@@ -1,0 +1,25 @@
+# Godot 4
+.godot/
+*.translation
+
+# Exportações
+export/
+build/
+*.exe
+*.pck
+
+# Prints gerados pelas ferramentas de dev
+screenshots/
+
+# Mono / .NET (caso use no futuro)
+.mono/
+data_*/
+mono_crash.*.json
+
+# Sistema e editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.tmp
+*.bak
