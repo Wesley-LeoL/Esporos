@@ -34,3 +34,11 @@ O que o pacote não cobre foi gerado por código no mesmo estilo (projeção 2:1
 - `ui/icons.png`: ícones dos itens do inventário.
 
 Para mudar ou regerar: edite os modelos em `tools/art_models.py` (personagens e objetos são montados com caixas, cilindros e elipsoides) e rode `python3 tools/gen_art.py` (requer Pillow e numpy). O script também reescreve `scripts/art/gen_catalog.gd` com tamanho de quadro, âncora e animações. Para trocar um desses sprites por arte desenhada à mão, mantenha o mesmo tamanho de quadro e âncora, ou ajuste os valores no catálogo.
+
+## Interface (`ui/`)
+
+O HUD é pixel art ciberpunk, gerado por `tools/gen_ui.py` (rode de novo após mudar cores ou desenhos): painéis 9-slice com cantos cortados e cantoneiras neon, botões, abas, teclas, espaços de equipamento, faixas de aviso, vinheta pontilhada, linhas de varredura e os ícones da interface (desenhados em cinza e tingidos no jogo). O script também gera `scripts/ui/ui_catalog.gd` com o índice dos ícones.
+
+- Fonte: Jersey 10 (`ui/fonts/`, licença SIL OFL 1.1, ver `ui/fonts/OFL.txt`), usada só nos tamanhos 19 (grade nativa) e múltiplos (38, 76) para os pixels ficarem nítidos.
+- A interface é montada em resolução dupla (`UITheme.UI_SCALE`): na janela padrão de 1600x900, 1 unidade = 1 px; cada pixel de desenho ocupa 2x2 px, como o mundo. O projeto usa escala inteira, então a arte continua nítida em outras resoluções.
+- Cores, fonte, texturas e o tema dos controles ficam todos em `scripts/ui/ui_theme.gd`; `scripts/ui/hud.gd` só monta o layout. A barra segmentada dos vitais é `scripts/ui/pixel_bar.gd`.

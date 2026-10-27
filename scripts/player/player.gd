@@ -47,7 +47,7 @@ func _ready() -> void:
 	spores.lifetime = 5.0
 	spores.preprocess = 5.0
 	spores.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	spores.emission_rect_extents = Vector2(430, 250)
+	spores.emission_rect_extents = Vector2(540, 310)
 	spores.direction = Vector2(1, 0.2)
 	spores.spread = 60.0
 	spores.gravity = Vector2.ZERO

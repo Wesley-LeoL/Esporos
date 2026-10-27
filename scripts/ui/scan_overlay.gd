@@ -34,5 +34,8 @@ func _draw() -> void:
 		var sp2 := xf * (lc.position + Vector2(0, -20))
 		draw_colored_polygon(PackedVector2Array([sp2 + Vector2(0, -4), sp2 + Vector2(4, 0), sp2 + Vector2(0, 4), sp2 + Vector2(-4, 0)]), Color(1.0, 0.85, 0.2, 0.9))
 	var spore := w.spore_at(ppos)
-	draw_string(ThemeDB.fallback_font, Vector2(8, size.y - 8), "SCAN ATIVO  esporos %.2f" % spore,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.32, 0.9, 1.0, 0.9))
+	# texto na fonte pixelada, em meia escala para ficar no tamanho nativo da grade
+	draw_set_transform(Vector2(8, 66), 0.0, Vector2(0.5, 0.5))
+	draw_string(UITheme.font(), Vector2.ZERO, "SCAN ATIVO  ESPOROS %.2f" % spore,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, UITheme.FONT_S, Color(0.32, 0.9, 1.0, 0.95))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

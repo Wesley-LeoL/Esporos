@@ -26,43 +26,76 @@ func _show_title() -> void:
 	_title = CanvasLayer.new()
 	_title.layer = 30
 	add_child(_title)
-	var theme := Theme.new()
-	theme.default_font_size = 10
 	var bg := ColorRect.new()
-	bg.color = Color(0.03, 0.05, 0.04, 1.0)
+	bg.color = Color("#070b10")
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_title.add_child(bg)
+	# interface em resolução dupla, como o HUD (ver UITheme.UI_SCALE)
+	var ui := Control.new()
+	ui.scale = Vector2.ONE / UITheme.UI_SCALE
+	ui.theme = UITheme.build_theme()
+	ui.size = get_viewport().get_visible_rect().size * UITheme.UI_SCALE
+	_title.add_child(ui)
+	var grid := TextureRect.new()
+	grid.texture = UITheme.tex("grid")
+	grid.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grid.stretch_mode = TextureRect.STRETCH_TILE
+	grid.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ui.add_child(grid)
+	var vig := TextureRect.new()
+	vig.texture = UITheme.tex("vignette")
+	vig.set_anchors_preset(Control.PRESET_FULL_RECT)
+	vig.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	vig.stretch_mode = TextureRect.STRETCH_SCALE
+	ui.add_child(vig)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	center.theme = theme
-	_title.add_child(center)
+	ui.add_child(center)
 	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 6)
+	vb.add_theme_constant_override("separation", 18)
 	center.add_child(vb)
+	var mark := UITheme.icon_rect("contaminacao", UITheme.CONTAMINATION, 96)
+	mark.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	vb.add_child(mark)
 	var t := Label.new()
 	t.text = "ESPOROS"
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	t.add_theme_font_size_override("font_size", 34)
-	t.add_theme_color_override("font_color", Color("#9be04a"))
+	t.add_theme_font_size_override("font_size", UITheme.FONT_S * 8)
+	t.add_theme_color_override("font_color", UITheme.CONTAMINATION)
+	t.add_theme_constant_override("shadow_offset_x", 8)
+	t.add_theme_constant_override("shadow_offset_y", 8)
+	t.add_theme_color_override("font_shadow_color", Color("#2a6b66"))
 	vb.add_child(t)
 	var sub := Label.new()
-	sub.text = "sobrevivência tática ciber-apocalíptica"
+	sub.text = "SOBREVIVÊNCIA TÁTICA CIBER-APOCALÍPTICA"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", UITheme.FONT_L)
+	sub.add_theme_color_override("font_color", UITheme.ACCENT)
 	vb.add_child(sub)
-	var b_new := Button.new()
-	b_new.text = "Novo jogo"
-	b_new.pressed.connect(func() -> void: _begin(false))
-	vb.add_child(b_new)
-	var b_cont := Button.new()
-	b_cont.text = "Continuar"
-	b_cont.disabled = not Game.has_save()
-	b_cont.pressed.connect(func() -> void: _begin(true))
-	vb.add_child(b_cont)
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 20)
+	vb.add_child(gap)
+	for def in [["NOVO JOGO", false], ["CONTINUAR", true]]:
+		var b := Button.new()
+		b.text = def[0]
+		b.add_theme_font_size_override("font_size", UITheme.FONT_L)
+		b.custom_minimum_size = Vector2(460, 76)
+		b.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		if def[1]:
+			b.disabled = not Game.has_save()
+		var cont: bool = def[1]
+		b.pressed.connect(func() -> void: _begin(cont))
+		vb.add_child(b)
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", UITheme.box("panel", 16, Vector4(28, 20, 28, 22)))
+	box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	vb.add_child(box)
 	var help := Label.new()
-	help.text = "\nWASD mover · Espaço/clique atacar · E interagir\nTab menu (inventário, corpo, habilidades, construção, implantes)\nX demolir · F5 salvar · Esc cancela · F1 console de testes\n\nTodos carregam o patógeno. Gerencie sua carga (0-100%).\nNão chegue perto da borda: o Mar de Esporos é letal."
+	help.text = "WASD MOVER · ESPAÇO/CLIQUE ATACAR · E INTERAGIR · TAB MENU\nX DEMOLIR · F5 SALVAR · ESC CANCELA · F1 CONSOLE DE TESTES\n\nTodos carregam o patógeno. Gerencie sua carga (0-100%).\nNão chegue perto da borda: o Mar de Esporos é letal."
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	help.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
-	vb.add_child(help)
+	help.add_theme_color_override("font_color", UITheme.MUTED)
+	box.add_child(help)
 
 
 func _begin(continue_save: bool) -> void:
