@@ -15,8 +15,6 @@ const MAX_CAL := 2000.0
 var nome: String = "Sobrevivente"
 var pathogen: float = 10.0
 var calories: float = 1600.0
-var carbs: float = 70.0
-var protein: float = 70.0
 var water: float = 80.0
 var blood: float = 100.0
 var limbs := {}
@@ -55,8 +53,6 @@ static func random_survivor(r: RandomNumberGenerator) -> SurvivorData:
 	d.nome = NAMES[r.randi() % NAMES.size()]
 	d.pathogen = r.randf_range(5.0, 25.0)
 	d.calories = r.randf_range(1200.0, 1800.0)
-	d.carbs = r.randf_range(50.0, 80.0)
-	d.protein = r.randf_range(50.0, 80.0)
 	d.water = r.randf_range(60.0, 90.0)
 	var keys: Array = DB.SKILLS.keys()
 	keys.shuffle()
@@ -163,8 +159,6 @@ func _hurt_internal(limb_id: String, amount: float, cause: String) -> void:
 func _tick_metabolism(delta: float, moving: bool) -> void:
 	var k := 1.5 if moving else 1.0
 	calories = maxf(0.0, calories - 0.55 * k * delta)
-	carbs = maxf(0.0, carbs - 0.045 * k * delta)
-	protein = maxf(0.0, protein - 0.03 * delta)
 	water = maxf(0.0, water - 0.11 * k * delta)
 	if calories <= 0.0:
 		_hurt_internal("torso", 1.0 * delta, "Fome")
@@ -176,8 +170,6 @@ func _tick_metabolism(delta: float, moving: bool) -> void:
 		_warn("sede", "Você está desidratado!")
 	elif water < 20.0:
 		_warn("sede", "Você está com muita sede.")
-	if carbs < 10.0:
-		_warn("carb", "Falta de carboidratos: você se move mais devagar.", 90.0)
 
 
 func implant_active(slot: String) -> bool:
@@ -302,7 +294,7 @@ func _tick_wounds(delta: float, spore: float) -> void:
 				pathogen = minf(100.0, pathogen + spore * 0.8 * delta)
 				_warn("ferida_esporo", "Esporos entram pela ferida aberta! Enfaixe-a.", 20.0)
 			if limb["bandaged"] and int(limb["wound"]) == 1 and float(limb["infection"]) < 25.0 and healing_ok:
-				limb["heal"] = float(limb["heal"]) + (1.0 + protein / 100.0) * delta
+				limb["heal"] = float(limb["heal"]) + 1.0 * delta
 				if float(limb["heal"]) >= 100.0:
 					limb["wound"] = 0
 					limb["bleed"] = 0.0
@@ -328,7 +320,7 @@ func _tick_wounds(delta: float, spore: float) -> void:
 			for l in LIMBS:
 				var limb: Dictionary = limbs[l]
 				if float(limb["hp"]) < 100.0 and int(limb["wound"]) < 2:
-					limb["hp"] = minf(100.0, float(limb["hp"]) + 0.12 * delta * (0.5 + protein / 100.0))
+					limb["hp"] = minf(100.0, float(limb["hp"]) + 0.12 * delta * 1.0)
 
 
 func kill(cause: String, kind: String) -> void:
@@ -401,8 +393,6 @@ func speed_mult() -> float:
 			m -= 0.15
 	if pathogen > 60.0:
 		m -= 0.15 * (pathogen - 60.0) / 40.0
-	if carbs < 10.0:
-		m *= 0.85
 	return maxf(0.35, m)
 
 
@@ -415,8 +405,6 @@ func use_item(id: String) -> void:
 		"comida":
 			take_item(id)
 			calories = minf(MAX_CAL, calories + float(def["cal"]))
-			carbs = minf(100.0, carbs + float(def["carb"]))
-			protein = minf(100.0, protein + float(def["prot"]))
 			message.emit("Você comeu: %s." % def["nome"])
 		"bebida":
 			take_item(id)
@@ -583,7 +571,7 @@ func craft(recipe: String) -> void:
 
 # ---------------------------------------------------------------- persistência
 func to_dict() -> Dictionary:
-	return {"nome": nome, "pathogen": pathogen, "calories": calories, "carbs": carbs, "protein": protein,
+	return {"nome": nome, "pathogen": pathogen, "calories": calories,
 		"water": water, "blood": blood, "limbs": limbs.duplicate(true), "skills": skills.duplicate(true),
 		"inventory": inventory.duplicate(), "implants": implants.duplicate(true), "mask_on": mask_on,
 		"filter": filter, "weapon": weapon, "suppress_t": suppress_t, "tainted_t": tainted_t,
@@ -595,8 +583,6 @@ static func from_dict(src: Dictionary) -> SurvivorData:
 	d.nome = str(src.get("nome", "Sobrevivente"))
 	d.pathogen = float(src.get("pathogen", 10.0))
 	d.calories = float(src.get("calories", 1600.0))
-	d.carbs = float(src.get("carbs", 70.0))
-	d.protein = float(src.get("protein", 70.0))
 	d.water = float(src.get("water", 80.0))
 	d.blood = float(src.get("blood", 100.0))
 	d.mask_on = bool(src.get("mask_on", false))
