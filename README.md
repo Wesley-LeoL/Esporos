@@ -22,6 +22,9 @@ Abra a pasta no Godot 4.7+ (versão padrão, não .NET) e aperte F5. O projeto j
 ## Console de testes (cheats)
 `F1` ou `` ` `` abre o terminal (pausa o jogo). Digite `ajuda`. Comandos: `dar <item> [qtd]`, `dano <membro|todos> <n>`, `spawn [normal|elite] [n]`, `tp <x> <y>` (ou `abrigo`, `vila <n>`, `borda`, `cadaver`, `elite`), `set` (patogeno, sangue, calorias, agua, bateria, filtro, calor), `skill`, `curar`, `restaurar`, `implante`, `god`, `matar`, `infectar`, `limpar`, `pos`, `salvar`. Códigos prontos: `kit`, `kit_medico`, `kit_build`, `kit_cyber`. Tab completa, ↑↓ navega no histórico.
 
+## Arte
+Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no mesmo estilo para personagens, construções, caixas, chão e ícones. Detalhes e como regerar em [`assets/art/README.md`](assets/art/README.md).
+
 ## Estrutura
 ```
 autoload/   input_setup.gd (ações) · game.gd (log, save, legado, debug)
@@ -30,7 +33,8 @@ scripts/world/     world.gd (mundo, spawn, vilas, construção, morte) · villag
 scripts/entities/  structure · infected · corpse · loot_container · caravan · build_ghost
 scripts/player/    player.gd
 scripts/ui/        hud.gd · scan_overlay.gd · dev_console.gd
-tools/             setup.sh · screenshot.sh/.gd (prints headless e comandos de debug)
+tools/             setup.sh · screenshot.sh/.gd (prints headless) · gen_art.py, art_models.py, art_render.py (arte gerada) · build_art_catalog.py
+scripts/art/       art_db.gd + art_catalog.gd (pacote) · gen_art.gd + gen_catalog.gd (arte gerada)
 ```
 
 ## Ferramentas de desenvolvimento (Linux sem monitor)

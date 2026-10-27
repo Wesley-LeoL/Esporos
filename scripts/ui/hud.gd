@@ -47,7 +47,7 @@ func _ready() -> void:
 	root.visible = false
 	add_child(root)
 
-	fog = _overlay(Color(0.3, 0.65, 0.2, 0.0))
+	fog = _overlay(Color(0.36, 0.56, 0.32, 0.0))
 	hurt = _overlay(Color(0.9, 0.1, 0.1, 0.0))
 	root.add_child(ScanOverlay.new())
 
@@ -322,10 +322,10 @@ func _process(delta: float) -> void:
 		st += "\nMODO DEMOLIÇÃO (clique, X sai)"
 	status_label.text = st
 
-	fog.color.a = clampf((spore - 0.12) * 0.55, 0.0, 0.5)
-	hurt.color.a = clampf(p.hurt_flash * 1.6, 0.0, 0.35)
+	fog.color.a = clampf((spore - 0.12) * 0.36, 0.0, 0.3)
+	hurt.color.a = clampf(p.hurt_flash * 1.2, 0.0, 0.22)
 	if d.pathogen > 40.0:
-		hurt.color = Color(0.25, 0.5, 0.15, clampf((d.pathogen - 40.0) / 60.0 * 0.3, 0.0, 0.3))
+		hurt.color = Color(0.25, 0.5, 0.15, clampf((d.pathogen - 40.0) / 60.0 * 0.2, 0.0, 0.2))
 	else:
 		hurt.color = Color(0.9, 0.1, 0.1, hurt.color.a)
 
@@ -416,6 +416,11 @@ func _tab_inventory(d: SurvivorData) -> void:
 		var def: Dictionary = DB.ITEMS[id]
 		var row := HBoxContainer.new()
 		box.add_child(row)
+		var ic := TextureRect.new()
+		ic.texture = GenArt.icon(id)
+		ic.custom_minimum_size = Vector2(GenCatalog.ICON_SIZE, GenCatalog.ICON_SIZE)
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+		row.add_child(ic)
 		var l := Label.new()
 		l.text = "%s x%d" % [def["nome"], d.count(id)]
 		l.custom_minimum_size.x = 150

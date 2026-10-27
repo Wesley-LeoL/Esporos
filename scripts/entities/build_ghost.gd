@@ -26,6 +26,6 @@ func hide_ghost() -> void:
 
 func _draw() -> void:
 	var col := Color(0.3, 1.0, 0.4, 0.45) if valid else Color(1.0, 0.3, 0.3, 0.45)
-	var pts := PackedVector2Array([Vector2(0, -16), Vector2(32, 0), Vector2(0, 16), Vector2(-32, 0)])
+	var pts := PackedVector2Array([Vector2(0, -20), Vector2(40, 0), Vector2(0, 20), Vector2(-40, 0)])
 	draw_colored_polygon(pts, col)
 	draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]), col.lightened(0.4), 2.0)

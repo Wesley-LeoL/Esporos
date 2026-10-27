@@ -23,3 +23,7 @@ Thumbs.db
 .idea/
 *.tmp
 *.bak
+
+# Python (ferramentas de arte)
+__pycache__/
+*.pyc

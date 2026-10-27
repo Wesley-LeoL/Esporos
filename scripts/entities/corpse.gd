@@ -50,17 +50,15 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
-	draw_circle(Vector2.ZERO, 12.0, Color(0, 0, 0, 0.3))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	var k := decomp / 100.0
-	var body := Color("#3fb8af").lerp(Color("#5a5a3a"), k)
-	draw_rect(Rect2(-12, -6, 20, 7), body)
-	draw_circle(Vector2(-14, -3), 4.0, Color("#e8d5b7").lerp(Color("#7a8a5a"), k))
+	# decompõe: escurece e esverdeia; some aos poucos no fim
+	var tint := Color.WHITE.lerp(Color(0.55, 0.62, 0.42), k)
+	tint.a = 1.0 if k < 0.85 else (1.0 - (k - 0.85) / 0.15 * 0.6)
+	GenArt.draw_frame(self, "corpse", 0, posmod(nome.hash(), 2), Vector2.ZERO, tint)
 	if items.is_empty():
-		draw_rect(Rect2(-12, -6, 20, 7), Color(0, 0, 0, 0.35))
+		GenArt.draw_frame(self, "corpse", 0, posmod(nome.hash(), 2), Vector2.ZERO, Color(0, 0, 0, 0.3))
 	if decomp > 20.0:
 		var t := Time.get_ticks_msec() * 0.006
-		for i in 5:
+		for i in 6:
 			var a := t + float(i) * 1.7
-			draw_rect(Rect2(cos(a * 1.3) * 12.0, -10.0 + sin(a * 1.9) * 6.0, 1.5, 1.5), Color(0.1, 0.1, 0.1))
+			draw_rect(Rect2(cos(a * 1.3) * 14.0, -14.0 + sin(a * 1.9) * 7.0, 1.5, 1.5), Color(0.05, 0.05, 0.08))

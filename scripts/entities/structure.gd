@@ -1,8 +1,10 @@
 class_name Structure
 extends StaticBody2D
-## Estrutura sólida: ruínas, paredes, portas, gerador, purificador, torre e selagem de ar.
+## Estrutura sólida: prédios do pacote (edificio), paredes, portas, gerador, purificador,
+## torre e selagem de ar. As construções usam os sprites de assets/art/generated/structures.
 
 const CONSUMERS := ["purificador", "torre", "vedacao"]
+const SPRITES := ["parede", "porta", "gerador", "purificador", "torre", "vedacao"]
 
 var kind := "parede"
 var cell := Vector2i.ZERO
@@ -11,19 +13,25 @@ var powered := false
 var fuel := 0.0
 var open := false
 var eternal := false
+var art := ""
+var art_variant := 0
+var fp := Vector2i.ONE
 
 var _shape: CollisionPolygon2D
 var _power_t := 0.0
 var _cd := 0.0
 var _tracer := Vector2.ZERO
 var _tracer_t := 0.0
+var _aim := 1
 
 
 func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 0
 	_shape = CollisionPolygon2D.new()
-	_shape.polygon = PackedVector2Array([Vector2(0, -14), Vector2(28, 0), Vector2(0, 14), Vector2(-28, 0)])
+	_shape.polygon = PackedVector2Array([Vector2(0, -17), Vector2(35, 0), Vector2(0, 17), Vector2(-35, 0)])
+	if kind == "edificio":
+		_setup_building()
 	add_child(_shape)
 	match kind:
 		"gerador":
@@ -44,6 +52,29 @@ func _ready() -> void:
 			add_to_group("interactable")
 	_apply_open()
 	_refresh_power()
+
+
+func cells() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for i in fp.x:
+		for j in fp.y:
+			out.append(cell + Vector2i(i, j))
+	return out
+
+
+## Edifício do pacote: colisão na pegada e sprite alinhado pelo vértice inferior da base.
+## O nó fica no centro da pegada (chave de ordenação em profundidade).
+func _setup_building() -> void:
+	var w := float(fp.x)
+	var d := float(fp.y)
+	var hw := World.HALF_W * 0.5
+	var hh := World.HALF_H * 0.5
+	var k := 0.94
+	_shape.polygon = PackedVector2Array([
+		Vector2(-hw * (w - d), -hh * (w + d)) * k, Vector2(hw * (w + d), hh * (w - d)) * k,
+		Vector2(hw * (w - d), hh * (w + d)) * k, Vector2(-hw * (w + d), hh * (d - w)) * k])
+	y_sort_enabled = true
+	ArtDB.add_building_strips(self, art, art_variant, fp)
 
 
 func _apply_open() -> void:
@@ -93,6 +124,8 @@ func interact(player: Player) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if kind == "edificio":
+		return
 	if kind == "gerador" and not eternal and fuel > 0.0:
 		fuel = maxf(0.0, fuel - 0.12 * delta)
 		if fuel <= 0.0:
@@ -107,7 +140,7 @@ func _physics_process(delta: float) -> void:
 		_tracer_t = maxf(0.0, _tracer_t - delta)
 		if powered and _cd <= 0.0:
 			var best: Infected = null
-			var best_d := 230.0
+			var best_d := 290.0
 			for n in get_tree().get_nodes_in_group("infected"):
 				var e := n as Infected
 				var off := e.position - position
@@ -118,7 +151,8 @@ func _physics_process(delta: float) -> void:
 			if best != null:
 				best.take_damage(20.0, self)
 				_cd = 1.0
-				_tracer = best.position - position + Vector2(0, -14)
+				_aim = GenArt.facing_of(best.position - position)
+				_tracer = best.position - position + Vector2(0, -18)
 				_tracer_t = 0.12
 				queue_redraw()
 		if _tracer_t <= 0.0 and _tracer != Vector2.ZERO:
@@ -131,44 +165,26 @@ func to_dict() -> Dictionary:
 
 
 # ------------------------------------------------------------------ visual
-func _cube(h: float, c: Color, s: float = 1.0) -> void:
-	var w := 32.0 * s
-	var q := 16.0 * s
-	var top := PackedVector2Array([Vector2(0, q - 2 * q - h), Vector2(w, -h), Vector2(0, q - h), Vector2(-w, -h)])
-	var left := PackedVector2Array([Vector2(-w, -h), Vector2(0, q - h), Vector2(0, q), Vector2(-w, 0)])
-	var right := PackedVector2Array([Vector2(0, q - h), Vector2(w, -h), Vector2(w, 0), Vector2(0, q)])
-	draw_colored_polygon(left, c.darkened(0.25))
-	draw_colored_polygon(right, c.darkened(0.45))
-	draw_colored_polygon(top, c.lightened(0.08))
-
-
 func _draw() -> void:
+	if kind == "vedacao" and powered:
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
+		draw_arc(Vector2.ZERO, World.SEAL_RADIUS, 0.0, TAU, 64, Color(0.32, 0.9, 1.0, 0.3), 1.5)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if not kind in SPRITES:
+		return
+	var row := 0
+	var col := 0
 	match kind:
-		"ruina":
-			var h := 22.0 + float(posmod(cell.x * 7 + cell.y * 13, 5)) * 7.0
-			_cube(h, Color("#6e6a66"))
 		"parede":
-			_cube(30.0, Color("#8a8f99"))
+			col = posmod(cell.x * 7 + cell.y * 13, 2)
 		"porta":
-			if open:
-				_cube(4.0, Color("#a0763c"))
-			else:
-				_cube(28.0, Color("#a0763c"))
-		"gerador":
-			_cube(16.0, Color("#c9a227"), 0.7)
-			draw_rect(Rect2(-4, -26, 8, 4), Color("#3be06a") if powered else Color("#7a2020"))
-		"purificador":
-			_cube(26.0, Color("#4aa3a3"), 0.75)
-			draw_rect(Rect2(-4, -36, 8, 4), Color("#3be06a") if powered else Color("#7a2020"))
+			col = 1 if open else 0
+		"gerador", "purificador", "vedacao":
+			col = 0 if powered else 1
 		"torre":
-			_cube(20.0, Color("#7a3b3b"), 0.7)
-			draw_rect(Rect2(-3, -34, 6, 12), Color("#444a52"))
-			if _tracer_t > 0.0:
-				draw_line(Vector2(0, -32), _tracer, Color("#ffe066"), 2.0)
-		"vedacao":
-			_cube(14.0, Color("#3b5f7a"), 0.7)
-			draw_rect(Rect2(-4, -24, 8, 4), Color("#3be06a") if powered else Color("#7a2020"))
-			if powered:
-				draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
-				draw_arc(Vector2.ZERO, World.SEAL_RADIUS, 0.0, TAU, 48, Color(0.4, 0.9, 1.0, 0.35), 1.5)
-				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			row = 0 if powered else 1
+			col = _aim
+	GenArt.draw_frame(self, kind, row, col)
+	if kind == "torre" and _tracer_t > 0.0:
+		var muzzle := Vector2.from_angle(float(_aim) * PI / 4.0) * Vector2(18, 9) + Vector2(0, -28)
+		draw_line(muzzle, _tracer, Color("#ffe066"), 2.0)

@@ -5,7 +5,7 @@ extends CharacterBody2D
 
 var hp := 40.0
 var max_hp := 40.0
-var speed := 48.0
+var speed := 60.0
 var dmg := 9.0
 var elite := false
 var legacy := false
@@ -22,13 +22,16 @@ var _wander_dir := Vector2.ZERO
 var _flash := 0.0
 var _avoid_t := 0.0
 var _avoid_sign := 1.0
+var _facing := 2
+var _anim_t := 0.0
+var _atk_anim := 0.0
 
 
 func setup(is_elite: bool) -> void:
 	elite = is_elite
 	if elite:
 		max_hp = 110.0
-		speed = 74.0
+		speed = 92.0
 		dmg = 17.0
 	hp = max_hp
 
@@ -40,7 +43,7 @@ func _ready() -> void:
 	add_to_group("infected")
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
-	circle.radius = 6.0
+	circle.radius = 7.0
 	shape.shape = circle
 	add_child(shape)
 	if home == Vector2.ZERO:
@@ -58,7 +61,7 @@ func _physics_process(delta: float) -> void:
 	var to_p := player.position - position
 	var iso := Vector2(to_p.x, to_p.y * 2.0)
 	var dist := iso.length()
-	var aggro := 270.0 if elite else 190.0
+	var aggro := 340.0 if elite else 240.0
 	var dir := Vector2.ZERO
 	var mult := 1.0
 	if p_alive and dist < aggro and not world.in_safe_zone(player.position):
@@ -78,15 +81,21 @@ func _physics_process(delta: float) -> void:
 		dir = dir.rotated(_avoid_sign * 1.1)
 	velocity = Vector2(dir.x, dir.y * 0.5) * speed * mult
 	move_and_slide()
+	if velocity.length() > 4.0:
+		_facing = GenArt.facing_of(velocity)
+		_anim_t += delta * velocity.length() / 9.0
+	_atk_anim = maxf(0.0, _atk_anim - delta)
 	if get_slide_collision_count() > 0 and dir != Vector2.ZERO and _avoid_t <= 0.0:
 		_avoid_t = 0.6
 		_avoid_sign = 1.0 if randf() < 0.5 else -1.0
-	if p_alive and dist < 22.0 and _cd <= 0.0:
+	if p_alive and dist < 28.0 and _cd <= 0.0:
 		_attack()
 
 
 func _attack() -> void:
 	_cd = 0.9 if elite else 1.15
+	_atk_anim = 0.4
+	_facing = GenArt.facing_of(player.position - position)
 	var limb: String = ["torso", "torso", "braco_e", "braco_d", "perna_e", "perna_d", "cabeca"][randi() % 7]
 	player.data.damage_limb(limb, dmg * randf_range(0.7, 1.3))
 	player.data.pathogen = minf(100.0, player.data.pathogen + (4.0 if elite else 2.5))
@@ -122,21 +131,19 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
-	draw_circle(Vector2.ZERO, 9.0, Color(0, 0, 0, 0.35))
+	draw_circle(Vector2.ZERO, 11.0 if not elite else 13.0, Color(0, 0, 0, 0.35))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	var body := Color("#6b7a4a") if not elite else Color("#7a2f5a")
-	var skin := Color("#9ab07a") if not elite else Color("#b07a9a")
-	if _flash > 0.0:
-		body = Color.WHITE
-	var wob := sin(Time.get_ticks_msec() * 0.008 + get_instance_id() % 7) * 1.5
-	draw_rect(Rect2(-5 + wob, -22, 10, 20), body)
-	draw_circle(Vector2(wob, -26), 5.0, skin)
-	draw_rect(Rect2(-3 + wob, -27, 2, 2), Color("#ff3b3b"))
-	draw_rect(Rect2(1 + wob, -27, 2, 2), Color("#ff3b3b"))
-	if elite:
-		draw_rect(Rect2(5 + wob, -20, 3, 9), Color("#9aa7b5"))
-		if not implants.is_empty():
-			draw_rect(Rect2(-1 + wob, -30, 4, 2), Color("#52e6ff"))
+	var anims := GenCatalog.INFECTED_ANIMS
+	var col := 0
+	if _atk_anim > 0.0:
+		var a: Array = anims["attack"]
+		col = a[0] if _atk_anim > 0.2 else a[1]
+	else:
+		var w: Array = anims["walk"]
+		col = w[int(_anim_t) % w.size()]
+	var tint := Color(2.2, 2.2, 2.2) if _flash > 0.0 else Color.WHITE
+	GenArt.draw_frame(self, "elite" if elite else "infected", _facing, col, Vector2.ZERO, tint)
 	if hp < max_hp:
-		draw_rect(Rect2(-8, -36, 16, 2), Color(0, 0, 0, 0.7))
-		draw_rect(Rect2(-8, -36, 16.0 * clampf(hp / max_hp, 0.0, 1.0), 2), Color("#ff5a5f"))
+		var top := -50.0 if elite else -42.0
+		draw_rect(Rect2(-9, top, 18, 3), Color(0, 0, 0, 0.75))
+		draw_rect(Rect2(-9, top, 18.0 * clampf(hp / max_hp, 0.0, 1.0), 3), Color("#ff5a5f"))

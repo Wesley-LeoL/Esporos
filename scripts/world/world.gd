@@ -4,27 +4,31 @@ extends Node2D
 ## segundo plano, concentração de esporos (letal na borda), infectados, construção,
 ## morte/legado e persistência apenas dos deltas feitos pelo jogador.
 
-const TILE_W := 64
-const TILE_H := 32
+## Grade da arte: células isométricas 2:1 de 80x40 px (pacote em assets/art/tiles).
+const TILE_W := 80
+const TILE_H := 40
+const HALF_W := TILE_W / 2.0
+const HALF_H := TILE_H / 2.0
 const RADIUS := 64.0
-const SAFE_RADIUS_PX := 260.0
-const SEAL_RADIUS := 150.0
-const POWER_RADIUS_PX := 420.0
-const PURIFY_RADIUS_PX := 120.0
+const SAFE_RADIUS_PX := 325.0
+const SEAL_RADIUS := 190.0
+const POWER_RADIUS_PX := 525.0
+const PURIFY_RADIUS_PX := 150.0
 const N_VILLAGES := 8
 
 enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA }
 
-const TILE_COLORS: Array[Color] = [
-	Color("#2b2f36"), Color("#32373f"), Color("#4a6b2f"), Color("#1d1f23"),
-	Color("#4a4034"), Color("#59616b"), Color("#23262b"), Color("#3a3d44"),
-]
+# Prédios e objetos do pacote FreeSample (peso de sorteio dos prédios).
+const BUILDINGS: Array = [["BuildingBlock1", 15], ["BuildingBlock2", 15], ["BuildingBlock18", 20],
+	["BuildingBlock19", 20], ["BuildingBlock24", 25], ["Building3", 5]]
+const PROPS: Array[String] = ["Advertising5", "Advertising6", "Advertising7", "SateliteDish2"]
 const VILLAGE_NAMES: Array[String] = ["Abrigo Alfa", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
 	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix"]
 
 var seed_value: int = 0
 var rng := RandomNumberGenerator.new()
 var ground: TileMapLayer
+var art_ground: Node2D
 var build_layer: TileMapLayer
 var entities: Node2D
 var ghost: BuildGhost
@@ -38,7 +42,9 @@ var occupied := {}
 var terrain_deltas := {}
 var removed_cells := {}
 var road_cells := {}
+var road_blocks := {}
 var routes := {}
+var _ground_art: Array[Dictionary] = []
 
 var _spawn_t := 2.0
 var _village_t := 6.0
@@ -58,6 +64,8 @@ func generate(new_seed: int) -> void:
 	ground = TileMapLayer.new()
 	ground.tile_set = ts
 	add_child(ground)
+	art_ground = Node2D.new()
+	add_child(art_ground)
 	build_layer = TileMapLayer.new()
 	build_layer.tile_set = ts
 	add_child(build_layer)
@@ -71,6 +79,7 @@ func generate(new_seed: int) -> void:
 	_connect_villages()
 	_decorate_villages()
 	_scatter_ruins()
+	_flush_ground_art()
 	player = Player.new()
 	player.world = self
 	entities.add_child(player)
@@ -83,29 +92,22 @@ func _build_tileset() -> TileSet:
 	ts.tile_layout = TileSet.TILE_LAYOUT_DIAMOND_DOWN
 	ts.tile_size = Vector2i(TILE_W, TILE_H)
 	var source := TileSetAtlasSource.new()
-	source.texture = _make_atlas()
+	source.texture = load(GenCatalog.GROUND_PATH)
 	source.texture_region_size = Vector2i(TILE_W, TILE_H)
-	for i in TILE_COLORS.size():
-		source.create_tile(Vector2i(i, 0))
+	for t in T.size():
+		for v in GenCatalog.GROUND_VARIANTS:
+			source.create_tile(Vector2i(t, v))
 	ts.add_source(source, 0)
 	return ts
 
 
-func _make_atlas() -> ImageTexture:
-	var img := Image.create(TILE_W * TILE_COLORS.size(), TILE_H, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	for i in TILE_COLORS.size():
-		for px in TILE_W:
-			for py in TILE_H:
-				var d := absf(px - (TILE_W - 1) / 2.0) / (TILE_W / 2.0) + absf(py - (TILE_H - 1) / 2.0) / (TILE_H / 2.0)
-				if d <= 1.0:
-					var c := TILE_COLORS[i]
-					var jitter := float((px * 73 + py * 151 + i * 31) % 9) / 9.0
-					c = c.lightened(jitter * 0.07)
-					if d > 0.93:
-						c = c.darkened(0.3)
-					img.set_pixel(i * TILE_W + px, py, c)
-	return ImageTexture.create_from_image(img)
+## Célula do atlas do chão: tipo na coluna, variação (estável por posição) na linha.
+func _gtile(t: int, c: Vector2i) -> Vector2i:
+	var h := posmod(c.x * 73856093 ^ c.y * 19349663, 1000)
+	var v := 0
+	if h > 640:
+		v = 1 if h < 860 else 2
+	return Vector2i(t, v)
 
 
 func _paint_terrain() -> void:
@@ -115,7 +117,7 @@ func _paint_terrain() -> void:
 			var d := Vector2(x, y).length()
 			if d > RADIUS + 5.0:
 				continue
-			var t: int = T.CONC_A if ((x + y) & 1) == 0 else T.CONC_B
+			var t: int = T.CONC_A if noise.get_noise_2d(x * 3.1 + 40.0, y * 3.1) < 0.05 else T.CONC_B
 			var n := noise.get_noise_2d(x, y)
 			if n > 0.28:
 				t = T.TERRA
@@ -125,7 +127,7 @@ func _paint_terrain() -> void:
 			var sn := spore_noise.get_noise_2d(x * 1.7, y * 1.7) * 0.5 + 0.5
 			if d > RADIUS - 1.5 or sn < edge * 0.9:
 				t = T.ESPOROS
-			ground.set_cell(Vector2i(x, y), 0, Vector2i(t, 0))
+			ground.set_cell(Vector2i(x, y), 0, _gtile(t, Vector2i(x, y)))
 
 
 func _place_villages() -> void:
@@ -172,9 +174,12 @@ func _carve_road(a: VillageData, b: VillageData) -> void:
 		path.append(c)
 	var pts := PackedVector2Array()
 	pts.append(ground.map_to_local(a.cell))
+	_mark_road_block(a.cell)
+	_mark_road_block(b.cell)
 	for p in path:
-		ground.set_cell(p, 0, Vector2i(T.ESTRADA, 0))
+		ground.set_cell(p, 0, _gtile(T.ESTRADA, p))
 		road_cells[p] = true
+		_mark_road_block(p)
 		pts.append(ground.map_to_local(p))
 	routes["%d>%d" % [a.id, b.id]] = pts
 	var rev := PackedVector2Array()
@@ -185,31 +190,143 @@ func _carve_road(a: VillageData, b: VillageData) -> void:
 	b.links.append(a.id)
 
 
+## A arte de estrada tem 2x2 células: cada célula do caminho vira o bloco 2x2 que a contém.
+func _mark_road_block(c: Vector2i) -> void:
+	var origin := Vector2i(floori(c.x / 2.0) * 2, floori(c.y / 2.0) * 2)
+	if road_blocks.has(origin):
+		return
+	road_blocks[origin] = true
+	for dx in 2:
+		for dy in 2:
+			var cell := origin + Vector2i(dx, dy)
+			road_cells[cell] = true
+			ground.set_cell(cell, 0, _gtile(T.ESTRADA, cell))
+	_queue_ground_art("Road_Chunk5", rng.randi() % 4, origin, 1)
+
+
+## Enfileira um bloco de chão do pacote; _flush_ground_art() desenha em ordem de profundidade.
+func _queue_ground_art(art: String, v: int, cell: Vector2i, layer: int) -> void:
+	_ground_art.append({"art": art, "v": v, "cell": cell, "layer": layer})
+
+
+func _flush_ground_art() -> void:
+	_ground_art.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["layer"] != b["layer"]:
+			return a["layer"] < b["layer"]
+		var ka: int = a["cell"].x + a["cell"].y
+		var kb: int = b["cell"].x + b["cell"].y
+		if ka != kb:
+			return ka < kb
+		return a["cell"].x < b["cell"].x)
+	for e in _ground_art:
+		var sp := ArtDB.sprite(e["art"], e["v"], "top")
+		sp.position += ground.map_to_local(e["cell"]) + Vector2(0, -HALF_H)
+		art_ground.add_child(sp)
+	_ground_art.clear()
+
+
 func _decorate_villages() -> void:
 	for v in villages:
 		for dx in range(-6, 7):
 			for dy in range(-6, 7):
 				var c := v.cell + Vector2i(dx, dy)
 				if not road_cells.has(c):
-					ground.set_cell(c, 0, Vector2i(T.VILA, 0))
+					ground.set_cell(c, 0, _gtile(T.VILA, c))
+		# praça: 3x3 blocos de calçada de 4x4 células, mais calçadas menores ao redor
+		for i in 3:
+			for j in 3:
+				_queue_ground_art("Sidewalk_Tile1", rng.randi() % 4, v.cell + Vector2i(-6 + i * 4, -6 + j * 4), 0)
+		for k in 7:
+			var ring := Vector2i(rng.randi_range(-5, 4) * 2, rng.randi_range(-5, 4) * 2)
+			if maxi(absi(ring.x), absi(ring.y)) >= 8 and not road_cells.has(v.cell + ring):
+				_queue_ground_art("Sidewalk_Chunk2", rng.randi() % 4, v.cell + ring, 0)
 		if v.safe:
 			_build_shelter(v)
+			for i in 3:
+				_place_random_building(v.cell, 5, 8)
+		else:
+			for i in 5:
+				_place_random_building(v.cell, 3, 8)
+			for i in 4:
+				var c2 := v.cell + Vector2i(rng.randi_range(-4, 4), rng.randi_range(-4, 4))
+				if _free_cell(c2):
+					var tables := ["comum", "medico", "tecnico"]
+					_add_container(c2, tables[rng.randi() % 3], v.id)
+		for i in 3:
+			var pc := v.cell + Vector2i(rng.randi_range(-6, 6), rng.randi_range(-6, 6))
+			if _free_cell(pc) and (not v.safe or maxi(absi(pc.x - v.cell.x), absi(pc.y - v.cell.y)) >= 3):
+				_add_prop(PROPS[rng.randi() % PROPS.size()], rng.randi() % 4, pc)
+
+
+func _pick_building() -> String:
+	var total := 0.0
+	for b in BUILDINGS:
+		total += float(b[1])
+	var r := rng.randf() * total
+	for b in BUILDINGS:
+		r -= float(b[1])
+		if r <= 0.0:
+			return b[0]
+	return BUILDINGS[0][0]
+
+
+func _footprint_free(c: Vector2i, fp: Vector2i) -> bool:
+	for i in fp.x:
+		for j in fp.y:
+			if not _free_cell(c + Vector2i(i, j)):
+				return false
+	return true
+
+
+## Tenta colocar um prédio em um anel [rmin, rmax] (distância de xadrez) ao redor de center.
+func _place_random_building(center: Vector2i, rmin: int, rmax: int) -> bool:
+	for attempt in 40:
+		var art := _pick_building()
+		var v := rng.randi() % 4
+		var fp := ArtDB.footprint(art, v)
+		var c := center + Vector2i(rng.randi_range(-rmax, rmax), rng.randi_range(-rmax, rmax))
+		if maxi(absi(c.x - center.x), absi(c.y - center.y)) < rmin:
 			continue
-		var placed := 0
-		var guard := 0
-		while placed < 16 and guard < 200:
-			guard += 1
-			var c := v.cell + Vector2i(rng.randi_range(-5, 5), rng.randi_range(-5, 5))
-			if absi(c.x - v.cell.x) <= 1 and absi(c.y - v.cell.y) <= 1:
-				continue
-			if _free_cell(c):
-				_add_structure("ruina", c)
-				placed += 1
-		for i in 4:
-			var c2 := v.cell + Vector2i(rng.randi_range(-4, 4), rng.randi_range(-4, 4))
-			if _free_cell(c2):
-				var tables := ["comum", "medico", "tecnico"]
-				_add_container(c2, tables[rng.randi() % 3], v.id)
+		if _footprint_free(c, fp):
+			_add_building(art, v, c, fp)
+			return true
+	return false
+
+
+func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i) -> Structure:
+	var s := Structure.new()
+	s.kind = "edificio"
+	s.cell = c
+	s.world = self
+	s.art = art
+	s.art_variant = v
+	s.fp = fp
+	# centro da pegada: topo da célula inicial + deslocamento até o centro do losango
+	var top := ground.map_to_local(c) + Vector2(0, -HALF_H)
+	var w := float(fp.x)
+	var d := float(fp.y)
+	s.position = top + Vector2(HALF_W * 0.5 * (w - d), HALF_H * 0.5 * (w + d))
+	entities.add_child(s)
+	for cell in s.cells():
+		structures[cell] = s
+		occupied[cell] = true
+	return s
+
+
+func _add_prop(art: String, v: int, c: Vector2i) -> void:
+	var pr := Prop.new()
+	pr.art = art
+	pr.variant = v
+	pr.position = ground.map_to_local(c)
+	entities.add_child(pr)
+	occupied[c] = true
+
+
+func _remove_structure(s: Structure) -> void:
+	for cell in s.cells():
+		structures.erase(cell)
+		occupied.erase(cell)
+	s.queue_free()
 
 
 func _build_shelter(v: VillageData) -> void:
@@ -229,16 +346,17 @@ func _scatter_ruins() -> void:
 		var c := Vector2i(roundi(cos(ang) * dist), roundi(sin(ang) * dist))
 		if Vector2(c).length() < 9.0 or not _free_cell(c):
 			continue
-		var n := rng.randi_range(3, 6)
-		for k in n:
-			var cc := c + Vector2i(rng.randi_range(-2, 2), rng.randi_range(-2, 2))
-			if _free_cell(cc):
-				_add_structure("ruina", cc)
+		if rng.randf() < 0.65:
+			_place_random_building(c, 0, 3)
 		if rng.randf() < 0.75:
-			var cc2 := c + Vector2i(rng.randi_range(-2, 2), rng.randi_range(-2, 2))
+			var cc2 := c + Vector2i(rng.randi_range(-3, 3), rng.randi_range(-3, 3))
 			if _free_cell(cc2):
 				var tables := ["comum", "comum", "medico", "tecnico"]
 				_add_container(cc2, tables[rng.randi() % 4], -1)
+		if rng.randf() < 0.3:
+			var pc := c + Vector2i(rng.randi_range(-3, 3), rng.randi_range(-3, 3))
+			if _free_cell(pc):
+				_add_prop(PROPS[rng.randi() % PROPS.size()], rng.randi() % 4, pc)
 
 
 func _free_cell(c: Vector2i) -> bool:
@@ -272,7 +390,7 @@ func _add_container(c: Vector2i, table: String, village_id: int) -> LootContaine
 
 # ======================================================================= esporos
 func tile_pos(world_pos: Vector2) -> Vector2:
-	return Vector2((world_pos.x / 32.0 + world_pos.y / 16.0) * 0.5, (world_pos.y / 16.0 - world_pos.x / 32.0) * 0.5)
+	return Vector2((world_pos.x / HALF_W + world_pos.y / HALF_H) * 0.5, (world_pos.y / HALF_H - world_pos.x / HALF_W) * 0.5)
 
 
 func edge_ratio(world_pos: Vector2) -> float:
@@ -332,9 +450,9 @@ func can_place_at(kind: String, c: Vector2i, p: Player = null) -> bool:
 	if p != null:
 		var off := ground.map_to_local(c) - p.position
 		var d := Vector2(off.x, off.y * 2.0).length()
-		if d > 220.0:
+		if d > 275.0:
 			return false
-		if kind != "piso" and d < 24.0:
+		if kind != "piso" and d < 30.0:
 			return false
 	return true
 
@@ -352,7 +470,7 @@ func try_place(kind: String, c: Vector2i, p: Player) -> bool:
 		return false
 	p.data.pay(def["custo"])
 	if kind == "piso":
-		build_layer.set_cell(c, 0, Vector2i(T.PISO, 0))
+		build_layer.set_cell(c, 0, _gtile(T.PISO, c))
 		terrain_deltas[c] = T.PISO
 	else:
 		var s := _add_structure(kind, c)
@@ -365,7 +483,7 @@ func try_place(kind: String, c: Vector2i, p: Player) -> bool:
 
 func try_demolish(c: Vector2i, p: Player) -> bool:
 	var off := ground.map_to_local(c) - p.position
-	if Vector2(off.x, off.y * 2.0).length() > 220.0:
+	if Vector2(off.x, off.y * 2.0).length() > 275.0:
 		Game.say("Longe demais.")
 		return false
 	if structures.has(c):
@@ -373,12 +491,13 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 		if s.eternal:
 			Game.say("Você não pode demolir isto.")
 			return false
-		if s.kind == "ruina":
-			p.data.add_item("sucata", rng.randi_range(1, 2))
-			if rng.randf() < 0.25:
-				p.data.add_item("metal", 1)
-			removed_cells[c] = true
-			Game.say("Você desmontou uma ruína (+sucata).")
+		if s.kind == "ruina" or s.kind == "edificio":
+			var big := s.kind == "edificio"
+			p.data.add_item("sucata", rng.randi_range(3, 5) if big else rng.randi_range(1, 2))
+			if rng.randf() < (0.8 if big else 0.25):
+				p.data.add_item("metal", rng.randi_range(1, 2) if big else 1)
+			removed_cells[s.cell] = true
+			Game.say("Você desmontou %s (+materiais)." % ("um prédio" if big else "uma ruína"))
 		else:
 			var cost: Dictionary = DB.BUILDS[s.kind]["custo"]
 			for k in cost:
@@ -386,9 +505,7 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 				if back > 0:
 					p.data.add_item(k, back)
 			Game.say("Estrutura desmontada (50% dos materiais).")
-		structures.erase(c)
-		occupied.erase(c)
-		s.queue_free()
+		_remove_structure(s)
 		return true
 	if build_layer.get_cell_source_id(c) != -1:
 		build_layer.erase_cell(c)
@@ -613,7 +730,7 @@ func to_dict() -> Dictionary:
 	var st: Array = []
 	for c in structures:
 		var s: Structure = structures[c]
-		if s.kind == "ruina" or s.eternal:
+		if s.kind == "ruina" or s.kind == "edificio" or s.eternal:
 			continue
 		st.append(s.to_dict())
 	var floors: Array = []
@@ -651,13 +768,10 @@ func apply_save(save: Dictionary) -> void:
 		var c := Game.v2i(r)
 		removed_cells[c] = true
 		if structures.has(c):
-			var s: Structure = structures[c]
-			structures.erase(c)
-			occupied.erase(c)
-			s.queue_free()
+			_remove_structure(structures[c])
 	for f in save.get("floors", []):
 		var c2 := Vector2i(int(f[0]), int(f[1]))
-		build_layer.set_cell(c2, 0, Vector2i(int(f[2]), 0))
+		build_layer.set_cell(c2, 0, _gtile(int(f[2]), c2))
 		terrain_deltas[c2] = int(f[2])
 	for sd in save.get("structures", []):
 		if structures.has(Game.v2i(sd["cell"])):

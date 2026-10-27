@@ -118,6 +118,23 @@ func debug_command(cmd: String) -> void:
 		"place":
 			var base := world.ground.local_to_map(world.ground.to_local(p.position))
 			world.try_place(a[0], base + Vector2i(int(a[1]), int(a[2])), p)
+		"tpb":
+			# teleporta para a frente do maior prédio próximo (teste de ordenação de profundidade)
+			var best: Structure = null
+			var best_d := 1e9
+			for c in world.structures:
+				var st: Structure = world.structures[c]
+				if st.kind == "edificio" and st.fp.x * st.fp.y >= 8 and st.position.distance_to(p.position) < best_d:
+					best_d = st.position.distance_to(p.position)
+					best = st
+			if best != null:
+				var w := float(best.fp.x)
+				var d := float(best.fp.y)
+				var side := float(arg) if arg != "" else 0.5
+				var front := best.position + Vector2(-World.HALF_W * 0.5 * (w + d), World.HALF_H * 0.5 * (d - w)).lerp(
+					Vector2(World.HALF_W * 0.5 * (w - d), World.HALF_H * 0.5 * (w + d)), side)
+				p.position = front + Vector2(0, 14)
+				p.camera.reset_smoothing()
 		"con":
 			console.execute(arg)
 		"conopen":

@@ -8,7 +8,7 @@ signal died(data: SurvivorData, pos: Vector2)
 enum Facing { E, SE, S, SW, W, NW, N, NE }
 
 const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
-const SPEED := 80.0
+const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 
 var data: SurvivorData
@@ -23,6 +23,10 @@ var nearby: Node = null
 var camera: Camera2D
 var spores: CPUParticles2D
 var _dead := false
+var _anim_t := 0.0
+var _attack_anim := 0.0
+var _moving := false
+var _frame := -1
 
 
 func _ready() -> void:
@@ -32,7 +36,7 @@ func _ready() -> void:
 	add_to_group("player")
 	var shape := CollisionShape2D.new()
 	var circle := CircleShape2D.new()
-	circle.radius = 6.0
+	circle.radius = 7.0
 	shape.shape = circle
 	add_child(shape)
 	camera = Camera2D.new()
@@ -78,6 +82,7 @@ func _physics_process(delta: float) -> void:
 		return
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var moving := input != Vector2.ZERO
+	_moving = moving
 	if moving:
 		var new_facing := _vector_to_facing(input)
 		if new_facing != facing:
@@ -104,8 +109,31 @@ func _physics_process(delta: float) -> void:
 	_update_nearby()
 	if build_kind == "" and not demolish and attack_cd <= 0.0 and Input.is_action_pressed("attack"):
 		_attack()
-	if attack_flash > 0.0 or hurt_flash > 0.0:
+	_attack_anim = maxf(0.0, _attack_anim - delta)
+	_anim_t += delta
+	var f := _anim_frame()
+	if f != _frame or hurt_flash > 0.0:
+		_frame = f
 		queue_redraw()
+
+
+## Coluna da folha do sobrevivente para o estado atual (ver GenCatalog.SURVIVOR_ANIMS).
+func _anim_frame() -> int:
+	var anims := GenCatalog.SURVIVOR_ANIMS
+	if _attack_anim > 0.0:
+		var a: Array = anims["attack"]
+		var i := clampi(int((1.0 - _attack_anim / 0.33) * a.size()), 0, a.size() - 1)
+		return a[i] + 100 * int(facing)
+	if _moving:
+		var w: Array = anims["walk"]
+		return w[int(_anim_t * 8.0 * data.speed_mult()) % w.size()] + 100 * int(facing)
+	var idle: Array = anims["idle"]
+	return idle[int(_anim_t * 1.6) % idle.size()] + 100 * int(facing)
+
+
+func _sheet() -> String:
+	return "survivor_m%d_a%d_e%d" % [int(data.mask_on), int(data.implant_active("braco_d")),
+		int(data.implant_active("olho"))]
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -152,7 +180,7 @@ func _process(_delta: float) -> void:
 
 func _update_nearby() -> void:
 	var best: Node = null
-	var best_d := 38.0
+	var best_d := 48.0
 	for n in get_tree().get_nodes_in_group("interactable"):
 		var node := n as Node2D
 		var off := node.position - position
@@ -166,13 +194,14 @@ func _update_nearby() -> void:
 func _attack() -> void:
 	attack_cd = 0.55
 	attack_flash = 0.15
+	_attack_anim = 0.33
 	var dir := Vector2.from_angle(float(facing) * PI / 4.0)
 	var dmg := data.melee_damage()
 	for n in get_tree().get_nodes_in_group("infected"):
 		var e := n as Infected
 		var off := e.position - position
 		var iso := Vector2(off.x, off.y * 2.0)
-		if iso.length() < 52.0 and iso.normalized().dot(dir) > 0.3:
+		if iso.length() < 65.0 and iso.normalized().dot(dir) > 0.3:
 			e.take_damage(dmg, self)
 	queue_redraw()
 
@@ -186,22 +215,9 @@ func _draw() -> void:
 	if data == null:
 		return
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, ISO_Y_SCALE))
-	draw_circle(Vector2.ZERO, 9.0, Color(0, 0, 0, 0.35))
+	draw_circle(Vector2.ZERO, 11.0, Color(0, 0, 0, 0.35))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	var body := Color("#3fb8af")
+	var tint := Color.WHITE
 	if hurt_flash > 0.0:
-		body = Color("#ff5a5f")
-	draw_rect(Rect2(-5, -22, 10, 20), body)
-	draw_circle(Vector2(0, -26), 5.0, Color("#e8d5b7"))
-	if data.mask_on:
-		draw_rect(Rect2(-4, -26, 8, 4), Color("#2b2f36"))
-	if data.implant_active("olho"):
-		draw_rect(Rect2(-1, -29, 4, 2), Color("#52e6ff"))
-	if data.implant_active("braco_d"):
-		draw_rect(Rect2(5, -20, 3, 9), Color("#9aa7b5"))
-	var dir := Vector2.from_angle(float(facing) * PI / 4.0)
-	var tip := Vector2(dir.x, dir.y * ISO_Y_SCALE) * 14.0
-	draw_line(Vector2(0, -12), Vector2(0, -12) + tip, Color("#ff5a5f"), 2.0)
-	if attack_flash > 0.0:
-		var swing := Vector2(dir.x, dir.y * ISO_Y_SCALE) * 30.0
-		draw_line(Vector2(0, -12), Vector2(0, -12) + swing, Color(1, 1, 1, 0.85), 3.0)
+		tint = Color(1.0, 0.45, 0.45)
+	GenArt.draw_frame(self, _sheet(), int(facing), _frame % 100 if _frame >= 0 else 0, Vector2.ZERO, tint)
