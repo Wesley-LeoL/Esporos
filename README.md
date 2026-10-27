@@ -10,7 +10,7 @@ Abra a pasta no Godot 4.7+ (versão padrão, não .NET) e aperte F5. O projeto j
 ## Sistemas implementados (protótipo jogável)
 - **Carga patogênica (0–100%)**: todos nascem infectados; máscara + filtro, supressor químico e purificador controlam a carga. Água contaminada acelera a infecção.
 - **Mar de Esporos**: concentração sobe perto da borda do mapa; na zona letal o filtro é destruído e hordas de elite surgem sem parar.
-- **Metabolismo**: calorias, carboidratos, proteínas e sede (água limpa vs. suja).
+- **Metabolismo**: fome (calorias) e sede (água limpa vs. suja); carboidratos e proteínas foram removidos do protótipo.
 - **Medicina por membros**: 6 membros com ferida leve/profunda, sangramento, desinfecção, sutura, bandagem, antibiótico, sepse e infecção fúngica por ferida aberta.
 - **Cibernética**: implantes (filtro pulmonar, HUD de escaneamento, braço reforçado) com bateria, estresse térmico, integridade e manutenção; implante danificado enfraquece a imunidade.
 - **Habilidades por ação** (Mecânica, Lógica, Medicina, Engenharia/Eletrônica) e manuais; "parede de conhecimento" para construções e cirurgias (falha crítica ou morte sem o nível).
@@ -20,7 +20,7 @@ Abra a pasta no Godot 4.7+ (versão padrão, não .NET) e aperte F5. O projeto j
 - **Persistência de deltas**: só construções, terreno, caixas saqueadas, cadáveres, elites, vilas e legado vão para o save.
 
 ## Console de testes (cheats)
-`F1` ou `` ` `` abre o terminal (pausa o jogo). Digite `ajuda`. Comandos: `dar <item> [qtd]`, `dano <membro|todos> <n>`, `spawn [normal|elite] [n]`, `tp <x> <y>` (ou `abrigo`, `vila <n>`, `borda`, `cadaver`, `elite`), `set`, `skill`, `curar`, `restaurar`, `implante`, `god`, `matar`, `infectar`, `limpar`, `pos`, `salvar`. Códigos prontos: `kit`, `kit_medico`, `kit_build`, `kit_cyber`. Tab completa, ↑↓ navega no histórico.
+`F1` ou `` ` `` abre o terminal (pausa o jogo). Digite `ajuda`. Comandos: `dar <item> [qtd]`, `dano <membro|todos> <n>`, `spawn [normal|elite] [n]`, `tp <x> <y>` (ou `abrigo`, `vila <n>`, `borda`, `cadaver`, `elite`), `set` (patogeno, sangue, calorias, agua, bateria, filtro, calor), `skill`, `curar`, `restaurar`, `implante`, `god`, `matar`, `infectar`, `limpar`, `pos`, `salvar`. Códigos prontos: `kit`, `kit_medico`, `kit_build`, `kit_cyber`. Tab completa, ↑↓ navega no histórico.
 
 ## Estrutura
 ```

@@ -12,7 +12,7 @@ const LIMB_ALIASES := {"cabeca": "cabeca", "cabeça": "cabeca", "tronco": "torso
 	"perna_e": "perna_e", "perna_d": "perna_d"}
 
 const STATS := {"patogeno": ["pathogen", 100.0], "sangue": ["blood", 100.0], "calorias": ["calories", 2000.0],
-	"carbo": ["carbs", 100.0], "proteina": ["protein", 100.0], "agua": ["water", 100.0],
+	"agua": ["water", 100.0],
 	"bateria": ["battery", 100.0], "filtro": ["filter", 100.0], "calor": ["heat", 100.0]}
 
 const HELP := """[color=#9be04a]COMANDOS[/color] (Tab completa · setas ↑↓ histórico · F1 ou ` fecha)
@@ -20,7 +20,7 @@ const HELP := """[color=#9be04a]COMANDOS[/color] (Tab completa · setas ↑↓ h
 [color=#ffe066]dano[/color] <membro|todos> <n>  causa dano (cabeca, tronco, braco_e, braco_d, perna_e, perna_d)
 [color=#ffe066]curar[/color]                  cura ferimentos, sangue e infecções
 [color=#ffe066]restaurar[/color]              cura tudo e zera patógeno; enche fome, sede, filtro e bateria
-[color=#ffe066]set[/color] <stat> <valor>       patogeno, sangue, calorias, carbo, proteina, agua, bateria, filtro, calor
+[color=#ffe066]set[/color] <stat> <valor>       patogeno, sangue, calorias (fome), agua (sede), bateria, filtro, calor
 [color=#ffe066]skill[/color] <nome|todas> <0-10>  mecanica, logica, medicina, engenharia
 [color=#ffe066]spawn[/color] [normal|elite] [n]  cria inimigos perto de você
 [color=#ffe066]limpar[/color]                 remove todos os infectados
@@ -245,8 +245,6 @@ func execute(raw: String) -> void:
 			_heal(d)
 			d.pathogen = 0.0
 			d.calories = SurvivorData.MAX_CAL
-			d.carbs = 100.0
-			d.protein = 100.0
 			d.water = 100.0
 			d.filter = 100.0
 			d.battery = 100.0
