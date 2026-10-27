@@ -8,6 +8,8 @@ const SAVE_PATH := "user://esporos_save.json"
 
 var world: World
 var hud: HUD
+var console: DevConsole
+var god := false
 var legacy: Array = []
 var play_time := 0.0
 var rng := RandomNumberGenerator.new()
@@ -116,5 +118,9 @@ func debug_command(cmd: String) -> void:
 		"place":
 			var base := world.ground.local_to_map(world.ground.to_local(p.position))
 			world.try_place(a[0], base + Vector2i(int(a[1]), int(a[2])), p)
+		"con":
+			console.execute(arg)
+		"conopen":
+			console.open()
 		"save":
 			save_game()

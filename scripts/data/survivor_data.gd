@@ -153,6 +153,8 @@ func _warn(key: String, text: String, cooldown: float = 40.0) -> void:
 
 
 func _hurt_internal(limb_id: String, amount: float, cause: String) -> void:
+	if Game.god:
+		return
 	var limb: Dictionary = limbs[limb_id]
 	limb["hp"] = maxf(0.0, float(limb["hp"]) - amount)
 	_last_hurt_cause = cause
@@ -329,8 +331,17 @@ func _tick_wounds(delta: float, spore: float) -> void:
 					limb["hp"] = minf(100.0, float(limb["hp"]) + 0.12 * delta * (0.5 + protein / 100.0))
 
 
+func kill(cause: String, kind: String) -> void:
+	if alive:
+		_die(cause, kind)
+
+
 func _check_death() -> void:
 	if not alive:
+		return
+	if Game.god:
+		pathogen = minf(pathogen, 99.0)
+		blood = maxf(blood, 1.0)
 		return
 	if pathogen >= 100.0:
 		_die("Carga patogênica em 100%", "infeccao")
@@ -349,6 +360,8 @@ func _die(cause: String, kind: String) -> void:
 
 # ---------------------------------------------------------------- combate
 func damage_limb(limb_id: String, amount: float) -> void:
+	if Game.god:
+		return
 	var limb: Dictionary = limbs[limb_id]
 	limb["hp"] = maxf(0.0, float(limb["hp"]) - amount)
 	_last_hurt_cause = "Trauma em combate"

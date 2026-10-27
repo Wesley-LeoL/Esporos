@@ -10,6 +10,8 @@ func _ready() -> void:
 	hud = HUD.new()
 	add_child(hud)
 	Game.hud = hud
+	Game.console = DevConsole.new()
+	add_child(Game.console)
 	var auto := ""
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--autostart="):
@@ -57,7 +59,7 @@ func _show_title() -> void:
 	b_cont.pressed.connect(func() -> void: _begin(true))
 	vb.add_child(b_cont)
 	var help := Label.new()
-	help.text = "\nWASD mover · Espaço/clique atacar · E interagir\nTab menu (inventário, corpo, habilidades, construção, implantes)\nX demolir · F5 salvar · Esc cancela\n\nTodos carregam o patógeno. Gerencie sua carga (0-100%).\nNão chegue perto da borda: o Mar de Esporos é letal."
+	help.text = "\nWASD mover · Espaço/clique atacar · E interagir\nTab menu (inventário, corpo, habilidades, construção, implantes)\nX demolir · F5 salvar · Esc cancela · F1 console de testes\n\nTodos carregam o patógeno. Gerencie sua carga (0-100%).\nNão chegue perto da borda: o Mar de Esporos é letal."
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8))
 	vb.add_child(help)

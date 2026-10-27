@@ -102,7 +102,7 @@ func _ready() -> void:
 	prompt_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 	help_label = Label.new()
-	help_label.text = "WASD mover · Espaço/clique atacar · E interagir · Tab menu · X demolir · F5 salvar"
+	help_label.text = "WASD mover · Espaço/clique atacar · E interagir · Tab menu · X demolir · F5 salvar · F1 console"
 	help_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8, 0.8))
 	root.add_child(help_label)
 	help_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 6)
@@ -215,6 +215,8 @@ func open_menu(tab: int = -1) -> void:
 	var p := _player()
 	if p == null or p.data == null or p.is_dead():
 		return
+	if Game.console != null and Game.console.is_open():
+		return
 	if tab >= 0:
 		tabs.current_tab = tab
 	menu_root.visible = true
@@ -229,6 +231,8 @@ func close_menu() -> void:
 
 func _input(event: InputEvent) -> void:
 	if not root.visible:
+		return
+	if Game.console != null and Game.console.is_open():
 		return
 	if event.is_action_pressed("menu"):
 		if menu_root.visible:
