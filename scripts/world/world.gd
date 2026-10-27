@@ -216,8 +216,8 @@ func _build_shelter(v: VillageData) -> void:
 	var gen := _add_structure("gerador", v.cell + Vector2i(2, -2))
 	gen.eternal = true
 	gen.fuel = 100.0
-	_add_structure("purificador", v.cell + Vector2i(-1, -1))
-	_add_structure("vedacao", v.cell + Vector2i(1, 1))
+	_add_structure("purificador", v.cell + Vector2i(-1, -1)).eternal = true
+	_add_structure("vedacao", v.cell + Vector2i(1, 1)).eternal = true
 	var starter := _add_container(v.cell + Vector2i(-2, 1), "comum", v.id)
 	starter.items = {"feijao": 3, "agua_limpa": 3, "bandagem": 2, "sucata": 4, "madeira": 4, "metal": 2}
 
@@ -660,6 +660,8 @@ func apply_save(save: Dictionary) -> void:
 		build_layer.set_cell(c2, 0, Vector2i(int(f[2]), 0))
 		terrain_deltas[c2] = int(f[2])
 	for sd in save.get("structures", []):
+		if structures.has(Game.v2i(sd["cell"])):
+			continue
 		var s2 := _add_structure(str(sd["kind"]), Game.v2i(sd["cell"]))
 		s2.fuel = float(sd.get("fuel", 0.0))
 		s2.open = bool(sd.get("open", false))
