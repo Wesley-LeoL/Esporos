@@ -52,7 +52,7 @@ func _ready() -> void:
 	root.add_child(ScanOverlay.new())
 
 	var bar_panel := PanelContainer.new()
-	bar_panel.add_theme_stylebox_override("panel", UITheme.panel_style(Color("#e6101820"), 7))
+	bar_panel.add_theme_stylebox_override("panel", UITheme.panel_style(Color("#101820e8"), 7))
 	root.add_child(bar_panel)
 	bar_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 8)
 	bar_panel.custom_minimum_size.x = 590
