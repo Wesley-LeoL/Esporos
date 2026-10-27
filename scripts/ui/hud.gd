@@ -298,7 +298,7 @@ func _process(delta: float) -> void:
 	name_label.text = "%s  ·  %s" % [d.nome, _fmt_time(d.time_alive)]
 	_set_bar("pathogen", d.pathogen)
 	_set_bar("blood", d.blood)
-	_set_bar("hunger", d.calories / SurvivorData.MAX_CAL * 100.0)
+	_set_bar("hunger", 100.0 - d.calories / SurvivorData.MAX_CAL * 100.0)
 	_set_bar("thirst", d.water)
 
 	var spore := Game.world.spore_at(p.position)
