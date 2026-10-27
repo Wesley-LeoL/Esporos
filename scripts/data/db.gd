@@ -10,9 +10,9 @@ const SKILLS := {
 }
 
 const ITEMS := {
-	"feijao": {"nome": "Lata de feijão", "tipo": "comida", "cal": 380.0, "carb": 45.0, "prot": 22.0, "desc": "Calorias, carboidratos e proteínas."},
-	"carne_seca": {"nome": "Carne seca", "tipo": "comida", "cal": 300.0, "carb": 2.0, "prot": 48.0, "desc": "Muita proteína."},
-	"barra_cereal": {"nome": "Barra de cereal", "tipo": "comida", "cal": 210.0, "carb": 42.0, "prot": 4.0, "desc": "Carboidratos rápidos."},
+	"feijao": {"nome": "Lata de feijão", "tipo": "comida", "cal": 380.0, "desc": "Reduz a fome."},
+	"carne_seca": {"nome": "Carne seca", "tipo": "comida", "cal": 300.0, "desc": "Reduz a fome."},
+	"barra_cereal": {"nome": "Barra de cereal", "tipo": "comida", "cal": 210.0, "desc": "Reduz a fome rapidamente."},
 	"agua_limpa": {"nome": "Água limpa", "tipo": "bebida", "agua": 45.0, "limpa": true, "desc": "Água segura."},
 	"agua_suja": {"nome": "Água contaminada", "tipo": "bebida", "agua": 45.0, "limpa": false, "desc": "Mata a sede, mas acelera a infecção."},
 	"mascara": {"nome": "Máscara de gás", "tipo": "mascara", "desc": "Equipa/desequipa. Só protege com filtro."},
