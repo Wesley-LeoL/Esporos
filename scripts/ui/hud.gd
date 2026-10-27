@@ -4,14 +4,10 @@ extends CanvasLayer
 ## (inventário, corpo, habilidades, construção, implantes, mundo e legado).
 
 const BAR_DEFS := [
-	["pathogen", "Patógeno", Color("#9be04a")],
-	["blood", "Sangue", Color("#d13b3b")],
-	["cal", "Calorias", Color("#e0a63b")],
-	["carb", "Carbo", Color("#d9c36a")],
-	["prot", "Proteína", Color("#c97a5a")],
-	["water", "Água", Color("#4aa3e0")],
-	["battery", "Bateria", Color("#52e6ff")],
-	["heat", "Calor impl.", Color("#ff7a3b")],
+	["pathogen", "☣", "CONTAMINAÇÃO", UITheme.CONTAMINATION],
+	["blood", "♥", "VIDA", UITheme.LIFE],
+	["hunger", "F", "FOME", UITheme.HUNGER],
+	["thirst", "S", "SEDE", UITheme.THIRST],
 ]
 const TAB_DEFS := [["inv", "Inventário"], ["corpo", "Corpo"], ["skills", "Habilidades"],
 	["build", "Construção"], ["impl", "Implantes"], ["mundo", "Mundo"], ["legado", "Legado"]]
@@ -38,12 +34,16 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 10
 	Game.log_message.connect(_on_log)
-	var theme := Theme.new()
-	theme.default_font_size = 9
+	var game_theme := Theme.new()
+	game_theme.default_font_size = 10
+	game_theme.set_color("font_color", "Label", UITheme.TEXT)
+	game_theme.set_color("font_color", "Button", UITheme.TEXT)
+	game_theme.set_color("font_hover_color", "Button", UITheme.ACCENT)
+	game_theme.set_color("font_pressed_color", "Button", UITheme.ACCENT)
 	root = Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.theme = theme
+	root.theme = game_theme
 	root.visible = false
 	add_child(root)
 
@@ -52,49 +52,87 @@ func _ready() -> void:
 	root.add_child(ScanOverlay.new())
 
 	var bar_panel := PanelContainer.new()
-	bar_panel.add_theme_stylebox_override("panel", _box_style(Color(0.04, 0.05, 0.07, 0.7), 4))
+	bar_panel.add_theme_stylebox_override("panel", UITheme.panel_style(Color("#101820e8"), 7))
 	root.add_child(bar_panel)
-	bar_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 6)
-	var vb := VBoxContainer.new()
-	vb.add_theme_constant_override("separation", 1)
-	bar_panel.add_child(vb)
+	bar_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 8)
+	bar_panel.custom_minimum_size.x = 590
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 6)
+	bar_panel.add_child(layout)
+
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 8)
+	layout.add_child(header)
 	name_label = Label.new()
-	vb.add_child(name_label)
+	name_label.add_theme_font_size_override("font_size", 12)
+	name_label.add_theme_color_override("font_color", UITheme.ACCENT)
+	header.add_child(name_label)
+	var status_tag := Label.new()
+	status_tag.text = "SISTEMA DE SOBREVIVÊNCIA"
+	status_tag.add_theme_color_override("font_color", UITheme.MUTED)
+	status_tag.add_theme_font_size_override("font_size", 8)
+	status_tag.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	header.add_child(status_tag)
+
+	var cards := HBoxContainer.new()
+	cards.add_theme_constant_override("separation", 6)
+	layout.add_child(cards)
 	for def in BAR_DEFS:
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 3)
+		var card := PanelContainer.new()
+		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card.custom_minimum_size = Vector2(136, 48)
+		card.add_theme_stylebox_override("panel", UITheme.panel_style(UITheme.PANEL, 4, Color("#2b424c")))
+		cards.add_child(card)
+		var card_layout := VBoxContainer.new()
+		card_layout.add_theme_constant_override("separation", 4)
+		card.add_child(card_layout)
+		var card_header := HBoxContainer.new()
+		card_header.add_theme_constant_override("separation", 5)
+		card_layout.add_child(card_header)
+		var icon := Label.new()
+		icon.text = def[1]
+		icon.add_theme_color_override("font_color", def[3])
+		icon.add_theme_font_size_override("font_size", 12)
+		card_header.add_child(icon)
 		var lbl := Label.new()
-		lbl.text = def[1]
-		lbl.custom_minimum_size.x = 50
+		lbl.text = def[2]
+		lbl.add_theme_color_override("font_color", UITheme.MUTED)
+		lbl.add_theme_font_size_override("font_size", 8)
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		card_header.add_child(lbl)
+		var val := Label.new()
+		val.text = "100%"
+		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		val.add_theme_color_override("font_color", UITheme.TEXT)
+		card_header.add_child(val)
 		var pb := ProgressBar.new()
-		pb.custom_minimum_size = Vector2(86, 7)
+		pb.custom_minimum_size = Vector2(0, 7)
+		pb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		pb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		pb.show_percentage = false
 		pb.max_value = 100.0
-		var fill := StyleBoxFlat.new()
-		fill.bg_color = def[2]
-		var bg := StyleBoxFlat.new()
-		bg.bg_color = Color(0, 0, 0, 0.55)
-		pb.add_theme_stylebox_override("fill", fill)
-		pb.add_theme_stylebox_override("background", bg)
-		var val := Label.new()
-		val.custom_minimum_size.x = 26
-		row.add_child(lbl)
-		row.add_child(pb)
-		row.add_child(val)
-		vb.add_child(row)
+		pb.add_theme_stylebox_override("fill", UITheme.bar_fill(def[3]))
+		pb.add_theme_stylebox_override("background", UITheme.bar_background())
+		card_layout.add_child(pb)
 		bars[def[0]] = [pb, val]
+
 	status_label = Label.new()
-	status_label.add_theme_color_override("font_color", Color(0.8, 0.85, 0.9))
-	vb.add_child(status_label)
+	status_label.add_theme_color_override("font_color", UITheme.MUTED)
+	status_label.add_theme_font_size_override("font_size", 9)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(status_label)
 
 	log_label = Label.new()
+	log_label.add_theme_color_override("font_color", UITheme.TEXT)
+	log_label.add_theme_font_size_override("font_size", 10)
 	root.add_child(log_label)
-	log_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 6)
+	log_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 8)
 	log_label.grow_vertical = Control.GROW_DIRECTION_BEGIN
 
 	prompt_label = Label.new()
-	prompt_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.5))
+	prompt_label.add_theme_color_override("font_color", UITheme.HUNGER)
+	prompt_label.add_theme_font_size_override("font_size", 12)
 	prompt_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(prompt_label)
 	prompt_label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 40)
@@ -103,9 +141,10 @@ func _ready() -> void:
 
 	help_label = Label.new()
 	help_label.text = "WASD mover · Espaço/clique atacar · E interagir · Tab menu · X demolir · F5 salvar · F1 console"
-	help_label.add_theme_color_override("font_color", Color(0.7, 0.75, 0.8, 0.8))
+	help_label.add_theme_color_override("font_color", UITheme.MUTED)
+	help_label.add_theme_font_size_override("font_size", 9)
 	root.add_child(help_label)
-	help_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 6)
+	help_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 8)
 	help_label.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 
 	_build_menu()
@@ -126,10 +165,8 @@ func _overlay(col: Color) -> ColorRect:
 
 
 func _box_style(col: Color, margin: float) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = col
+	var sb := UITheme.panel_style(col, 5)
 	sb.set_content_margin_all(margin)
-	sb.set_corner_radius_all(2)
 	return sb
 
 
@@ -261,12 +298,8 @@ func _process(delta: float) -> void:
 	name_label.text = "%s  ·  %s" % [d.nome, _fmt_time(d.time_alive)]
 	_set_bar("pathogen", d.pathogen)
 	_set_bar("blood", d.blood)
-	_set_bar("cal", d.calories / SurvivorData.MAX_CAL * 100.0)
-	_set_bar("carb", d.carbs)
-	_set_bar("prot", d.protein)
-	_set_bar("water", d.water)
-	_set_bar("battery", d.battery)
-	_set_bar("heat", d.heat)
+	_set_bar("hunger", 100.0 - d.calories / SurvivorData.MAX_CAL * 100.0)
+	_set_bar("thirst", d.water)
 
 	var spore := Game.world.spore_at(p.position)
 	var mask := "OFF"
@@ -280,7 +313,7 @@ func _process(delta: float) -> void:
 	if d.weapon != "":
 		extra.append(DB.item_name(d.weapon))
 	var edge_tiles := World.RADIUS - Game.world.tile_pos(p.position).length()
-	var st := "Máscara %s\nEsporos %.2f · borda a %d tiles" % [mask, spore, int(edge_tiles)]
+	var st := "Máscara %s · Esporos %.2f · borda a %d tiles" % [mask, spore, int(edge_tiles)]
 	if not extra.is_empty():
 		st += "\n" + " · ".join(extra)
 	if p.build_kind != "":
@@ -312,11 +345,11 @@ func _set_bar(key: String, value: float) -> void:
 	var pair: Array = bars[key]
 	var pb: ProgressBar = pair[0]
 	var lbl: Label = pair[1]
-	pb.value = clampf(value, 0.0, 100.0)
-	lbl.text = "%d" % int(value)
+	var amount := clampf(value, 0.0, 100.0)
+	pb.value = amount
+	lbl.text = "%d%%" % int(amount)
 
 
-# ------------------------------------------------------------------ helpers de UI
 func _clear(box: Control) -> void:
 	for c in box.get_children():
 		box.remove_child(c)
