@@ -7,11 +7,14 @@ extends SceneTree
 ##   --scene=res://scenes/main.tscn
 ##   --frames=60
 ##   --hold=move_right:40,move_down:20   (ação:frame até o qual fica pressionada)
+##   --debug="30:give:metal,5;40:tab:3"  (frame:comando de Game.debug_command)
+##   --autostart=new|continue            (repassado ao Main: pula a tela de título)
 
 var _out := "/tmp/shot.png"
 var _scene_path := "res://scenes/main.tscn"
 var _frames := 60
 var _holds: Array[Dictionary] = []
+var _debug: Array[Dictionary] = []
 var _frame := 0
 
 
@@ -23,6 +26,11 @@ func _initialize() -> void:
 			_scene_path = arg.substr(8)
 		elif arg.begins_with("--frames="):
 			_frames = int(arg.substr(9))
+		elif arg.begins_with("--debug="):
+			for part in arg.substr(8).split(";"):
+				var kv2 := part.split(":", true, 1)
+				if kv2.size() == 2:
+					_debug.append({"frame": int(kv2[0]), "cmd": kv2[1]})
 		elif arg.begins_with("--hold="):
 			for part in arg.substr(7).split(","):
 				var kv := part.split(":")
@@ -36,6 +44,11 @@ func _process(_delta: float) -> bool:
 	if _frame == 2:
 		for hold in _holds:
 			Input.action_press(hold.action)
+	for dbg in _debug:
+		if _frame == dbg.frame:
+			var game := root.get_node_or_null("Game")
+			if game != null:
+				game.call("debug_command", dbg.cmd)
 	for hold in _holds:
 		if _frame == hold.until:
 			Input.action_release(hold.action)

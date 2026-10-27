@@ -12,4 +12,4 @@ shift || true
 
 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" \
 	"$GODOT_BIN" --path "$ROOT" --rendering-driver opengl3 --resolution 1280x720 \
-	--fixed-fps 60 --audio-driver Dummy -s res://tools/screenshot.gd -- --out="$OUT" "$@"
+	--fixed-fps 60 --audio-driver Dummy -s res://tools/screenshot.gd -- --out="$OUT" --autostart=new "$@"
