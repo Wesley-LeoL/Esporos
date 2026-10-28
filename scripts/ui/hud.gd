@@ -599,6 +599,7 @@ func _process(delta: float) -> void:
 	var low := d.blood < 30.0 or float(d.limbs["torso"]["hp"]) < 25.0
 	var pulse := 0.5 + 0.5 * sin(_t * 5.0)
 	vignette.self_modulate = Color(1.0, 0.25, 0.3).lerp(Color.WHITE, pulse * 0.5) if low else Color.WHITE
+	_neural_glitch(d)
 
 	# aviso de interação
 	if p.nearby != null and is_instance_valid(p.nearby) and not menu_root.visible and p.build_kind == "":
@@ -644,6 +645,21 @@ func _process(delta: float) -> void:
 		if _refresh_t <= 0.0 and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 			_refresh_t = 1.0
 			_rebuild()
+
+
+## Sobrecarga sináptica: a interface treme, pisca e muda de cor (GDD 4: distorções de HUD).
+func _neural_glitch(d: SurvivorData) -> void:
+	if not d.overloaded():
+		if ui.position != Vector2.ZERO or ui.modulate != Color.WHITE:
+			ui.position = Vector2.ZERO
+			ui.modulate = Color.WHITE
+		return
+	if randf() < 0.25:
+		ui.position = Vector2(randf_range(-7, 7), randf_range(-4, 4)).round()
+		ui.modulate = Color(1.0, randf_range(0.55, 1.0), 1.0, randf_range(0.7, 1.0))
+	if randf() < 0.04:
+		ui.modulate = Color(1, 0.3, 1, 0.35)
+	hurt.color = Color(0.7, 0.1, 0.9, 0.12 + 0.08 * sin(_t * 23.0))
 
 
 func _set_bar(key: String, value: float) -> void:
@@ -717,6 +733,10 @@ func _update_effects(d: SurvivorData, spore: float) -> void:
 		list.append(["filtro", "FILTRO ESGOTADO", UITheme.DANGER])
 	if d.load_ratio() > 1.0:
 		list.append(["mochila", "SOBRECARGA", UITheme.WARN])
+	if d.overloaded():
+		list.append(["cerebro", "SOBRECARGA SINÁPTICA", UITheme.MAGENTA])
+	elif d.synaptic > 60.0:
+		list.append(["cerebro", "ESTRESSE NEURAL %d%%" % int(d.synaptic), UITheme.MAGENTA])
 	if d.pathogen > 75.0:
 		list.append(["contaminacao", "CARGA CRÍTICA", UITheme.DANGER])
 	var bleeding := false
@@ -1303,8 +1323,19 @@ func _tab_implants(d: SurvivorData) -> void:
 	info.add_child(bars_row)
 	_bar(bars_row, d.battery, 100.0, UITheme.ACCENT, 260, 14)
 	_bar(bars_row, d.heat, 100.0, UITheme.WARN, 260, 14)
-	_btn(top, "Recarregar (+60%)", _act(func() -> void: _player().act("use_item", ["bateria"])), d.count("bateria") > 0)
-	_lbl(box, "Implantes mal mantidos, sem bateria ou superaquecidos enfraquecem sua imunidade e aceleram a infecção nas áreas ligadas ao metal.", UITheme.MUTED)
+	_btn(top, "Recarregar", _act(func() -> void: _player().act("use_item", ["bateria"])), d.count("bateria") > 0)
+	# núcleo neural
+	var nrow := _row(box)
+	nrow.add_child(UITheme.icon_rect("cerebro", UITheme.MAGENTA, 44))
+	var ninfo := _vbox(4)
+	ninfo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	nrow.add_child(ninfo)
+	var cap := d.neural_capacity()
+	var over := d.general_count() > cap
+	ninfo.add_child(_label("NÚCLEO NEURAL: %d / %d IMPLANTES GERAIS · ESTRESSE SINÁPTICO %d%%%s" % [d.general_count(), cap, int(d.synaptic),
+		("  ·  SOBRECARGA!" if d.overloaded() else "")], S, UITheme.DANGER if d.overloaded() else UITheme.TEXT))
+	_bar(ninfo, d.synaptic, 100.0, UITheme.DANGER if over else UITheme.MAGENTA, 540, 20)
+	_lbl(box, "Sem processador neural o corpo aguenta 1 implante geral; mais que isso é rejeitado na cirurgia. Se a bateria acabar ou o processador falhar com vários implantes, vem a sobrecarga: espasmos, controle atrasado, HUD distorcido e nenhuma ação complexa.", UITheme.MUTED)
 	for slot: String in DB.IMPLANT_SLOTS:
 		_head(box, DB.IMPLANT_SLOTS[slot])
 		if d.implants.has(slot):
@@ -1318,6 +1349,7 @@ func _tab_implants(d: SurvivorData) -> void:
 			_lbl(row, "%s · integridade %d%% · %s\n%s" % [DB.item_name(imp["id"]), int(imp["integ"]), state, def["efeito"]],
 				OK_COLOR if d.implant_active(slot) and not d.implant_damaged(slot) else UITheme.WARN)
 			_btn(row, "Manutenção (1 sucata)", _act(func() -> void: _player().act("maintain", [slot])), d.count("sucata") > 0)
+			_btn(row, "Remover (kit)", _act(func() -> void: _player().act("remove_implant", [slot])), d.count("kit_cirurgico") > 0)
 		else:
 			var found := false
 			for id: String in DB.IMPLANTS:
@@ -1327,10 +1359,13 @@ func _tab_implants(d: SurvivorData) -> void:
 					var row2 := _row(box)
 					row2.add_child(_item_icon(id, 48))
 					var meets := d.meets(def2["req"])
-					var txt := "%s (exige %s)" % [DB.item_name(id), DB.req_text(def2["req"])]
-					if not meets:
+					var reject := slot != "cerebro" and d.general_count() >= cap
+					var txt := "%s (exige %s)\n%s" % [DB.item_name(id), DB.req_text(def2["req"]), def2["efeito"]]
+					if reject:
+						txt += "\nREJEIÇÃO: seu cérebro já está no limite (%d/%d). Instale um processador neural." % [d.general_count(), cap]
+					elif not meets:
 						txt += "\nRISCO: falha crítica ou morte na cirurgia!"
-					_lbl(row2, txt, UITheme.TEXT if meets else UITheme.DANGER)
+					_lbl(row2, txt, UITheme.TEXT if meets and not reject else UITheme.DANGER)
 					_btn(row2, "Instalar", _act(func() -> void: _player().act("install", [id])), d.count("kit_cirurgico") > 0)
 			if not found:
 				_lbl(box, "Vazio. Encontre um implante e um kit cirúrgico.", UITheme.MUTED)

@@ -147,5 +147,37 @@ func _initialize() -> void:
 	check(old_sk.level("eletronica") == 4 and old_sk.level("metalurgia") == 2, "habilidades antigas convertidas")
 	check(Items.sanitize([{"id": "manual_logica", "n": 1}])[0]["id"] == "manual_metalurgia", "manual antigo renomeado")
 
+	# fase 4: núcleo neural e sobrecarga sináptica
+	var cy := SurvivorData.from_spec({"nome": "Ciber", "forca": 5, "resist": 5, "skills": {"medicina": 3, "cibernetica": 3}, "traits": []}, r)
+	cy.skills["medicina"]["lv"] = 6
+	cy.skills["cibernetica"]["lv"] = 6
+	cy.battery = 100.0
+	check(cy.neural_capacity() == 1, "sem processador: 1 implante geral")
+	cy.give("kit_cirurgico", 4)
+	cy.give("implante_pulmao")
+	cy.give("implante_braco")
+	cy.install_implant("implante_pulmao")
+	check(cy.implants.has("pulmao"), "primeiro implante instalado")
+	cy.install_implant("implante_braco")
+	check(not cy.implants.has("braco_d") and cy.count("implante_braco") == 0, "segundo implante sem processador é rejeitado")
+	cy.synaptic = 0.0
+	cy.give("proc_neural_mk1")
+	cy.install_implant("proc_neural_mk1")
+	check(cy.neural_capacity() == 2, "processador Mk1: 2 implantes")
+	cy.give("implante_braco")
+	cy.install_implant("implante_braco")
+	check(cy.implants.has("braco_d") and not cy.overloaded(), "com processador cabe o segundo, sem sobrecarga")
+	cy.battery = 0.0
+	check(cy.overloaded(), "bateria vazia desliga o processador: sobrecarga")
+	cy.battery = 100.0
+	check(not cy.overloaded() or cy.synaptic >= 80.0, "bateria de volta: sem sobrecarga por excesso")
+	check(cy.complex_block() == "" or cy.overloaded(), "ações complexas liberadas sem sobrecarga")
+	cy.give("kit_cirurgico")
+	cy.remove_implant("cerebro")
+	check(cy.overloaded() and cy.complex_block() != "", "tirar o processador com 2 implantes causa sobrecarga e bloqueia ações")
+	for i in 30:
+		cy.tick(1.0, {"moving": false})
+	check(cy.synaptic > 50.0, "estresse sináptico sobe na sobrecarga (%d)" % int(cy.synaptic))
+
 	print("FALHAS: %d" % fails)
 	quit(1 if fails > 0 else 0)

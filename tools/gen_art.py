@@ -137,7 +137,11 @@ ITEMS = ["feijao", "carne_seca", "barra_cereal", "agua_limpa", "agua_suja", "mas
          "manual_mecanica", "manual_metalurgia", "manual_medicina", "manual_engenharia",
          "implante_pulmao", "implante_hud", "implante_braco",
          "mochila_escolar", "mochila_trilha", "mochila_militar", "coldre", "fita", "faca", "taco", "maca", "pao", "abridor",
-         "manual_carpintaria", "manual_cibernetica"]
+         "manual_carpintaria", "manual_cibernetica",
+         "proc_neural_mk1", "proc_neural_mk2", "implante_pernas", "implante_derme",
+         "chave_fenda", "martelo", "serra", "alicate", "lanterna", "pilha", "pregos", "fios",
+         "sucata_eletronica", "cantil", "gaze", "analgesico", "alcool", "pistola", "espingarda",
+         "municao_9mm", "cartucho_12"]
 
 
 def fit_icon(parts, theta):

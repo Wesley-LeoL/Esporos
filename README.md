@@ -23,7 +23,7 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **Inventário por peso e volume**: bolsos, mochilas e coldre com capacidade em litros, sobrecarga que deixa lento, itens com durabilidade (armas e máscara), validade (perecíveis estragam) e carga (bateria, combustível, antisséptico, fita). Janela de saque com o recipiente e o inventário lado a lado; baú para guardar.
 - **Metabolismo**: fome (calorias) e sede (água limpa vs. suja); carboidratos e proteínas foram removidos do protótipo.
 - **Medicina por membros**: 6 membros com ferida leve/profunda, sangramento, desinfecção, sutura, bandagem, antibiótico, sepse e infecção fúngica por ferida aberta.
-- **Cibernética**: implantes (filtro pulmonar, HUD de escaneamento, braço reforçado) com bateria, estresse térmico, integridade e manutenção; implante danificado enfraquece a imunidade.
+- **Cibernética**: implantes (filtro pulmonar, HUD, braço, pernas hidráulicas, malha subdérmica) com bateria, estresse térmico, integridade e manutenção. O **núcleo neural** limita os implantes (1 sem processador; Mk1 e Mk2 ampliam); passar do limite dá rejeição ou **sobrecarga sináptica** (controle atrasado, espasmos, HUD distorcido, sem ações complexas).
 - **Criação de personagem por pontos**: Força, Resistência, habilidades iniciais e traços (qualidades e defeitos), com modelos prontos; refeita a cada morte.
 - **12 habilidades por uso** (Luta, Pontaria, Atletismo, Furtividade, Mecânica, Eletrônica, Carpintaria, Metalurgia, Medicina, Cibernética, Agricultura, Culinária) e manuais; "parede de conhecimento" para construções e cirurgias.
 - **Estamina**: Shift corre; golpes cansam; fome e sobrecarga atrasam a recuperação.

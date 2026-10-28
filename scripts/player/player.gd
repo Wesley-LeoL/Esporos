@@ -14,7 +14,9 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store"]
+	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant"]
+## Ações que a sobrecarga sináptica impede (GDD 4: incapacidade de ações complexas).
+const COMPLEX := ["treat", "craft", "install", "maintain", "build", "repair"]
 
 ## Dono deste personagem (id do peer) e nome do jogador.
 var peer := 1
@@ -54,6 +56,11 @@ var _seen_hurt := 0
 var _sync_t := 0.0
 var _last_sync := ""
 var _was_alive := true
+# ---- sobrecarga sináptica (só no dono): atraso e desvio do controle, espasmos
+var _input_buf: Array[Vector2] = []
+var _spasm_t := 0.0
+var _spasm_dir := Vector2.ZERO
+var _glitch_t := 1.0
 
 signal data_changed
 
@@ -134,6 +141,10 @@ func _local_control(delta: float) -> void:
 	var menu_open := Game.hud != null and Game.hud.menu_root.visible
 	if console_open or menu_open:
 		input = Vector2.ZERO
+	if data != null and data.overloaded():
+		input = _overload_input(input, delta)
+	else:
+		_input_buf.clear()
 	moving = input != Vector2.ZERO
 	if moving:
 		facing = _vector_to_facing(input)
@@ -150,9 +161,30 @@ func _local_control(delta: float) -> void:
 			and not console_open and not menu_open:
 		attack_cd = 0.55
 		attack_seq += 1
-		act("attack", [facing])
+		var aim := facing
+		if data != null and data.overloaded():
+			aim = posmod(facing + randi_range(-2, 2), 8)  # não consegue mirar
+		act("attack", [aim])
 	if spores != null and world != null:
 		spores.modulate.a = clampf(world.spore_at(position) * 1.6, 0.15, 1.0)
+
+
+## Sobrecarga: o comando chega atrasado (~0,3 s), desvia e às vezes o corpo dá espasmos.
+func _overload_input(input: Vector2, delta: float) -> Vector2:
+	_input_buf.append(input)
+	var delayed: Vector2 = _input_buf.pop_front() if _input_buf.size() > 18 else Vector2.ZERO
+	var k := 1.0 - 0.06 * float(data.level("cibernetica"))
+	_glitch_t -= delta
+	if _glitch_t <= 0.0:
+		_glitch_t = randf_range(1.0, 3.0) / maxf(k, 0.3)
+		_spasm_t = randf_range(0.15, 0.45) * k
+		_spasm_dir = Vector2.from_angle(randf() * TAU)
+	if _spasm_t > 0.0:
+		_spasm_t -= delta
+		return _spasm_dir
+	if delayed != Vector2.ZERO:
+		delayed = delayed.rotated(randf_range(-0.7, 0.7) * k)
+	return delayed
 
 
 func _server_tick(delta: float) -> void:
@@ -243,6 +275,11 @@ func _do_act(action: String, args: Array) -> void:
 		return
 	if not alive and action != "save":
 		return
+	if action in COMPLEX:
+		var why := data.complex_block()
+		if why != "":
+			Game.tell(peer, why)
+			return
 	match action:
 		"use_item":
 			data.use_item(args[0] if (args[0] is int or args[0] is String) else str(args[0]))
@@ -270,6 +307,8 @@ func _do_act(action: String, args: Array) -> void:
 			data.install_implant(str(args[0]))
 		"maintain":
 			data.maintain_implant(str(args[0]))
+		"remove_implant":
+			data.remove_implant(str(args[0]))
 		"interact":
 			world.interact(self, str(args[0]))
 		"build":

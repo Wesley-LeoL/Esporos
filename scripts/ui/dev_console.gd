@@ -507,7 +507,7 @@ func _find_village(w: World, args: PackedStringArray) -> VillageData:
 
 func _cmd_implant(d: SurvivorData, args: PackedStringArray) -> void:
 	if args.is_empty():
-		_err("Uso: implante <pulmao|hud|braco>")
+		_err("Uso: implante <pulmao|hud|braco|pernas|derme|mk1|mk2> (instala direto, sem cirurgia)")
 		return
 	var q := _norm(args[0])
 	var id := ""
@@ -516,7 +516,7 @@ func _cmd_implant(d: SurvivorData, args: PackedStringArray) -> void:
 			id = k
 			break
 	if id == "":
-		_err("Implante inválido. Opções: pulmao, hud, braco.")
+		_err("Implante inválido. Opções: pulmao, hud, braco, pernas, derme, mk1, mk2.")
 		return
 	var slot: String = DB.IMPLANTS[id]["slot"]
 	d.implants[slot] = {"id": id, "integ": 100.0}
@@ -542,7 +542,7 @@ func _cmd_kit(d: SurvivorData, which: String) -> void:
 			for s in ["carpintaria", "metalurgia", "eletronica"]:
 				d.skills[s]["lv"] = maxi(d.level(s), 5)
 		"kit_cyber":
-			items = {"implante_pulmao": 1, "implante_hud": 1, "implante_braco": 1, "kit_cirurgico": 3, "bateria": 4}
+			items = {"proc_neural_mk1": 1, "implante_pulmao": 1, "implante_hud": 1, "implante_braco": 1, "kit_cirurgico": 4, "bateria": 4}
 			d.battery = 100.0
 			for s in ["medicina", "cibernetica"]:
 				d.skills[s]["lv"] = maxi(d.level(s), 6)

@@ -127,6 +127,13 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Estamina:** Shift corre (+55% de velocidade) gastando estamina; cada golpe também gasta (armas pesadas mais; Luta reduz). Sem estamina não corre e o golpe enfraquece. Fome, sede, sobrecarga e infecção alta atrasam a recuperação.
 - **Peso:** carga confortável = 16 kg + 1,2 por ponto de Força acima de 5 + 0,6 por nível de Atletismo.
 
+### Cibernética neural (fase 4)
+
+- **Núcleo neural:** sem processador o corpo aguenta 1 implante geral. Processador neural Mk1 (até 2) e Mk2 (até 4) ocupam o encaixe do cérebro e gastam bateria. Instalar além do limite causa rejeição imediata: o implante se perde, o membro é ferido e o estresse sináptico vai a 100%.
+- **Estresse sináptico (0-100%):** cada implante ativo soma estresse (Cibernética e o processador reduzem; superaquecimento aumenta).
+- **Sobrecarga:** mais implantes do que o cérebro suporta (bateria vazia, processador danificado ou removido) ou estresse ≥ 80%. Efeitos: o controle chega atrasado e desviado, espasmos empurram o personagem, os golpes saem em direção errada, o HUD treme e muda de cor, ações complexas (tratar, fabricar, operar, construir, consertar) ficam bloqueadas, o calor sobe e a cabeça sofre dano lento.
+- **Implantes novos:** pernas hidráulicas (+12% de velocidade, corrida mais barata) e malha subdérmica (-25% de dano). Implantes podem ser removidos com um kit cirúrgico (Cibernética reduz o risco).
+
 ## Estado da implementação
 
 | Fase | Conteúdo | Situação |
@@ -134,7 +141,7 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 1 | Base de rede: sessão (hospedar, entrar, solo), personagens sincronizados, infectados, construção, saque, vilas, morte e legado com autoridade no anfitrião, save por jogador | **feito** |
 | 2 | Inventário por peso e volume (bolsos, mochilas, coldre, sobrecarga), itens com estado próprio (durabilidade, validade, cargas), janela de saque, baú, abridor de latas | **feito** |
 | 3 | Criação por pontos (atributos, habilidades, traços), 12 habilidades, estamina e corrida | **feito** |
-| 4 | Cibernética neural (processador, limite de implantes, sobrecarga sináptica) | a fazer |
+| 4 | Cibernética neural (processador, limite de implantes, rejeição, estresse e sobrecarga sináptica, remoção de implantes) | **feito** |
 | 5 | Itens novos, armas que quebram, armas de fogo, som e furtividade | a fazer |
 | 6 | Ações com tempo e medicina cooperativa | a fazer |
 | 7 | Mundo em chunks, vilas vivas com NPCs e pedidos de socorro | a fazer |

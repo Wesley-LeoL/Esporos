@@ -46,6 +46,8 @@ var antibiotic_t: float = 0.0
 var battery: float = 0.0
 var heat: float = 0.0
 var implants := {}
+## Estresse sináptico (0-100). Ver overloaded().
+var synaptic: float = 0.0
 var alive: bool = true
 ## Invulnerável (cheat de testes, por personagem).
 var god := false
@@ -471,6 +473,7 @@ func tick(delta: float, env: Dictionary) -> void:
 	_tick_stamina(delta, moving and env.get("sprinting", false))
 	_tick_metabolism(delta, moving)
 	_tick_implants(delta, moving or env.get("combat", false))
+	_tick_neural(delta)
 	_tick_pathogen(delta, spore, env.get("purifier", false))
 	_tick_wounds(delta, spore)
 	_check_death()
@@ -519,6 +522,8 @@ func spend_stamina(amount: float) -> bool:
 func _tick_stamina(delta: float, sprinting: bool) -> void:
 	if sprinting and can_sprint():
 		var drain := 14.0 * (1.0 - 0.04 * float(level("atletismo")))
+		if implant_active("pernas"):
+			drain *= 0.7
 		if load_ratio() > 1.0:
 			drain *= 1.5
 		spend_stamina(drain * delta)
@@ -746,6 +751,8 @@ func _die(cause: String, kind: String) -> void:
 func damage_limb(limb_id: String, amount: float) -> void:
 	if god:
 		return
+	if implant_active("pele"):
+		amount *= 0.75
 	var limb: Dictionary = limbs[limb_id]
 	limb["hp"] = maxf(0.0, float(limb["hp"]) - amount)
 	_last_hurt_cause = "Trauma em combate"
@@ -804,6 +811,8 @@ func speed_mult() -> float:
 		elif hp < 40.0:
 			m -= 0.15
 	m += 0.015 * float(level("atletismo"))
+	if implant_active("pernas"):
+		m += 0.12
 	if has_trait("lento"):
 		m -= 0.08
 	if pathogen > 60.0:
@@ -965,7 +974,59 @@ func treat(limb_id: String, action: String) -> void:
 
 
 # ---------------------------------------------------------------- cibernética
-## Retorna true se o personagem sobreviveu à operação.
+## Implantes gerais (tudo menos o processador do cérebro).
+func general_count() -> int:
+	var n := 0
+	for slot in implants:
+		if slot != "cerebro":
+			n += 1
+	return n
+
+
+## Quantos implantes gerais o cérebro suporta agora (o processador precisa estar ligado).
+func neural_capacity() -> int:
+	if implant_active("cerebro"):
+		return int(DB.IMPLANTS[implants["cerebro"]["id"]].get("slots", DB.NEURAL_BASE))
+	return DB.NEURAL_BASE
+
+
+## Sobrecarga sináptica: mais implantes do que o cérebro suporta, ou estresse alto demais.
+func overloaded() -> bool:
+	return general_count() > neural_capacity() or synaptic >= 80.0
+
+
+func _tick_neural(delta: float) -> void:
+	var target := 0.0
+	for slot in implants:
+		if slot != "cerebro" and implant_active(slot):
+			target += float(DB.IMPLANTS[implants[slot]["id"]].get("neuro", 10.0))
+	target *= 1.0 - 0.06 * float(level("cibernetica"))
+	if implant_active("cerebro"):
+		target *= 0.6
+	if heat > 70.0:
+		target += 20.0
+	var over := general_count() > neural_capacity()
+	if over:
+		target = 100.0
+	synaptic = move_toward(synaptic, clampf(target, 0.0, 100.0), (6.0 if synaptic < target else 3.0) * delta)
+	if overloaded():
+		heat = minf(100.0, heat + 0.4 * delta)
+		if over:
+			_hurt_internal("cabeca", 0.15 * delta, "Colapso sináptico")
+			_warn("sobrecarga", "SOBRECARGA SINÁPTICA! Implantes demais para o seu cérebro (%d/%d)." % [general_count(), neural_capacity()], 20.0)
+		else:
+			_warn("sobrecarga", "SOBRECARGA SINÁPTICA! O estresse neural está alto demais.", 20.0)
+	elif synaptic > 60.0:
+		_warn("neural", "Estresse sináptico alto: sua visão tremula.", 45.0)
+
+
+## O sobrevivente pode fazer ações complexas (fabricar, tratar, operar, construir)?
+func complex_block() -> String:
+	if overloaded():
+		return "Sobrecarga sináptica: suas mãos não obedecem."
+	return ""
+
+
 func install_implant(item_id: String) -> void:
 	if not DB.IMPLANTS.has(item_id) or count(item_id) <= 0:
 		return
@@ -979,6 +1040,13 @@ func install_implant(item_id: String) -> void:
 		return
 	take_item("kit_cirurgico")
 	take_item(item_id)
+	# sem suporte neural o corpo rejeita o implante na hora (GDD 4)
+	if slot != "cerebro" and general_count() >= neural_capacity():
+		damage_limb(def["membro"], 20.0)
+		synaptic = 100.0
+		add_xp("cibernetica", 6.0)
+		message.emit("REJEIÇÃO IMEDIATA: seu cérebro não suporta mais um implante (%d/%d). O implante foi perdido." % [general_count(), neural_capacity()])
+		return
 	var deficit := 0
 	for k in def["req"]:
 		deficit += maxi(0, int(def["req"][k]) - level(k))
@@ -1005,6 +1073,32 @@ func install_implant(item_id: String) -> void:
 		message.emit("Instalado com muita sorte, mas mal encaixado (integridade 55%).")
 		add_xp("medicina", 12.0)
 		add_xp("cibernetica", 12.0)
+
+
+## Remove um implante (gasta um kit cirúrgico). O item volta para o inventário, a não ser
+## que esteja destruído. Tirar o processador com vários implantes gerais causa sobrecarga.
+func remove_implant(slot: String) -> void:
+	if not implants.has(slot):
+		return
+	if count("kit_cirurgico") <= 0:
+		message.emit("Você precisa de um kit cirúrgico.")
+		return
+	take_item("kit_cirurgico")
+	var imp: Dictionary = implants[slot]
+	var def: Dictionary = DB.IMPLANTS[imp["id"]]
+	implants.erase(slot)
+	var fail := maxf(0.0, 0.35 - 0.08 * float(level("cibernetica")))
+	if rng.randf() < fail:
+		damage_limb(def["membro"], 18.0)
+		message.emit("A remoção foi brusca: o implante quebrou e feriu %s." % LIMB_NAMES[def["membro"]].to_lower())
+	elif float(imp["integ"]) < 15.0:
+		message.emit("Implante removido, mas destruído demais para reaproveitar.")
+	else:
+		give(imp["id"])
+		message.emit("Implante removido: %s." % DB.item_name(imp["id"]))
+	add_xp("cibernetica", 8.0)
+	if slot == "cerebro" and general_count() > DB.NEURAL_BASE:
+		message.emit("Sem o processador, seu cérebro não suporta os implantes!")
 
 
 func maintain_implant(slot: String) -> void:
@@ -1043,7 +1137,7 @@ func to_dict() -> Dictionary:
 		"bags": bags.duplicate(true), "equip": equip.duplicate(true), "hand_u": hand_u, "next_u": _next_u,
 		"implants": implants.duplicate(true), "suppress_t": suppress_t, "tainted_t": tainted_t,
 		"antibiotic_t": antibiotic_t, "battery": battery, "heat": heat, "time_alive": time_alive,
-		"forca": forca, "resist": resist, "traits": traits.duplicate(), "stamina": stamina}
+		"forca": forca, "resist": resist, "traits": traits.duplicate(), "stamina": stamina, "synaptic": synaptic}
 
 
 static func from_dict(src: Dictionary) -> SurvivorData:
@@ -1081,6 +1175,7 @@ static func from_dict(src: Dictionary) -> SurvivorData:
 		if DB.TRAITS.has(str(t)):
 			d.traits.append(str(t))
 	d.stamina = float(src.get("stamina", d.max_stamina()))
+	d.synaptic = float(src.get("synaptic", 0.0))
 	if src.has("bags"):
 		var sb: Dictionary = src["bags"]
 		for c in d.bags:

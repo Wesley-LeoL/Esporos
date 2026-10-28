@@ -172,18 +172,35 @@ const ITEMS := {
 	"manual_cibernetica": {"nome": "Manual de Cibernética", "tipo": "manual", "skill": "cibernetica", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Cibernética."},
 	"implante_pulmao": {"nome": "Filtro pulmonar mecânico", "tipo": "implante", "peso": 1.5, "vol": 1.0, "desc": "Implante. Instale na aba Implantes."},
 	"implante_hud": {"nome": "HUD de escaneamento", "tipo": "implante", "peso": 0.4, "vol": 0.4, "desc": "Implante. Instale na aba Implantes."},
+	"proc_neural_mk1": {"nome": "Processador neural Mk1", "tipo": "implante", "peso": 0.3, "vol": 0.2, "desc": "Implante cerebral: até 2 implantes gerais."},
+	"proc_neural_mk2": {"nome": "Processador neural Mk2", "tipo": "implante", "peso": 0.3, "vol": 0.2, "desc": "Implante cerebral: até 4 implantes gerais."},
+	"implante_pernas": {"nome": "Pernas hidráulicas", "tipo": "implante", "peso": 3.0, "vol": 2.5, "desc": "Implante. Instale na aba Implantes."},
+	"implante_derme": {"nome": "Malha subdérmica", "tipo": "implante", "peso": 1.0, "vol": 0.8, "desc": "Implante. Instale na aba Implantes."},
 	"implante_braco": {"nome": "Braço reforçado", "tipo": "implante", "peso": 2.5, "vol": 2.0, "desc": "Implante. Instale na aba Implantes."},
 }
 
-const IMPLANT_SLOTS := {"pulmao": "Pulmões", "olho": "Olho (HUD)", "braco_d": "Braço direito"}
+## Encaixes de implantes. O cérebro recebe o processador neural, que não conta como
+## implante geral: sem processador o corpo aguenta só 1 implante geral (GDD, seção 4).
+const IMPLANT_SLOTS := {"cerebro": "Cérebro (processador neural)", "pulmao": "Pulmões", "olho": "Olho (HUD)",
+	"braco_d": "Braço direito", "pernas": "Pernas", "pele": "Pele"}
+const NEURAL_BASE := 1
 
+## neuro: estresse sináptico que o implante gera; slots: limite de implantes gerais (processadores).
 const IMPLANTS := {
+	"proc_neural_mk1": {"slot": "cerebro", "membro": "cabeca", "req": {"medicina": 4, "cibernetica": 4}, "dreno": 0.03, "calor": 0.3,
+		"neuro": 0.0, "slots": 2, "efeito": "Suporta até 2 implantes gerais e reduz o estresse sináptico."},
+	"proc_neural_mk2": {"slot": "cerebro", "membro": "cabeca", "req": {"medicina": 5, "cibernetica": 6}, "dreno": 0.05, "calor": 0.4,
+		"neuro": 0.0, "slots": 4, "efeito": "Suporta até 4 implantes gerais e reduz o estresse sináptico."},
 	"implante_pulmao": {"slot": "pulmao", "membro": "torso", "req": {"medicina": 4, "cibernetica": 3}, "dreno": 0.05, "calor": 0.6,
-		"efeito": "Reduz em 65% a entrada de esporos."},
+		"neuro": 12.0, "efeito": "Reduz em 65% a entrada de esporos."},
 	"implante_hud": {"slot": "olho", "membro": "cabeca", "req": {"medicina": 3, "cibernetica": 4}, "dreno": 0.03, "calor": 0.4,
-		"efeito": "Escaneia infectados, caixas e nível de esporos."},
+		"neuro": 10.0, "efeito": "Escaneia infectados, caixas e nível de esporos."},
 	"implante_braco": {"slot": "braco_d", "membro": "braco_d", "req": {"medicina": 5, "cibernetica": 4}, "dreno": 0.04, "calor": 0.5,
-		"efeito": "+14 de dano corpo a corpo."},
+		"neuro": 16.0, "efeito": "+14 de dano corpo a corpo."},
+	"implante_pernas": {"slot": "pernas", "membro": "perna_d", "req": {"medicina": 4, "cibernetica": 3}, "dreno": 0.04, "calor": 0.5,
+		"neuro": 14.0, "efeito": "+12% de velocidade; correr gasta 30% menos estamina."},
+	"implante_derme": {"slot": "pele", "membro": "torso", "req": {"medicina": 3, "cibernetica": 3}, "dreno": 0.03, "calor": 0.4,
+		"neuro": 10.0, "efeito": "Malha subdérmica: recebe 25% menos dano."},
 }
 
 const BUILDS := {
@@ -223,7 +240,8 @@ const LOOT := {
 	"tecnico": [["metal", 30, 1, 4], ["sucata", 25, 2, 5], ["bateria", 14, 1, 2], ["combustivel", 14, 1, 3],
 		["filtro", 12, 1, 2], ["mascara", 5, 1, 1], ["manual_mecanica", 3, 1, 1], ["manual_metalurgia", 3, 1, 1],
 		["manual_engenharia", 3, 1, 1], ["manual_carpintaria", 3, 1, 1], ["manual_cibernetica", 2, 1, 1], ["implante_pulmao", 1, 1, 1], ["implante_hud", 1, 1, 1],
-		["implante_braco", 1, 1, 1], ["machete", 2, 1, 1], ["fita", 8, 1, 1], ["mochila_trilha", 2, 1, 1],
+		["implante_braco", 1, 1, 1], ["implante_pernas", 1, 1, 1], ["implante_derme", 1, 1, 1],
+		["proc_neural_mk1", 2, 1, 1], ["proc_neural_mk2", 1, 1, 1], ["machete", 2, 1, 1], ["fita", 8, 1, 1], ["mochila_trilha", 2, 1, 1],
 		["mochila_militar", 1, 1, 1], ["coldre", 3, 1, 1]],
 }
 
