@@ -14,7 +14,8 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy", "vehicle"]
+	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy", "vehicle", "reorder", "sort_inv",
+	"loot_order", "sort_loot"]
 ## Ações que levam tempo (barra de progresso; mover-se ou levar dano interrompe).
 const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item", "vehicle"]
 const TREAT_NAMES := {"antibiotico": "Aplicando antibiótico", "desinfetar": "Desinfetando", "enfaixar": "Enfaixando",
@@ -156,7 +157,7 @@ func _physics_process(delta: float) -> void:
 func _local_control(delta: float) -> void:
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var console_open := Game.console != null and Game.console.is_open()
-	var menu_open := Game.hud != null and Game.hud.menu_root.visible
+	var menu_open := Game.hud != null and Game.hud.blocks_input()
 	if console_open or menu_open:
 		input = Vector2.ZERO
 	if data != null and data.overloaded():
@@ -448,6 +449,14 @@ func _run_act(action: String, args: Array) -> void:
 			world.buy(self, int(args[0]), str(args[1]))
 		"vehicle":
 			world.vehicle_action(self, str(args[0]), str(args[1]))
+		"reorder":
+			data.reorder(int(args[0]), int(args[1]))
+		"sort_inv":
+			data.sort_bags()
+		"loot_order":
+			world.loot_order(self, str(args[0]), int(args[1]), int(args[2]))
+		"sort_loot":
+			world.sort_loot(self, str(args[0]))
 		"save":
 			Game.save_game()
 			Game.tell(peer, "Jogo salvo pelo anfitrião.")

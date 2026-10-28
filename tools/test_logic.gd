@@ -243,5 +243,22 @@ func _initialize() -> void:
 	self_op.install_implant("implante_derme")
 	check(float(self_op.implants["pele"]["integ"]) == 80.0, "operar a si mesmo deixa o encaixe a 80%")
 
+	# interface: reordenar e organizar o inventário
+	var o := SurvivorData.from_spec({"nome": "Org", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
+	o.wear(Items.make("mochila_militar")[0])
+	o.give("pregos", 5)
+	o.give("faca")
+	o.give("feijao", 2)
+	var list: Array = o.bags["mochila"]
+	var last_u := int(list[list.size() - 1]["u"])
+	o.reorder(last_u, 0)
+	check(int(o.bags["mochila"][0]["u"]) == last_u, "reordenar põe o item na posição escolhida")
+	o.use_item("faca")
+	var hand := o.hand_u
+	o.sort_bags()
+	check(o.hand_u == hand and o.weapon_id() == "faca", "organizar mantém a arma na mão")
+	var first_tipo := String(Items.def(o.bags["mochila"][0]["id"])["tipo"])
+	check(first_tipo == "arma", "organizar põe as armas primeiro (%s)" % first_tipo)
+
 	print("FALHAS: %d" % fails)
 	quit(1 if fails > 0 else 0)

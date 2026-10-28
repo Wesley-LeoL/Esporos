@@ -1025,10 +1025,35 @@ func take_from(p: Player, key: String, idx: int, n: int, mode: String, id: Strin
 			Items.add(items, extra)
 		p.data.wear(part)
 	else:
-		var left := p.data.store(part)
+		var prefer := mode.substr(5) if mode.begins_with("para:") else ""
+		var left := p.data.store(part, prefer)
 		if not left.is_empty():
 			Items.add(items, left)
 			Game.tell(p.peer, "Sem espaço para %s." % Items.label(left))
+	container_changed(node)
+
+
+## Servidor: reordena um item dentro de um recipiente do mundo.
+func loot_order(p: Player, key: String, from: int, to: int) -> void:
+	var node := _loot_node(p, key)
+	if node == null:
+		return
+	var items: Array = node.items
+	if from < 0 or from >= items.size():
+		return
+	var it = items[from]
+	items.remove_at(from)
+	items.insert(clampi(to, 0, items.size()), it)
+	container_changed(node)
+
+
+## Servidor: organiza um recipiente do mundo.
+func sort_loot(p: Player, key: String) -> void:
+	var node := _loot_node(p, key)
+	if node == null:
+		return
+	Items.sort_list(node.items)
+	Items.compact(node.items)
 	container_changed(node)
 
 

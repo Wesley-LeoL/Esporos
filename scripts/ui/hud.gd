@@ -15,10 +15,11 @@ const VITALS := [
 	["stamina", "estamina", "ESTAMINA", Color("#e6d26a"), false],
 ]
 const TAB_DEFS := [["inv", "Inventário", "mochila"], ["corpo", "Corpo", "corpo"], ["skills", "Habilidades", "chip"],
-	["build", "Construção", "martelo"], ["impl", "Implantes", "bateria"], ["mundo", "Mundo", "mundo"],
-	["legado", "Legado", "legado"], ["vila", "Vila", "pessoa"], ["veiculo", "Veículo", "carro"]]
-const HINTS := [["SHIFT", "CORRER"], ["C", "AGACHAR"], ["ESPAÇO", "ATACAR"], ["R", "RECARREGAR"], ["E", "INTERAGIR"],
-	["TAB", "MENU"], ["X", "DEMOLIR"], ["F1", "CONSOLE"]]
+	["impl", "Implantes", "bateria"], ["mapa", "Mapa", "mundo"]]
+const TAB_INV := 0
+const TAB_MAP := 4
+const HINTS := [["SHIFT", "CORRER"], ["C", "AGACHAR"], ["R", "RECARREGAR"], ["E", "INTERAGIR"],
+	["TAB", "MENU"], ["I", "INVENTÁRIO"], ["M", "MAPA"], ["B", "CONSTRUIR"]]
 const OK_COLOR := Color("#7fe0a0")
 const NO_COLOR := Color("#c07a84")
 const S := UITheme.FONT_S
@@ -74,6 +75,25 @@ var patient_peer := 0
 var patient_info := {}
 ## Vila aberta pela conversa com um NPC (-1 = a mais próxima).
 var village_open := -1
+## Janela separada do menu principal: "build", "village" ou "vehicle" ("" = fechada).
+var window_kind := ""
+var window_root: Control
+var window_title: Label
+var window_box: VBoxContainer
+var _window_t := 0.0
+## Menu de contexto da grade de itens (botão direito).
+var ctx_root: Control
+var ctx_box: VBoxContainer
+## Mapa: chunks descobertos por este jogador (Vector2i -> true), salvo em user://.
+var map_known := {}
+var map_view: MapView
+var map_info: VBoxContainer
+var _map_dirty := false
+var _map_t := 0.0
+var _map_save_t := 10.0
+var _map_file := ""
+## Botão na tela para o status do veículo (aparece dentro de um veículo).
+var veh_button: Button
 var busy_panel: PanelContainer
 var busy_text: Label
 var busy_bar: PixelBar
@@ -110,8 +130,16 @@ func _ready() -> void:
 	_build_banner()
 	_build_busy()
 	_build_menu()
+	_build_window()
+	_build_ctx()
+	_build_vehicle_button()
 	_build_death()
 	_build_creation()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and _map_dirty:
+		save_map()
 
 
 func _fit() -> void:
@@ -527,19 +555,162 @@ func _player() -> Player:
 
 
 # ------------------------------------------------------------------ menu
-## Veículo perto: abre a aba Veículo.
+## Veículo perto (ou o veículo em que você está): janela de status e ações.
 var vehicle_node: Vehicle
 
 
 func open_vehicle(v: Vehicle) -> void:
 	vehicle_node = v
-	open_menu(8)
+	open_window("vehicle")
 
 
-## Conversa com um NPC: abre a aba Vila.
+## Conversa com um NPC: janela da vila.
 func open_village(vid: int) -> void:
 	village_open = vid
-	open_menu(7)
+	open_window("village")
+
+
+## O menu principal, uma janela separada, o menu de contexto ou a criação de personagem
+## estão abertos (o personagem não anda).
+func blocks_input() -> bool:
+	return menu_root.visible or window_kind != "" or creation_root.visible
+
+
+# ------------------------------------------------------------------ janela separada
+func _build_window() -> void:
+	window_root = Control.new()
+	window_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	window_root.visible = false
+	ui.add_child(window_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.02, 0.03, 0.45)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	window_root.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	window_root.add_child(center)
+	var panel := _panel("panel_solid", 16, Vector4(18, 14, 18, 16))
+	panel.custom_minimum_size = Vector2(1100, 640)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	center.add_child(panel)
+	var col := _vbox(10)
+	panel.add_child(col)
+	var head := _hbox(12)
+	col.add_child(head)
+	window_title = _label("", L, UITheme.ACCENT)
+	window_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(window_title)
+	var close := _btn(head, "Fechar [Esc]", close_window)
+	close.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	col.add_child(_pixel_line())
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sc.custom_minimum_size.y = 540
+	col.add_child(sc)
+	window_box = _vbox(8)
+	window_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(window_box)
+
+
+func open_window(kind: String) -> void:
+	var p := _player()
+	if p == null or p.data == null or p.is_dead():
+		return
+	if menu_root.visible:
+		menu_root.visible = false
+		loot_node = null
+	window_kind = kind
+	window_root.visible = true
+	get_tree().paused = Net.is_solo()
+	_rebuild_window()
+
+
+func close_window() -> void:
+	window_kind = ""
+	window_root.visible = false
+	village_open = -1
+	vehicle_node = null
+	_close_ctx()
+	if not menu_root.visible:
+		get_tree().paused = false
+
+
+func _rebuild_window() -> void:
+	var p := _player()
+	if p == null or p.data == null or window_kind == "":
+		return
+	match window_kind:
+		"build":
+			window_title.text = "CONSTRUÇÃO"
+			_win_build(p)
+		"village":
+			window_title.text = "VILA"
+			_tab_village(p)
+		"vehicle":
+			window_title.text = "VEÍCULO"
+			_tab_vehicle(p)
+
+
+func _win_act(cb: Callable) -> Callable:
+	return func() -> void:
+		cb.call()
+		_rebuild_window()
+
+
+# ------------------------------------------------------------------ menu de contexto
+func _build_ctx() -> void:
+	ctx_root = Control.new()
+	ctx_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ctx_root.visible = false
+	ctx_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	ui.add_child(ctx_root)
+	ctx_root.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed:
+			_close_ctx())
+	var panel := _panel("card", 8, Vector4(8, 8, 8, 8))
+	panel.name = "Panel"
+	ctx_root.add_child(panel)
+	ctx_box = _vbox(4)
+	panel.add_child(ctx_box)
+
+
+## Abre o menu de contexto na posição do mouse com as opções [[texto, Callable], ...].
+func _open_ctx(title: String, options: Array) -> void:
+	_clear(ctx_box)
+	var t := _label(title, S, UITheme.ACCENT)
+	ctx_box.add_child(t)
+	for o in options:
+		var cb: Callable = o[1]
+		var b := _btn(ctx_box, o[0], func() -> void:
+			_close_ctx()
+			cb.call()
+			_rebuild())
+		b.size_flags_horizontal = Control.SIZE_FILL
+		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	ctx_root.visible = true
+	var panel: PanelContainer = ctx_root.get_node("Panel")
+	panel.reset_size()
+	var mp := ui.get_local_mouse_position()
+	panel.position = Vector2(minf(mp.x, ui.size.x - panel.size.x - 8), minf(mp.y, ui.size.y - panel.size.y - 8))
+
+
+func _close_ctx() -> void:
+	if ctx_root != null:
+		ctx_root.visible = false
+
+
+# ------------------------------------------------------------------ botão do veículo
+func _build_vehicle_button() -> void:
+	veh_button = Button.new()
+	veh_button.text = "[V] STATUS DO VEÍCULO"
+	veh_button.visible = false
+	veh_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	veh_button.pressed.connect(func() -> void:
+		var v := Game.world.vehicle_of(_player().peer)
+		if v != null:
+			open_vehicle(v))
+	ui.add_child(veh_button)
 
 
 ## Abre a janela de saque de um recipiente (aba Inventário em duas colunas).
@@ -567,10 +738,10 @@ func open_menu(tab: int = -1) -> void:
 
 func close_menu() -> void:
 	loot_node = null
-	village_open = -1
-	vehicle_node = null
+	_close_ctx()
 	menu_root.visible = false
-	get_tree().paused = false
+	if window_kind == "":
+		get_tree().paused = false
 
 
 func _input(event: InputEvent) -> void:
@@ -578,15 +749,54 @@ func _input(event: InputEvent) -> void:
 		return
 	if Game.console != null and Game.console.is_open():
 		return
-	if event.is_action_pressed("menu"):
-		if menu_root.visible:
+	if creation_root.visible:
+		return
+	var p := _player()
+	if p == null or p.data == null:
+		return
+	if event.is_action_pressed("cancel") and ctx_root.visible:
+		_close_ctx()
+	elif event.is_action_pressed("cancel") and window_kind != "":
+		close_window()
+	elif event.is_action_pressed("cancel") and menu_root.visible:
+		close_menu()
+	elif event.is_action_pressed("menu"):
+		if window_kind != "":
+			close_window()
+		elif menu_root.visible:
 			close_menu()
 		else:
 			open_menu()
-		get_viewport().set_input_as_handled()
-	elif event.is_action_pressed("cancel") and menu_root.visible:
+	elif event.is_action_pressed("inventory"):
+		_toggle_tab(TAB_INV)
+	elif event.is_action_pressed("map"):
+		_toggle_tab(TAB_MAP)
+	elif event.is_action_pressed("build_menu"):
+		if window_kind == "build":
+			close_window()
+		else:
+			open_window("build")
+	elif event.is_action_pressed("vehicle_status"):
+		var v := Game.world.vehicle_of(p.peer)
+		if window_kind == "vehicle":
+			close_window()
+		elif v != null:
+			open_vehicle(v)
+		else:
+			return
+	else:
+		return
+	get_viewport().set_input_as_handled()
+
+
+## Atalho (I, M): abre o menu direto na aba; se já está nela, fecha.
+func _toggle_tab(tab: int) -> void:
+	if menu_root.visible and tabs.current_tab == tab:
 		close_menu()
-		get_viewport().set_input_as_handled()
+		return
+	if window_kind != "":
+		close_window()
+	open_menu(tab)
 
 
 # ------------------------------------------------------------------ atualização por frame
@@ -704,6 +914,18 @@ func _process(delta: float) -> void:
 		if _refresh_t <= 0.0 and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
 			_refresh_t = 1.0
 			_rebuild()
+	if window_kind != "":
+		_window_t -= delta
+		if _window_t <= 0.0 and not Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			_window_t = 1.0
+			_rebuild_window()
+	_map_tick(delta, p)
+	# botão de status do veículo
+	var inside := Game.world.vehicle_of(p.peer)
+	veh_button.visible = inside != null and not blocks_input()
+	if veh_button.visible:
+		veh_button.reset_size()
+		veh_button.position = Vector2((ui.size.x - veh_button.size.x) / 2.0, ui.size.y - veh_button.size.y - 120.0).round()
 
 
 ## Sobrecarga sináptica: a interface treme, pisca e muda de cor (GDD 4: distorções de HUD).
@@ -916,17 +1138,16 @@ func _rebuild() -> void:
 	var p := _player()
 	if p == null or p.data == null or not menu_root.visible:
 		return
+	# não reconstrói no meio de um arraste ou com o menu de contexto aberto
+	if get_viewport().gui_is_dragging() or ctx_root.visible:
+		return
 	var d := p.data
 	match tabs.current_tab:
 		0: _tab_inventory(d)
 		1: _tab_body(d)
 		2: _tab_skills(d)
-		3: _tab_build(p)
-		4: _tab_implants(d)
-		5: _tab_world(p)
-		6: _tab_legacy(d)
-		7: _tab_village(p)
-		8: _tab_vehicle(p)
+		3: _tab_implants(d)
+		4: _tab_map(p)
 
 
 func _act(cb: Callable) -> Callable:
@@ -944,40 +1165,333 @@ func _tab_inventory(d: SurvivorData) -> void:
 	top.add_child(UITheme.icon_rect("mochila", UITheme.ACCENT, 36))
 	var ratio := d.load_ratio()
 	var wl := _label("CARGA %.1f / %.0f KG" % [d.carried_weight(), d.carry_max()], S, UITheme.DANGER if ratio > 1.0 else UITheme.TEXT)
-	wl.custom_minimum_size.x = 300
 	wl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	top.add_child(wl)
-	_bar(top, minf(ratio, 1.5), 1.5, UITheme.DANGER if ratio > 1.0 else UITheme.ACCENT, 260, 15)
-	_lbl(top, ("SOBRECARGA: você anda mais devagar." if ratio > 1.0 else "Acima de %.0f kg você fica lento." % d.carry_max()),
+	_bar(top, minf(ratio, 1.5), 1.5, UITheme.DANGER if ratio > 1.0 else UITheme.ACCENT, 240, 15)
+	_lbl(top, ("SOBRECARGA: você anda mais devagar." if ratio > 1.0 else "Botão direito: opções · arrastar: organizar · dois cliques: passar"),
 		UITheme.WARN if ratio > 1.0 else UITheme.MUTED)
-	if loot_node != null and is_instance_valid(loot_node):
-		var cols := _hbox(16)
-		cols.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		box.add_child(cols)
-		var left := _vbox(6)
-		left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		left.size_flags_stretch_ratio = 1.0
-		cols.add_child(left)
-		var right := _vbox(6)
-		right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		cols.add_child(right)
-		_loot_column(left, d)
-		_inventory_lists(right, d, true)
-		return
-	_inventory_lists(box, d, false)
+	var cols := _hbox(16)
+	cols.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_child(cols)
+	var looting := loot_node != null and is_instance_valid(loot_node)
+	if looting:
+		_loot_grid(_scroll_col(cols, 560), d)
+	_inventory_grid(_scroll_col(cols, 560), d, looting)
+	if not looting:
+		_crafting(_scroll_col(cols, 0), d)
+
+
+## Coluna com rolagem própria (largura mínima 'w'; 0 = ocupa o resto).
+func _scroll_col(parent: Control, w: int) -> VBoxContainer:
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.custom_minimum_size = Vector2(w, 540)
+	if w == 0:
+		sc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(sc)
+	var v := _vbox(8)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(v)
+	return v
+
+
+## Grade de 4 colunas (com espaços vazios até completar a linha, para soltar itens).
+func _grid(parent: Control, side: String, cont: String, items: Array, d: SurvivorData) -> void:
+	var g := GridContainer.new()
+	g.columns = 4
+	g.add_theme_constant_override("h_separation", 6)
+	g.add_theme_constant_override("v_separation", 6)
+	parent.add_child(g)
+	var total := items.size() + 1
+	total = int(ceil(float(total) / 4.0)) * 4
+	for i in total:
+		var sl := InvSlot.new()
+		sl.hud = self
+		sl.side = side
+		sl.cont = cont
+		if i < items.size():
+			sl.inst = items[i]
+			sl.index = i
+			sl.in_hand = side == "inv" and int(items[i].get("u", 0)) == d.hand_u
+		g.add_child(sl)
+
+
+func _inventory_grid(box: VBoxContainer, d: SurvivorData, looting: bool) -> void:
+	var head := _hbox(10)
+	box.add_child(head)
+	var t := _label("INVENTÁRIO", S, UITheme.ACCENT)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	_btn(head, "Organizar", _act(func() -> void: _player().act("sort_inv")))
+	# itens vestidos
+	var worn := _hbox(6)
+	box.add_child(worn)
+	for slot in SurvivorData.EQUIP_SLOTS:
+		var sl := InvSlot.new()
+		sl.hud = self
+		sl.side = "equip"
+		sl.cont = slot
+		sl.inst = d.equip[slot]
+		worn.add_child(sl)
+	var wl := _label("VESTINDO: máscara · mochila · coldre", S, UITheme.MUTED)
+	wl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	worn.add_child(wl)
+	for c in ["coldre", "mochila", "bolsos"]:
+		var cap := d.capacity(c)
+		if cap <= 0.0 and d.bags[c].is_empty():
+			continue
+		_head(box, "%s  %.1f / %.0f L" % [SurvivorData.CONT_NAMES[c], d.used_volume(c), cap])
+		_grid(box, "inv", c, d.bags[c], d)
+
+
+func _loot_grid(box: VBoxContainer, _d: SurvivorData) -> void:
+	var node := loot_node
+	var key := Game.world.key_of(node)
+	var items: Array = node.items
+	var head := _hbox(10)
+	box.add_child(head)
+	var t := _label(String(node.title()).to_upper(), S, UITheme.ACCENT)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	_btn(head, "Organizar", _act(func() -> void: _player().act("sort_loot", [key])), items.size() > 1)
+	_btn(head, "Pegar tudo", _act(func() -> void: _player().act("take_all", [key])), not items.is_empty())
+	var info := "%d itens · %.1f kg" % [Items.total_units(items), Items.list_weight(items)]
+	if node is Vehicle:
+		info += " · %.0f / %.0f L" % [(node as Vehicle).trunk_volume(), float((node as Vehicle).def()["porta_malas"])]
+	_lbl(box, info, UITheme.MUTED)
+	_grid(box, "loot", key, items, _d)
+
+
+func _crafting(box: VBoxContainer, d: SurvivorData) -> void:
 	_head(box, "Fabricação")
 	for rid: String in DB.CRAFTS:
 		var cdef: Dictionary = DB.CRAFTS[rid]
 		var crow := _row(box)
-		crow.add_child(_item_icon(String(cdef.get("saida", rid)), 48))
+		crow.add_child(_item_icon(String(cdef.get("saida", rid)), 40))
 		var tools: Array = cdef.get("ferramentas", [])
 		var station := String(cdef.get("estacao", ""))
 		var near := station == "" or Game.world.station_near(_player().position, station)
 		var ok := d.meets(cdef["req"]) and _afford_local(cdef["custo"]) and d.missing_tools(tools) == "" and near
-		_lbl(crow, "%s: %s · exige %s · ferramentas: %s%s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"]),
+		_lbl(crow, "%s\n%s · exige %s · ferramentas: %s%s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"]),
 			DB.tools_text(tools), ("" if station == "" else " · perto de: %s" % String(DB.BUILDS[station]["nome"]).to_lower())],
 			UITheme.TEXT if ok else NO_COLOR)
 		_btn(crow, "Fabricar", _act(func() -> void: _player().act("craft", [rid])), d.meets(cdef["req"]))
+
+
+# ------------------------------------------------------------------ ações da grade
+## Botão direito num item: opções conforme onde ele está.
+func slot_menu(sl: InvSlot) -> void:
+	var p := _player()
+	var d := p.data
+	var inst := sl.inst
+	var opts: Array = []
+	var looting := loot_node != null and is_instance_valid(loot_node)
+	match sl.side:
+		"equip":
+			var u0 := int(inst.get("u", 0))
+			if inst.has("dur") and float(inst["dur"]) < 100.0 and d.count("fita") > 0:
+				opts.append(["Consertar (fita)", func() -> void: p.act("repair", [u0])])
+			var c0 := sl.cont
+			opts.append(["Tirar", func() -> void: p.act("unwear", [c0])])
+		"loot":
+			var key := sl.cont
+			var idx := sl.index
+			var n := int(inst["n"])
+			var id: String = inst["id"]
+			if String(Items.def(id)["tipo"]) in SurvivorData.EQUIP_SLOTS:
+				opts.append(["Vestir", func() -> void: p.act("take", [key, idx, 1, "vestir", id])])
+			opts.append(["Pegar" + (" (%d)" % n if n > 1 else ""), func() -> void: p.act("take", [key, idx, n, "", id])])
+			if n > 1:
+				opts.append(["Pegar 1", func() -> void: p.act("take", [key, idx, 1, "", id])])
+			opts.append(["Pegar tudo do recipiente", func() -> void: p.act("take_all", [key])])
+		"inv":
+			var u := int(inst["u"])
+			var n2 := int(inst["n"])
+			var verb := _verb_for(d, inst)
+			if verb != "":
+				opts.append([verb, func() -> void: p.act("use_item", [u])])
+			if inst.has("dur") and float(inst["dur"]) < 100.0 and d.count("fita") > 0:
+				opts.append(["Consertar (fita)", func() -> void: p.act("repair", [u])])
+			if looting:
+				var key2 := Game.world.key_of(loot_node)
+				opts.append(["Guardar" + (" (%d)" % n2 if n2 > 1 else ""), func() -> void: p.act("store", [key2, u, n2])])
+				if n2 > 1:
+					opts.append(["Guardar 1", func() -> void: p.act("store", [key2, u, 1])])
+			for dest in ["mochila", "bolsos", "coldre"]:
+				if dest != sl.cont and d.fits(dest, inst) >= n2:
+					var dn: String = dest
+					opts.append(["Mover para %s" % SurvivorData.CONT_NAMES[dest].to_lower(), func() -> void: p.act("move", [u, dn])])
+			opts.append(["Largar no chão" + (" (%d)" % n2 if n2 > 1 else ""), func() -> void: p.act("drop", [u, n2])])
+			if n2 > 1:
+				opts.append(["Largar 1", func() -> void: p.act("drop", [u, 1])])
+	if not opts.is_empty():
+		_open_ctx(Items.label(inst), opts)
+
+
+## Dois cliques: passa o item entre o recipiente aberto e o inventário.
+func slot_double(sl: InvSlot) -> void:
+	if loot_node == null or not is_instance_valid(loot_node):
+		return
+	var p := _player()
+	var n := int(sl.inst["n"])
+	if sl.side == "loot":
+		p.act("take", [sl.cont, sl.index, n, "", str(sl.inst["id"])])
+	elif sl.side == "inv":
+		p.act("store", [Game.world.key_of(loot_node), int(sl.inst["u"]), n])
+	_rebuild.call_deferred()
+
+
+## Arrastar e soltar: reordena no mesmo recipiente ou move entre recipientes.
+func slot_drop(src: InvSlot, dst: InvSlot) -> void:
+	var p := _player()
+	if src.inst.is_empty():
+		return
+	var n := int(src.inst["n"])
+	match [src.side, dst.side]:
+		["inv", "inv"]:
+			var u := int(src.inst["u"])
+			if src.cont == dst.cont:
+				p.act("reorder", [u, dst.index])
+			else:
+				p.act("move", [u, dst.cont])
+		["loot", "inv"]:
+			p.act("take", [src.cont, src.index, n, "para:" + dst.cont, str(src.inst["id"])])
+		["inv", "loot"]:
+			p.act("store", [dst.cont, int(src.inst["u"]), n])
+		["loot", "loot"]:
+			if src.cont == dst.cont:
+				p.act("loot_order", [src.cont, src.index, dst.index])
+	_rebuild.call_deferred()
+
+
+# ------------------------------------------------------------------ mapa
+func _tab_map(p: Player) -> void:
+	var box: VBoxContainer = boxes["mapa"]
+	if map_view == null or not is_instance_valid(map_view):
+		_clear(box)
+		var row := _hbox(14)
+		box.add_child(row)
+		map_view = MapView.new()
+		map_view.hud = self
+		map_view.custom_minimum_size = Vector2(920, 560)
+		row.add_child(map_view)
+		map_info = _vbox(6)
+		map_info.custom_minimum_size.x = 330
+		map_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(map_info)
+		map_view.resized.connect(func() -> void:
+			map_view.zoom = 2.0
+			map_view.center_on(Game.world.tile_pos(_player().position))
+			map_view.queue_redraw(), CONNECT_ONE_SHOT)
+	map_view._spore_cache.clear()
+	map_view.queue_redraw()
+	if map_info.get_child_count() == 0:
+		map_hovered(World.chunk_of(Vector2i(Game.world.tile_pos(p.position).floor())))
+
+
+## Atualiza o painel ao lado do mapa com o que se sabe da área sob o mouse.
+func map_hovered(ch: Vector2i) -> void:
+	if map_info == null:
+		return
+	_clear(map_info)
+	map_info.add_child(_label("ÁREA %d, %d" % [ch.x, ch.y], S, UITheme.ACCENT))
+	if not map_known.has(ch):
+		_lbl(map_info, "Área não explorada.", UITheme.MUTED)
+		_map_legend()
+		return
+	var w := Game.world
+	var center := ch * World.CHUNK + Vector2i(World.CHUNK / 2, World.CHUNK / 2)
+	var sp := w.spore_at(w.ground.map_to_local(center))
+	var air := "limpo" if sp < 0.15 else ("contaminado" if sp < 0.5 else ("denso" if sp < 1.0 else "LETAL"))
+	_lbl(map_info, "%d tiles do centro · ar %s (%.2f)" % [int(Vector2(center).length()), air, sp],
+		UITheme.DANGER if sp >= 1.0 else UITheme.TEXT)
+	for v in w.villages:
+		if World.chunk_of(v.cell) == ch:
+			_lbl(map_info, "%s — %s · nível %d · pop %d" % [v.nome, v.status_text(), v.level(), v.pop], UITheme.ACCENT)
+			if not v.request.is_empty():
+				_lbl(map_info, "Pedido de socorro: %s" % v.request_text(), UITheme.WARN)
+			_lbl(map_info, "Comerciante: %s" % {"comida": "comida e sementes", "sucata": "materiais e ferramentas", "medico": "remédios"}[v.specialty], UITheme.MUTED)
+	var buildings := 0
+	for e in w.plan.get(ch, []):
+		if e["t"] == "b" and not w.removed_cells.has(e["cell"]):
+			buildings += 1
+	if buildings > 0:
+		_lbl(map_info, "Prédios: %d" % buildings, UITheme.TEXT)
+	var counts := {}
+	var empty := 0
+	for e in w.plan.get(ch, []):
+		if e["t"] != "c":
+			continue
+		var cd: Dictionary = w.container_data[int(e["id"])]
+		counts[cd["table"]] = int(counts.get(cd["table"], 0)) + 1
+		if cd["items"].is_empty():
+			empty += 1
+	if not counts.is_empty():
+		var kinds := {"comum": "comida, água e materiais", "medico": "remédios e curativos", "tecnico": "peças, baterias, ferramentas e implantes"}
+		_lbl(map_info, "Caixas: %d (%d já vazias)" % [counts.values().reduce(func(a, b): return a + b, 0), empty], UITheme.TEXT)
+		for t in counts:
+			_lbl(map_info, "• %d %s: %s" % [int(counts[t]), {"comum": "comuns", "medico": "médicas", "tecnico": "técnicas"}[t], kinds[t]],
+				MapView.TABLE_COLORS[t])
+	var vehs := 0
+	for n in get_tree().get_nodes_in_group("vehicles"):
+		var vt := w.tile_pos((n as Node2D).position)
+		if World.chunk_of(Vector2i(vt.floor())) == ch:
+			vehs += 1
+	if vehs > 0:
+		_lbl(map_info, "Veículos abandonados: %d" % vehs, Color("#ff9a3c"))
+	var mine := 0
+	for c in w.built:
+		if World.chunk_of(c) == ch and not w.built[c].get("eternal", false):
+			mine += 1
+	if mine > 0:
+		_lbl(map_info, "Construções da equipe: %d" % mine, Color("#ffd166"))
+	_map_legend()
+
+
+func _map_legend() -> void:
+	_head(map_info, "Legenda")
+	_lbl(map_info, "Roda: zoom · arrastar: mover\nTriângulo: você · círculos: aliados\nQuadrados: vilas (amarelo = pedido de socorro, vermelho = zona morta)\nLaranja: veículos · amarelo pequeno: construções\nPontos (com zoom): caixas comuns, médicas e técnicas", UITheme.MUTED)
+
+
+## Marca como descobertos os chunks ao redor do jogador e salva de tempos em tempos.
+func _map_tick(delta: float, p: Player) -> void:
+	if _map_file == "":
+		var nm := Net.player_name.strip_edges().to_lower().replace(" ", "_").validate_filename()
+		_map_file = "user://mapa_%d_%s.json" % [Game.world.seed_value, nm if nm != "" else "jogador"]
+		var f := FileAccess.open(_map_file, FileAccess.READ)
+		if f != null:
+			var data: Variant = JSON.parse_string(f.get_as_text())
+			if data is Array:
+				for a in data:
+					map_known[Vector2i(int(a[0]), int(a[1]))] = true
+	_map_t -= delta
+	if _map_t <= 0.0:
+		_map_t = 0.5
+		var c := World.chunk_of(Vector2i(Game.world.tile_pos(p.position).floor()))
+		for dx in range(-1, 2):
+			for dy in range(-1, 2):
+				var ch := c + Vector2i(dx, dy)
+				if not map_known.has(ch):
+					map_known[ch] = true
+					_map_dirty = true
+		if _map_dirty and menu_root.visible and tabs.current_tab == TAB_MAP and map_view != null:
+			map_view.queue_redraw()
+	_map_save_t -= delta
+	if _map_save_t <= 0.0 and _map_dirty:
+		_map_save_t = 10.0
+		save_map()
+
+
+func save_map() -> void:
+	if _map_file == "":
+		return
+	_map_dirty = false
+	var arr: Array = []
+	for ch: Vector2i in map_known:
+		arr.append([ch.x, ch.y])
+	var f := FileAccess.open(_map_file, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(arr))
 
 
 ## Materiais no inventário + recipientes por perto (como o anfitrião confere).
@@ -1035,78 +1549,6 @@ func _verb_for(d: SurvivorData, inst: Dictionary) -> String:
 		"analgesico": return "Tomar"
 		"regador": return "Encher" if float(inst.get("carga", 0.0)) < 99.0 and d.count("agua_suja") + d.count("agua_limpa") > 0 else ""
 	return ""
-
-
-func _inventory_lists(box: VBoxContainer, d: SurvivorData, looting: bool) -> void:
-	_head(box, "Vestindo")
-	var worn := false
-	for slot in SurvivorData.EQUIP_SLOTS:
-		var inst: Dictionary = d.equip[slot]
-		if inst.is_empty():
-			continue
-		worn = true
-		var row := _row(box)
-		var extra := ""
-		if slot != "mascara":
-			extra = "  (%.0f L)" % d.capacity(slot)
-		_item_line(row, inst, extra)
-		if inst.has("dur") and float(inst["dur"]) < 100.0 and not looting:
-			var u0 := int(inst["u"])
-			_btn(row, "Consertar", _act(func() -> void: _player().act("repair", [u0])), d.count("fita") > 0)
-		var sl: String = slot
-		_btn(row, "Tirar", _act(func() -> void: _player().act("unwear", [sl])))
-	if not worn:
-		_lbl(box, "Nada vestido.", UITheme.MUTED)
-	for c in ["coldre", "mochila", "bolsos"]:
-		var cap := d.capacity(c)
-		if cap <= 0.0 and d.bags[c].is_empty():
-			continue
-		var used := d.used_volume(c)
-		_head(box, "%s  %.1f / %.0f L" % [SurvivorData.CONT_NAMES[c], used, cap])
-		if d.bags[c].is_empty():
-			_lbl(box, "Vazio.", UITheme.MUTED)
-		for inst: Dictionary in d.bags[c]:
-			var u := int(inst["u"])
-			var n := int(inst["n"])
-			var row := _row(box)
-			_item_line(row, inst, "  · NA MÃO" if d.hand_u == u else "")
-			if looting:
-				var key := Game.world.key_of(loot_node)
-				_btn(row, "Guardar", _act(func() -> void: _player().act("store", [key, u, n])))
-				continue
-			var verb := _verb_for(d, inst)
-			if verb != "":
-				_btn(row, verb, _act(func() -> void: _player().act("use_item", [u])))
-			if inst.has("dur") and float(inst["dur"]) < 100.0:
-				_btn(row, "Consertar", _act(func() -> void: _player().act("repair", [u])), d.count("fita") > 0)
-			for dest in ["mochila", "bolsos", "coldre"]:
-				if dest != c and d.fits(dest, inst) >= n:
-					var dn: String = dest
-					_btn(row, "→ " + SurvivorData.CONT_NAMES[dest], _act(func() -> void: _player().act("move", [u, dn])))
-					break
-			_btn(row, "Largar", _act(func() -> void: _player().act("drop", [u, n])))
-
-
-func _loot_column(box: VBoxContainer, _d: SurvivorData) -> void:
-	var node := loot_node
-	var key := Game.world.key_of(node)
-	var items: Array = node.items
-	_head(box, String(node.title()))
-	var bar := _row(box)
-	_lbl(bar, "%d itens · %.1f kg" % [Items.total_units(items), Items.list_weight(items)], UITheme.MUTED)
-	_btn(bar, "Pegar tudo", _act(func() -> void: _player().act("take_all", [key])), not items.is_empty())
-	if items.is_empty():
-		_lbl(box, "Vazio.", UITheme.MUTED)
-	for i in items.size():
-		var inst: Dictionary = items[i]
-		var row := _row(box)
-		_item_line(row, inst)
-		var idx := i
-		var n := int(inst["n"])
-		var id: String = inst["id"]
-		if String(Items.def(id)["tipo"]) in SurvivorData.EQUIP_SLOTS:
-			_btn(row, "Vestir", _act(func() -> void: _player().act("take", [key, idx, 1, "vestir", id])))
-		_btn(row, "Pegar", _act(func() -> void: _player().act("take", [key, idx, n, "", id])))
 
 
 ## Aliados vivos perto o bastante para receber tratamento.
@@ -1475,11 +1917,17 @@ func _trait_rows(parent: VBoxContainer, positive: bool) -> void:
 		tr.add_child(dl)
 
 
-func _tab_build(p: Player) -> void:
-	var box: VBoxContainer = boxes["build"]
+## Janela de construção (B). Será redesenhada depois; por enquanto lista as estruturas.
+func _win_build(p: Player) -> void:
+	var box := window_box
 	_clear(box)
 	var d := p.data
-	_lbl(box, "Escolha uma estrutura e clique no mapa. Materiais em baús e sacos a até 2 tiles também contam. Esc/botão direito cancela. X liga o modo demolição (devolve 50%).", UITheme.MUTED)
+	_lbl(box, "Escolha uma estrutura e clique no mapa. Materiais em baús e sacos a até 2 tiles também contam. Esc/botão direito cancela.", UITheme.MUTED)
+	var top := _row(box)
+	_btn(top, "Modo demolição [X] (devolve 50%)", func() -> void:
+		p.demolish = true
+		p.build_kind = ""
+		close_window())
 	for k: String in DB.BUILDS:
 		var def: Dictionary = DB.BUILDS[k]
 		var row := _row(box)
@@ -1492,7 +1940,7 @@ func _tab_build(p: Player) -> void:
 		_btn(row, "Construir", func() -> void:
 			p.build_kind = k
 			p.demolish = false
-			close_menu(), meets)
+			close_window(), meets)
 
 
 func _tab_implants(d: SurvivorData) -> void:
@@ -1557,7 +2005,7 @@ func _tab_implants(d: SurvivorData) -> void:
 
 
 func _tab_vehicle(p: Player) -> void:
-	var box: VBoxContainer = boxes["veiculo"]
+	var box := window_box
 	_clear(box)
 	var v := vehicle_node
 	if v == null or not is_instance_valid(v):
@@ -1586,62 +2034,51 @@ func _tab_vehicle(p: Player) -> void:
 	_bar(bars_row, v.fuel, 100.0, UITheme.WARN, 240, 14)
 	bars_row.add_child(_label("ESTADO", S, UITheme.MUTED))
 	_bar(bars_row, v.cond, 100.0, OK_COLOR, 240, 14)
+	var probs: Array[String] = []
+	if v.locked:
+		probs.append("Trancado: precisa de ligação direta (Mecânica 2).")
+	if v.fuel <= 0.0:
+		probs.append("Sem energia: abasteça com %s." % ("um galão de combustível" if String(def["energia"]) == "combustivel" else "baterias"))
+	elif v.fuel < 15.0:
+		probs.append("Energia baixa (%d%%)." % int(v.fuel))
+	if v.cond <= 0.0:
+		probs.append("Quebrado: não anda até ser consertado.")
+	elif v.cond < 30.0:
+		probs.append("Estado crítico (%d%%): perde velocidade. Conserte." % int(v.cond))
+	if v.trunk_volume() >= float(def["porta_malas"]) - 0.5:
+		probs.append("Porta-malas cheio.")
+	_head(box, "Problemas")
+	if probs.is_empty():
+		_lbl(box, "Nenhum problema: o veículo está pronto.", OK_COLOR)
+	for pr in probs:
+		_lbl(box, "• " + pr, UITheme.WARN)
 	var d := p.data
 	var inside := Game.world.vehicle_of(p.peer) == v
 	var row := _row(box)
 	if inside:
-		_btn(row, "Sair do veículo", _act(func() -> void: _player().act("vehicle", [key, "exit"])))
+		_btn(row, "Sair do veículo", _win_act(func() -> void: _player().act("vehicle", [key, "exit"])))
 	else:
-		_btn(row, "Dirigir", _act(func() -> void:
+		_btn(row, "Dirigir", _win_act(func() -> void:
 			_player().act("vehicle", [key, "drive"])
-			close_menu()), not v.locked and v.driver == 0 and v.seats_free() > 0)
-		_btn(row, "Entrar como passageiro", _act(func() -> void:
+			close_window()), not v.locked and v.driver == 0 and v.seats_free() > 0)
+		_btn(row, "Entrar como passageiro", _win_act(func() -> void:
 			_player().act("vehicle", [key, "ride"])
-			close_menu()), not v.locked and v.seats_free() > 0 and int(def["lugares"]) > 1)
+			close_window()), not v.locked and v.seats_free() > 0 and int(def["lugares"]) > 1)
 	_btn(row, "Porta-malas", func() -> void:
-		close_menu()
+		close_window()
 		open_loot(v))
 	var energy := "galão de combustível" if String(def["energia"]) == "combustivel" else "bateria"
 	var row2 := _row(box)
-	_btn(row2, "Abastecer (%s)" % energy, _act(func() -> void: _player().act("vehicle", [key, "refuel"])),
+	_btn(row2, "Abastecer (%s)" % energy, _win_act(func() -> void: _player().act("vehicle", [key, "refuel"])),
 		d.count("combustivel" if energy.begins_with("galão") else "bateria") > 0)
-	_btn(row2, "Ligação direta", _act(func() -> void: _player().act("vehicle", [key, "hotwire"])), v.locked)
-	_btn(row2, "Consertar (1 metal + 2 sucatas)", _act(func() -> void: _player().act("vehicle", [key, "repair"])), v.cond < 99.0)
+	_btn(row2, "Ligação direta", _win_act(func() -> void: _player().act("vehicle", [key, "hotwire"])), v.locked)
+	_btn(row2, "Consertar (1 metal + 2 sucatas)", _win_act(func() -> void: _player().act("vehicle", [key, "repair"])), v.cond < 99.0)
 	_lbl(box, "Veículos abandonados ficam trancados: a ligação direta exige Mecânica 2 (pode dar choque). A picape gasta combustível e leva até 4 pessoas; a moto elétrica é rápida e silenciosa, mas leva só o piloto e gasta baterias. Atropelar infectados desgasta o veículo; o motor faz barulho.", UITheme.MUTED)
-
-
-func _tab_world(p: Player) -> void:
-	var box: VBoxContainer = boxes["mundo"]
-	_clear(box)
-	var w := Game.world
-	var tp := w.tile_pos(p.position)
-	_lbl(box, "Seed %d · raio do mundo %d tiles · você está a %d do centro · esporos %.2f" % [w.seed_value, int(World.RADIUS), int(tp.length()), w.spore_at(p.position)], UITheme.MUTED)
-	_head(box, "Pedidos de socorro")
-	var any := false
-	for v in w.villages:
-		if v.request.is_empty():
-			continue
-		any = true
-		var rr := _row(box)
-		rr.add_child(UITheme.icon_rect("alerta", UITheme.WARN, 32))
-		var left := maxf(0.0, float(v.request.get("prazo", 0.0)) - Game.play_time)
-		_lbl(rr, "%s [%d,%d] — %s · prazo %s" % [v.nome, v.cell.x, v.cell.y, v.request_text(), _fmt_time(left)], UITheme.WARN)
-	if not any:
-		_lbl(box, "Nenhum pedido aberto.", UITheme.MUTED)
-	_head(box, "Vilas (simulação em segundo plano)")
-	for v in w.villages:
-		var col := UITheme.DANGER if v.infested else OK_COLOR if v.safe else UITheme.TEXT
-		var row := _row(box)
-		row.add_child(UITheme.icon_rect("caveira" if v.infested else "mundo", col, 32))
-		_lbl(row, "%s [%d,%d] — %s · nível %d · pop %d · reputação %d · comida %d · sucata %d · médico %d · risco %d%%" % [v.nome,
-			v.cell.x, v.cell.y, v.status_text(), v.level(), v.pop, int(v.rep), int(v.stock["comida"]), int(v.stock["sucata"]),
-			int(v.stock["medico"]), int(v.infestation)], col)
-	_lbl(box, "Vilas ajudadas prosperam (mais produção, guardas e ofertas). Pedidos ignorados as enfraquecem até caírem e virarem zonas mortas; limpe os infectados por perto para libertá-las.", UITheme.MUTED)
 
 
 ## Painel da vila: pedido de socorro, comerciante e doações.
 func _tab_village(p: Player) -> void:
-	var box: VBoxContainer = boxes["vila"]
+	var box := window_box
 	_clear(box)
 	var w := Game.world
 	var v: VillageData = null
@@ -1683,7 +2120,7 @@ func _tab_village(p: Player) -> void:
 				if VillageData.item_category(inst["id"]) == cat and not Items.spoiled(inst):
 					can = true
 		var vid := v.id
-		_btn(rr, "Entregar", _act(func() -> void: _player().act("deliver", [vid])), can)
+		_btn(rr, "Entregar", _win_act(func() -> void: _player().act("deliver", [vid])), can)
 	_head(box, "Comerciante (paga com reputação)")
 	for o in VillageData.OFFERS[v.specialty]:
 		var row := _row(box)
@@ -1693,7 +2130,7 @@ func _tab_village(p: Player) -> void:
 			UITheme.TEXT if ok_lv else NO_COLOR)
 		var id: String = o[0]
 		var vid2 := v.id
-		_btn(row, "Trocar", _act(func() -> void: _player().act("buy", [vid2, id])), ok_lv and v.rep >= float(o[1]))
+		_btn(row, "Trocar", _win_act(func() -> void: _player().act("buy", [vid2, id])), ok_lv and v.rep >= float(o[1]))
 	_head(box, "Doar (sobe a reputação)")
 	var any := false
 	for inst in d.all_items():
@@ -1706,22 +2143,8 @@ func _tab_village(p: Player) -> void:
 		var u := int(inst["u"])
 		var n := int(inst["n"])
 		var vid3 := v.id
-		_btn(row2, "Doar (+%d)" % int(VillageData.DONATE_REP[cat] * n), _act(func() -> void: _player().act("donate", [vid3, u, n])))
+		_btn(row2, "Doar (+%d)" % int(VillageData.DONATE_REP[cat] * n), _win_act(func() -> void: _player().act("donate", [vid3, u, n])))
 	if not any:
 		_lbl(box, "Você não tem comida, remédios ou materiais para doar.", UITheme.MUTED)
 
 
-func _tab_legacy(d: SurvivorData) -> void:
-	var box: VBoxContainer = boxes["legado"]
-	_clear(box)
-	_lbl(box, "Sobrevivente atual: %s — %s" % [d.nome, _fmt_time(d.time_alive)], UITheme.TEXT)
-	_head(box, "Legado (sobreviventes anteriores)")
-	if Game.legacy.is_empty():
-		_lbl(box, "Ninguém morreu ainda.", UITheme.MUTED)
-	for i in range(Game.legacy.size() - 1, -1, -1):
-		var e: Dictionary = Game.legacy[i]
-		var infected: bool = e["tipo"] == "infeccao"
-		var fate := "virou infectado de elite" if infected else "corpo no mapa"
-		var row := _row(box)
-		row.add_child(UITheme.icon_rect("caveira" if infected else "legado", UITheme.MAGENTA if infected else UITheme.MUTED, 32))
-		_lbl(row, "%s — %s — %s — %s" % [e["nome"], e["causa"], _fmt_time(float(e["tempo"])), fate], UITheme.TEXT)

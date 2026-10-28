@@ -272,3 +272,28 @@ static func describe_list(list: Array) -> String:
 	for inst in list:
 		parts.append(label(inst))
 	return ", ".join(parts)
+
+
+## Ordena uma lista de itens: por tipo, depois nome, depois estado.
+const SORT_ORDER := ["arma_fogo", "arma", "municao", "comida", "bebida", "cantil", "med", "analgesico", "supressor",
+	"filtro", "mascara", "mochila", "coldre", "ferramenta", "lanterna", "pilha", "regador", "semente", "reparo",
+	"bateria", "combustivel", "material", "kit", "implante", "manual"]
+
+
+static func sort_list(list: Array) -> void:
+	list.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var ta := SORT_ORDER.find(String(def(a["id"]).get("tipo", "")))
+		var tb := SORT_ORDER.find(String(def(b["id"]).get("tipo", "")))
+		if ta != tb:
+			return ta < tb
+		if a["id"] != b["id"]:
+			return DB.item_name(a["id"]) < DB.item_name(b["id"])
+		return float(a.get("venc", a.get("dur", a.get("carga", 0.0)))) < float(b.get("venc", b.get("dur", b.get("carga", 0.0)))))
+
+
+## Junta pilhas que podem ser unidas (depois de reorganizar).
+static func compact(list: Array) -> void:
+	var out: Array = []
+	for inst in list:
+		add(out, inst)
+	list.assign(out)

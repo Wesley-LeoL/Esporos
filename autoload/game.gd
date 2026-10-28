@@ -302,6 +302,15 @@ func debug_command(cmd: String) -> void:
 		"built":
 			print("construções salvas: %d · baús: %d · veículos: %d · %s" % [world.built.size(), world.chest_data.size(),
 				get_tree().get_nodes_in_group("vehicles").size(), str(world.built.values().map(func(b): return b["kind"]))])
+		"window":
+			hud.open_window(arg)
+		"ctxfirst":
+			# abre o menu de contexto do primeiro item do inventário (testes)
+			for n in hud.find_children("*", "InvSlot", true, false):
+				var sl := n as InvSlot
+				if sl.side == "inv" and not sl.inst.is_empty():
+					hud.slot_menu(sl)
+					break
 		"chunks":
 			print("chunks carregados: %d · estruturas: %d · caixas: %d · infectados: %d" % [world.loaded.size(),
 				world.structures.size(), world.container_nodes.size(), get_tree().get_nodes_in_group("infected").size()])

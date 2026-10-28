@@ -104,7 +104,7 @@ func close() -> void:
 	visible = false
 	_open = false
 	line.release_focus()
-	var menu_open: bool = Game.hud != null and Game.hud.menu_root.visible
+	var menu_open: bool = Game.hud != null and Game.hud.blocks_input()
 	get_tree().paused = menu_open and Net.is_solo()
 
 

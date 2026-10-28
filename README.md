@@ -8,7 +8,11 @@ Abra a pasta no Godot 4.7+ (versão padrão, não .NET) e aperte F5. O projeto j
 **Controles:** `WASD` mover · `Espaço`/clique atacar · `E` interagir · `Tab` ou `I` menu · `X` demolir · `F5` salvar · `Esc` cancelar · `F1` ou `` ` `` console de testes.
 
 ## Controles
-WASD move · Shift corre · C agacha · Espaço/clique ataca (armas de fogo miram no mouse) · R recarrega · E interage (caixas, NPCs, veículos; dentro do veículo, sai) · Tab abre o terminal (inventário, corpo, habilidades, construção, implantes, mundo, legado, vila, veículo) · X demolição · F5 salva · F1 console.
+WASD move · Shift corre · C agacha · Espaço/clique ataca (armas de fogo miram no mouse) · R recarrega · E interage (caixas, NPCs, veículos; dentro do veículo, sai) · Tab abre o terminal (inventário, corpo, habilidades, implantes, mapa) · I inventário · M mapa · B construção · V status do veículo (dentro dele) · X demolição · F5 salva · F1 console.
+
+**Inventário em grade:** botão direito abre as opções do item; arrastar com o botão esquerdo reorganiza ou move entre bolsos, mochila, coldre e o recipiente aberto; dois cliques passam o item entre o recipiente e o inventário; "Organizar" ordena por tipo. Caixas, baús, sacos, cadáveres e porta-malas abrem a grade deles ao lado da sua.
+
+**Mapa (M):** mostra só o que você já explorou (salvo por jogador em `user://`): estradas, prédios, vilas (com pedidos de socorro), caixas por tipo, veículos e construções; o painel ao lado diz o que se acha em cada área.
 
 ## Co-op (2 a 4 jogadores)
 - **Hospedar:** na tela de título, ligue **CO-OP: ABERTO** e clique em Novo jogo ou Continuar. O jogo abre a porta UDP **7777**, e o anfitrião é a autoridade da sessão: simula o mundo e guarda o save.

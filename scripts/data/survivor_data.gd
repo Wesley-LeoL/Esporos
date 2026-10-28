@@ -305,6 +305,30 @@ func move_item(u: int, dest: String) -> void:
 		hand_u = int(placed["u"])
 
 
+## Reordena um item dentro do próprio recipiente (organizar com o mouse).
+func reorder(u: int, to: int) -> void:
+	var f := find(u)
+	if f.is_empty() or String(f[0]).begins_with("equip:"):
+		return
+	var list: Array = bags[f[0]]
+	list.erase(f[1])
+	list.insert(clampi(to, 0, list.size()), f[1])
+
+
+## Organiza todos os recipientes (tipo, nome, estado) e junta pilhas.
+func sort_bags() -> void:
+	for c in bags:
+		var keep_hand := hand_u
+		Items.sort_list(bags[c])
+		Items.compact(bags[c])
+		if keep_hand != 0 and find(keep_hand).is_empty():
+			hand_u = 0
+		for inst in bags[c]:
+			if not inst.has("u"):
+				inst["u"] = _next_u
+				_next_u += 1
+
+
 # ---------------------------------------------------------------- equipamento
 func has_mask() -> bool:
 	return not equip["mascara"].is_empty()
