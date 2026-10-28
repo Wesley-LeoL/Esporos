@@ -142,6 +142,11 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Som:** passos (andando 110, correndo 270, agachado 35 px; Furtividade reduz; Barulhento e sobrecarga aumentam), golpes, tiros (900 e 1300 px), portas, construções, demolições e torres fazem barulho. Infectados no raio vão investigar o local.
 - **Furtividade:** [C] agacha (mais lento, quase silencioso, visto de 55% da distância). Correr e lanterna acesa aumentam a distância de visão. Infectados lembram do alvo por alguns segundos e depois vão até onde o viram. Andar agachado perto de infectados treina Furtividade. Camuflagem por áreas escuras fica para quando houver ciclo de luz.
 
+### Ações com tempo e medicina cooperativa (fase 6)
+
+- **Ações com tempo:** tratar (2 a 8 s), operar (14 s), remover implante (10 s), manutenção (5 s), fabricar, consertar, recarregar (1,6 s pistola, 2,4 s espingarda), comer, beber, vestir mochila ou máscara, trocar filtro e ler manuais. Uma barra aparece no HUD e sobre a cabeça do personagem (todos veem). Andar ou levar um golpe interrompe. Medicina, Cibernética e Pontaria encurtam o tempo.
+- **Tratar um aliado:** na aba Corpo escolha o paciente (aliados a até ~2 tiles). Curativos, antibiótico, sutura, instalação e remoção de implantes usam os suprimentos e as habilidades de quem trata. Os dois ficam parados e vulneráveis; se qualquer um se mexer ou for atacado, o procedimento para. Tratar outra pessoa é 25% mais rápido e rende 50% mais experiência; suturar a si mesmo falha mais e operar a si mesmo deixa o implante com integridade 80%.
+
 ## Estado da implementação
 
 | Fase | Conteúdo | Situação |
@@ -151,6 +156,6 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 3 | Criação por pontos (atributos, habilidades, traços), 12 habilidades, estamina e corrida | **feito** |
 | 4 | Cibernética neural (processador, limite de implantes, rejeição, estresse e sobrecarga sináptica, remoção de implantes) | **feito** |
 | 5 | Ferramentas e materiais, lanterna, cantil, médicos novos, armas de fogo com munição, som e furtividade | **feito** |
-| 6 | Ações com tempo e medicina cooperativa | a fazer |
+| 6 | Ações com tempo (barra, interrupção por movimento ou dano) e medicina cooperativa (curativos e cirurgias em aliados) | **feito** |
 | 7 | Mundo em chunks, vilas vivas com NPCs e pedidos de socorro | a fazer |
 | 8 | Agricultura e culinária; veículos | a fazer |

@@ -69,6 +69,12 @@ var creation_root: Control
 var creation_box: VBoxContainer
 var spec := {}
 var _creation_sent := false
+## Medicina cooperativa: paciente escolhido na aba Corpo (0 = você) e dados recebidos.
+var patient_peer := 0
+var patient_info := {}
+var busy_panel: PanelContainer
+var busy_text: Label
+var busy_bar: PixelBar
 
 
 func _ready() -> void:
@@ -100,6 +106,7 @@ func _ready() -> void:
 	_build_equipment()
 	_build_prompt()
 	_build_banner()
+	_build_busy()
 	_build_menu()
 	_build_death()
 	_build_creation()
@@ -374,6 +381,25 @@ func _stripes() -> TextureRect:
 	return r
 
 
+## Barra da ação com tempo em andamento (centro da tela, acima do aviso de interação).
+func _build_busy() -> void:
+	busy_panel = _panel("card", 8, Vector4(16, 10, 16, 10))
+	busy_panel.visible = false
+	ui.add_child(busy_panel)
+	var col := _vbox(6)
+	busy_panel.add_child(col)
+	busy_text = _label("", S, UITheme.ACCENT)
+	busy_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(busy_text)
+	busy_bar = PixelBar.new(UITheme.ACCENT, 20, false)
+	busy_bar.critical_at = -1.0
+	busy_bar.custom_minimum_size = Vector2(380, 18)
+	col.add_child(busy_bar)
+	var hint := _label("MOVA-SE PARA CANCELAR", S, UITheme.MUTED)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(hint)
+
+
 func _build_menu() -> void:
 	menu_root = Control.new()
 	menu_root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -612,6 +638,15 @@ func _process(delta: float) -> void:
 	if prompt_panel.visible:
 		prompt_panel.reset_size()
 		prompt_panel.position = Vector2((ui.size.x - prompt_panel.size.x) / 2.0, ui.size.y - prompt_panel.size.y - 180.0).round()
+
+	# ação com tempo
+	var busy := p.busy_label != "" and p.busy_end > Game.play_time and p.busy_total > 0.0
+	busy_panel.visible = busy
+	if busy:
+		busy_text.text = p.busy_label.to_upper()
+		busy_bar.value = clampf(1.0 - (p.busy_end - Game.play_time) / p.busy_total, 0.0, 1.0) * 100.0
+		busy_panel.reset_size()
+		busy_panel.position = Vector2((ui.size.x - busy_panel.size.x) / 2.0, ui.size.y - busy_panel.size.y - 260.0).round()
 
 	# faixa de construção / demolição
 	banner.visible = p.build_kind != "" or p.demolish
@@ -1026,17 +1061,77 @@ func _loot_column(box: VBoxContainer, _d: SurvivorData) -> void:
 		_btn(row, "Pegar", _act(func() -> void: _player().act("take", [key, idx, n, "", id])))
 
 
+## Aliados vivos perto o bastante para receber tratamento.
+func _nearby_allies(p: Player) -> Array[Player]:
+	var out: Array[Player] = []
+	for k in Game.world.players:
+		var o: Player = Game.world.players[k]
+		if o == p or not o.alive:
+			continue
+		var off := o.position - p.position
+		if Vector2(off.x, off.y * 2.0).length() <= 95.0:
+			out.append(o)
+	return out
+
+
 func _tab_body(d: SurvivorData) -> void:
 	var box: VBoxContainer = boxes["corpo"]
 	_clear(box)
-	_lbl(box, "Carga patogênica %d%% · Sangue %d%% · Água %d%%" % [int(d.pathogen), int(d.blood), int(d.water)], UITheme.MUTED)
+	var p := _player()
+	# escolha do paciente
+	var allies := _nearby_allies(p)
+	var sel := _row(box)
+	sel.add_child(UITheme.icon_rect("pessoa", UITheme.ACCENT, 36))
+	sel.add_child(_label("PACIENTE", S, UITheme.MUTED))
+	var ids: Array[int] = [0]
+	for o in allies:
+		ids.append(o.peer)
+	if not patient_peer in ids:
+		patient_peer = 0
+	for pid in ids:
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_pressed = pid == patient_peer
+		var nm := "VOCÊ" if pid == 0 else Net.name_of(pid).to_upper()
+		if pid != 0 and patient_info.has(pid):
+			nm = String(patient_info[pid]["nome"]).to_upper()
+		b.text = nm
+		var pp := pid
+		b.pressed.connect(func() -> void:
+			patient_peer = pp
+			if pp != 0:
+				_player().act("examine", [pp])
+			_rebuild())
+		sel.add_child(b)
+	if allies.is_empty():
+		_lbl(sel, "Chegue perto de um aliado para tratá-lo (vocês dois ficam parados durante o procedimento).", UITheme.MUTED)
+	var target := 0
+	var limbs: Dictionary = d.limbs
+	var pname := "você"
+	var blood := d.blood
+	var pathogen := d.pathogen
+	var antib := d.antibiotic_t
+	if patient_peer != 0:
+		p.act("examine", [patient_peer])
+		if not patient_info.has(patient_peer):
+			_lbl(box, "Examinando o paciente...", UITheme.MUTED)
+			return
+		var info: Dictionary = patient_info[patient_peer]
+		target = patient_peer
+		limbs = info["limbs"]
+		pname = str(info["nome"])
+		blood = float(info["blood"])
+		pathogen = float(info["pathogen"])
+		antib = float(info["antibiotic_t"])
+	_lbl(box, "%s · carga patogênica %d%% · sangue %d%%%s · usando os seus suprimentos e a sua Medicina" % [pname.capitalize(),
+		int(pathogen), int(blood), "" if target != 0 else " · água %d%%" % int(d.water)], UITheme.MUTED)
 	var top := _row(box)
 	top.add_child(_item_icon("antibiotico", 48))
-	_btn(top, "Antibiótico (x%d)" % d.count("antibiotico"), _act(func() -> void: _player().act("treat", ["torso", "antibiotico"])), d.count("antibiotico") > 0)
-	_lbl(top, "Ativo por %ds" % int(d.antibiotic_t) if d.antibiotic_t > 0.0 else "Cura sepse e infecção fúngica.", UITheme.MUTED)
+	_btn(top, "Antibiótico (x%d)" % d.count("antibiotico"), _act(func() -> void: _player().act("treat", ["torso", "antibiotico", target])), d.count("antibiotico") > 0)
+	_lbl(top, "Ativo por %ds" % int(antib) if antib > 0.0 else "Cura sepse e infecção fúngica.", UITheme.MUTED)
 	_head(box, "Membros")
 	for l: String in SurvivorData.LIMBS:
-		var limb: Dictionary = d.limbs[l]
+		var limb: Dictionary = limbs[l]
 		var row := _row(box)
 		var name_l := _label(SurvivorData.LIMB_NAMES[l], S, UITheme.TEXT)
 		name_l.custom_minimum_size.x = 130
@@ -1062,10 +1157,36 @@ func _tab_body(d: SurvivorData) -> void:
 			st.append("enfaixado")
 		_lbl(row, "saudável" if st.is_empty() else ", ".join(st), UITheme.MUTED if st.is_empty() else UITheme.WARN)
 		var wounded := int(limb["wound"]) > 0
-		_btn(row, "Desinfetar", _act(func() -> void: _player().act("treat", [l, "desinfetar"])), wounded and d.count("antisseptico") + d.count("alcool") > 0)
-		_btn(row, "Suturar", _act(func() -> void: _player().act("treat", [l, "suturar"])), int(limb["wound"]) == 2 and d.count("kit_sutura") > 0)
-		_btn(row, "Enfaixar", _act(func() -> void: _player().act("treat", [l, "enfaixar"])), wounded and not limb["bandaged"] and d.count("bandagem") + d.count("gaze") > 0)
-	_lbl(box, "Dica: feridas profundas só param de sangrar de vez após sutura + bandagem. Feridas abertas deixam esporos entrarem.", UITheme.MUTED)
+		_btn(row, "Desinfetar", _act(func() -> void: _player().act("treat", [l, "desinfetar", target])), wounded and d.count("antisseptico") + d.count("alcool") > 0)
+		_btn(row, "Suturar", _act(func() -> void: _player().act("treat", [l, "suturar", target])), int(limb["wound"]) == 2 and d.count("kit_sutura") > 0)
+		_btn(row, "Enfaixar", _act(func() -> void: _player().act("treat", [l, "enfaixar", target])), wounded and not limb["bandaged"] and d.count("bandagem") + d.count("gaze") > 0)
+	if target != 0:
+		_patient_surgery(box, d, target)
+	_lbl(box, "Dica: feridas profundas só param de sangrar de vez após sutura + bandagem. Tratar um aliado é mais rápido e rende mais experiência; operar a si mesmo deixa o implante imperfeito.", UITheme.MUTED)
+
+
+## Cirurgia no aliado: remover implantes dele ou instalar um dos seus.
+func _patient_surgery(box: VBoxContainer, d: SurvivorData, target: int) -> void:
+	var info: Dictionary = patient_info[target]
+	var imps: Dictionary = info["implants"]
+	_head(box, "Cirurgia no paciente (núcleo neural %d/%d)" % [int(info["general"]), int(info["cap"])])
+	for slot: String in imps:
+		var row := _row(box)
+		row.add_child(_item_icon(imps[slot]["id"], 40))
+		_lbl(row, "%s · integridade %d%%" % [DB.item_name(imps[slot]["id"]), int(imps[slot]["integ"])], UITheme.TEXT)
+		var sl := slot
+		_btn(row, "Remover (kit)", _act(func() -> void: _player().act("remove_implant", [sl, target])), d.count("kit_cirurgico") > 0)
+	for id: String in DB.IMPLANTS:
+		if d.count(id) <= 0 or imps.has(DB.IMPLANTS[id]["slot"]):
+			continue
+		var def: Dictionary = DB.IMPLANTS[id]
+		var row2 := _row(box)
+		row2.add_child(_item_icon(id, 40))
+		var meets := d.meets(def["req"])
+		_lbl(row2, "Instalar %s no paciente (exige %s)%s" % [DB.item_name(id), DB.req_text(def["req"]),
+			"" if meets else " · RISCO DE FALHA"], UITheme.TEXT if meets else UITheme.DANGER)
+		var iid := id
+		_btn(row2, "Operar", _act(func() -> void: _player().act("install", [iid, target])), d.count("kit_cirurgico") > 0)
 
 
 func _tab_skills(d: SurvivorData) -> void:

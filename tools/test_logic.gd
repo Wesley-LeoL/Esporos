@@ -216,5 +216,32 @@ func _initialize() -> void:
 	g.use_item("analgesico")
 	check(g.speed_mult() > slow, "analgésico tira a lentidão da perna ferida")
 
+	# fase 6: medicina cooperativa (o curativo usa os suprimentos e a Medicina de quem trata)
+	var medic := SurvivorData.from_spec({"nome": "Medica", "forca": 5, "resist": 5, "skills": {"medicina": 3}, "traits": []}, r)
+	var hurt := SurvivorData.from_spec({"nome": "Ferido", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
+	hurt.damage_limb("perna_e", 20.0)
+	medic.give("bandagem", 1)
+	var med_band := medic.count("bandagem")
+	var xp0 := float(medic.skills["medicina"]["xp"])
+	var own_band := hurt.count("bandagem")
+	hurt.treat("perna_e", "enfaixar", medic)
+	check(hurt.limbs["perna_e"]["bandaged"] and medic.count("bandagem") == med_band - 1 and hurt.count("bandagem") == own_band,
+		"aliado enfaixa usando a bandagem dele")
+	check(float(medic.skills["medicina"]["xp"]) > xp0, "quem trata ganha experiência")
+	medic.skills["medicina"]["lv"] = 6
+	medic.skills["cibernetica"]["lv"] = 6
+	medic.give("kit_cirurgico", 1)
+	medic.give("implante_derme", 1)
+	hurt.battery = 100.0
+	hurt.install_implant("implante_derme", medic)
+	check(hurt.implants.has("pele") and float(hurt.implants["pele"]["integ"]) == 100.0, "aliado opera com encaixe perfeito")
+	var self_op := SurvivorData.from_spec({"nome": "Solo", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
+	self_op.skills["medicina"]["lv"] = 6
+	self_op.skills["cibernetica"]["lv"] = 6
+	self_op.give("kit_cirurgico", 1)
+	self_op.give("implante_derme", 1)
+	self_op.install_implant("implante_derme")
+	check(float(self_op.implants["pele"]["integ"]) == 80.0, "operar a si mesmo deixa o encaixe a 80%")
+
 	print("FALHAS: %d" % fails)
 	quit(1 if fails > 0 else 0)

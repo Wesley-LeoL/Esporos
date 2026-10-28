@@ -1045,59 +1045,72 @@ func pour_fuel(need: float) -> float:
 
 
 # ---------------------------------------------------------------- medicina
-func treat(limb_id: String, action: String) -> void:
+## Mensagem para o paciente e, se for outra pessoa, também para quem trata.
+func _say_both(h: SurvivorData, text: String) -> void:
+	message.emit(text)
+	if h != self:
+		h.message.emit(text)
+
+
+## Trata um membro. 'healer' é quem faz o curativo (os suprimentos e a Medicina são dele);
+## null = o próprio sobrevivente. Tratar outra pessoa rende 50% mais experiência.
+func treat(limb_id: String, action: String, healer: SurvivorData = null) -> void:
+	var h: SurvivorData = healer if healer != null else self
+	var xp_k := 1.5 if h != self else 1.0
 	var limb: Dictionary = limbs[limb_id]
 	if action == "antibiotico":
-		if not take_item("antibiotico"):
-			message.emit("Sem antibiótico.")
+		if not h.take_item("antibiotico"):
+			h.message.emit("Sem antibiótico.")
 			return
 		antibiotic_t = 120.0
-		add_xp("medicina", 4.0)
-		message.emit("Antibiótico aplicado por 2 minutos.")
+		h.add_xp("medicina", 4.0 * xp_k)
+		_say_both(h, "Antibiótico aplicado por 2 minutos.")
 		return
 	if int(limb["wound"]) == 0:
-		message.emit("Não há ferida em %s." % LIMB_NAMES[limb_id])
+		h.message.emit("Não há ferida em %s." % LIMB_NAMES[limb_id])
 		return
 	match action:
 		"desinfetar":
-			if not spend("antisseptico") and not spend("alcool"):
-				message.emit("Sem antisséptico nem álcool.")
+			if not h.spend("antisseptico") and not h.spend("alcool"):
+				h.message.emit("Sem antisséptico nem álcool.")
 				return
 			limb["disinfected"] = true
 			limb["infection"] = maxf(0.0, float(limb["infection"]) - 15.0)
-			add_xp("medicina", 6.0)
-			message.emit("%s desinfetado." % LIMB_NAMES[limb_id])
+			h.add_xp("medicina", 6.0 * xp_k)
+			_say_both(h, "%s desinfetado." % LIMB_NAMES[limb_id])
 		"enfaixar":
 			if limb["bandaged"]:
-				message.emit("Já está enfaixado.")
+				h.message.emit("Já está enfaixado.")
 				return
-			if not take_item("bandagem") and not take_item("gaze"):
-				message.emit("Sem bandagem nem gaze.")
+			if not h.take_item("bandagem") and not h.take_item("gaze"):
+				h.message.emit("Sem bandagem nem gaze.")
 				return
 			limb["bandaged"] = true
-			add_xp("medicina", 5.0)
-			message.emit("%s enfaixado." % LIMB_NAMES[limb_id])
+			h.add_xp("medicina", 5.0 * xp_k)
+			_say_both(h, "%s enfaixado." % LIMB_NAMES[limb_id])
 		"suturar":
 			if int(limb["wound"]) < 2:
-				message.emit("Só ferimentos profundos precisam de sutura.")
+				h.message.emit("Só ferimentos profundos precisam de sutura.")
 				return
-			if not take_item("kit_sutura"):
-				message.emit("Sem kit de sutura.")
+			if not h.take_item("kit_sutura"):
+				h.message.emit("Sem kit de sutura.")
 				return
-			var chance_fail := maxf(0.0, 0.5 - 0.15 * float(level("medicina")))
-			if has_trait("maos_firmes"):
+			var chance_fail := maxf(0.0, 0.5 - 0.15 * float(h.level("medicina")))
+			if h.has_trait("maos_firmes"):
 				chance_fail *= 0.5
+			if h == self:
+				chance_fail += 0.1  # costurar a si mesmo é mais difícil
 			if rng.randf() < chance_fail:
 				limb["infection"] = minf(100.0, float(limb["infection"]) + 15.0)
 				limb["hp"] = maxf(0.0, float(limb["hp"]) - 5.0)
-				add_xp("medicina", 5.0)
-				message.emit("A sutura falhou! Falta prática em Medicina.")
+				h.add_xp("medicina", 5.0 * xp_k)
+				_say_both(h, "A sutura falhou! Falta prática em Medicina.")
 			else:
 				limb["sutured"] = true
 				limb["wound"] = 1
 				limb["bleed"] = float(limb["bleed"]) * 0.4
-				add_xp("medicina", 16.0)
-				message.emit("Sutura bem-sucedida em %s." % LIMB_NAMES[limb_id])
+				h.add_xp("medicina", 16.0 * xp_k)
+				_say_both(h, "Sutura bem-sucedida em %s." % LIMB_NAMES[limb_id])
 
 
 # ---------------------------------------------------------------- cibernética
@@ -1154,39 +1167,45 @@ func complex_block() -> String:
 	return ""
 
 
-func install_implant(item_id: String) -> void:
-	if not DB.IMPLANTS.has(item_id) or count(item_id) <= 0:
+## Cirurgia de implante. 'surgeon' opera (o implante, o kit e as habilidades são dele);
+## null = o próprio sobrevivente se opera (o encaixe sai imperfeito: integridade 80%).
+func install_implant(item_id: String, surgeon: SurvivorData = null) -> void:
+	var h: SurvivorData = surgeon if surgeon != null else self
+	if not DB.IMPLANTS.has(item_id) or h.count(item_id) <= 0:
 		return
 	var def: Dictionary = DB.IMPLANTS[item_id]
 	var slot: String = def["slot"]
 	if implants.has(slot):
-		message.emit("Esse encaixe já tem um implante.")
+		h.message.emit("Esse encaixe já tem um implante.")
 		return
-	if count("kit_cirurgico") <= 0:
-		message.emit("Você precisa de um kit cirúrgico.")
+	if h.count("kit_cirurgico") <= 0:
+		h.message.emit("Você precisa de um kit cirúrgico.")
 		return
-	take_item("kit_cirurgico")
-	take_item(item_id)
+	h.take_item("kit_cirurgico")
+	h.take_item(item_id)
 	# sem suporte neural o corpo rejeita o implante na hora (GDD 4)
 	if slot != "cerebro" and general_count() >= neural_capacity():
 		damage_limb(def["membro"], 20.0)
 		synaptic = 100.0
-		add_xp("cibernetica", 6.0)
+		h.add_xp("cibernetica", 6.0)
+		if h != self:
+			h.message.emit("O corpo do paciente rejeitou o implante: ele não tem suporte neural.")
 		message.emit("REJEIÇÃO IMEDIATA: seu cérebro não suporta mais um implante (%d/%d). O implante foi perdido." % [general_count(), neural_capacity()])
 		return
 	var deficit := 0
 	for k in def["req"]:
-		deficit += maxi(0, int(def["req"][k]) - level(k))
+		deficit += maxi(0, int(def["req"][k]) - h.level(k))
 	if deficit == 0:
-		implants[slot] = {"id": item_id, "integ": 100.0}
-		add_xp("medicina", 30.0)
-		add_xp("cibernetica", 30.0)
-		message.emit("Implante instalado com sucesso: %s." % DB.item_name(item_id))
+		implants[slot] = {"id": item_id, "integ": 100.0 if h != self else 80.0}
+		h.add_xp("medicina", 30.0)
+		h.add_xp("cibernetica", 30.0)
+		_say_both(h, "Implante instalado com sucesso: %s%s." % [DB.item_name(item_id),
+			"" if h != self else " (operar a si mesmo deixou o encaixe imperfeito: 80%)"])
 		return
 	var r := rng.randf()
 	var death_p := 0.0 if deficit < 2 else 0.30
 	var crit_p := 0.35 if deficit < 2 else 0.45
-	if has_trait("maos_firmes"):
+	if h.has_trait("maos_firmes"):
 		crit_p *= 0.6
 	if r < death_p:
 		_hurt_internal("torso", 999.0, "Cirurgia fracassada")
@@ -1197,33 +1216,34 @@ func install_implant(item_id: String) -> void:
 		add_xp("medicina", 10.0)
 	else:
 		implants[slot] = {"id": item_id, "integ": 55.0}
-		message.emit("Instalado com muita sorte, mas mal encaixado (integridade 55%).")
-		add_xp("medicina", 12.0)
-		add_xp("cibernetica", 12.0)
+		_say_both(h, "Instalado com muita sorte, mas mal encaixado (integridade 55%).")
+		h.add_xp("medicina", 12.0)
+		h.add_xp("cibernetica", 12.0)
 
 
 ## Remove um implante (gasta um kit cirúrgico). O item volta para o inventário, a não ser
 ## que esteja destruído. Tirar o processador com vários implantes gerais causa sobrecarga.
-func remove_implant(slot: String) -> void:
+func remove_implant(slot: String, surgeon: SurvivorData = null) -> void:
+	var h: SurvivorData = surgeon if surgeon != null else self
 	if not implants.has(slot):
 		return
-	if count("kit_cirurgico") <= 0:
-		message.emit("Você precisa de um kit cirúrgico.")
+	if h.count("kit_cirurgico") <= 0:
+		h.message.emit("Você precisa de um kit cirúrgico.")
 		return
-	take_item("kit_cirurgico")
+	h.take_item("kit_cirurgico")
 	var imp: Dictionary = implants[slot]
 	var def: Dictionary = DB.IMPLANTS[imp["id"]]
 	implants.erase(slot)
-	var fail := maxf(0.0, 0.35 - 0.08 * float(level("cibernetica")))
+	var fail := maxf(0.0, 0.35 - 0.08 * float(h.level("cibernetica")))
 	if rng.randf() < fail:
 		damage_limb(def["membro"], 18.0)
-		message.emit("A remoção foi brusca: o implante quebrou e feriu %s." % LIMB_NAMES[def["membro"]].to_lower())
+		_say_both(h, "A remoção foi brusca: o implante quebrou e feriu %s." % LIMB_NAMES[def["membro"]].to_lower())
 	elif float(imp["integ"]) < 15.0:
-		message.emit("Implante removido, mas destruído demais para reaproveitar.")
+		_say_both(h, "Implante removido, mas destruído demais para reaproveitar.")
 	else:
-		give(imp["id"])
-		message.emit("Implante removido: %s." % DB.item_name(imp["id"]))
-	add_xp("cibernetica", 8.0)
+		h.give(imp["id"])
+		_say_both(h, "Implante removido: %s." % DB.item_name(imp["id"]))
+	h.add_xp("cibernetica", 8.0)
 	if slot == "cerebro" and general_count() > DB.NEURAL_BASE:
 		message.emit("Sem o processador, seu cérebro não suporta os implantes!")
 

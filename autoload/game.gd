@@ -245,6 +245,11 @@ func debug_command(cmd: String) -> void:
 				p.act("attack", [p.facing, Vector2(off.x, off.y * 2.0).angle()])
 		"sneak":
 			p.sneaking = not p.sneaking
+		"patient":
+			hud.patient_peer = int(arg)
+			p.act("examine", [int(arg)])
+		"treat_ally":
+			p.act("treat", [a[0], a[1], int(a[2]) if a.size() > 2 else 1])
 		"clock":
 			play_time += float(arg)
 		"take_all_near":

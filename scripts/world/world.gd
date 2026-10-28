@@ -1201,6 +1201,7 @@ func _process(delta: float) -> void:
 
 ## Servidor: o sobrevivente de um jogador morreu (legado, corpo ou elite, renascimento).
 func on_player_died(p: Player) -> void:
+	p.cancel_busy("Você morreu.")
 	var data := p.data
 	var pos := p.position if p.is_local() else p.net_pos
 	Game.add_legacy({"nome": data.nome, "jogador": p.nome, "causa": data.death_cause, "tipo": data.death_kind,

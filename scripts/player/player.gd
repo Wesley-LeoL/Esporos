@@ -14,7 +14,13 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload"]
+	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine"]
+## Ações que levam tempo (barra de progresso; mover-se ou levar dano interrompe).
+const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item"]
+const TREAT_NAMES := {"antibiotico": "Aplicando antibiótico", "desinfetar": "Desinfetando", "enfaixar": "Enfaixando",
+	"suturar": "Suturando"}
+const USE_TIME := {"comida": 1.5, "bebida": 1.5, "cantil": 1.2, "mascara": 2.0, "filtro": 2.5, "manual": 8.0,
+	"analgesico": 1.0, "supressor": 1.5, "mochila": 1.5, "coldre": 1.0, "bateria": 2.0, "pilha": 1.0}
 ## Ações que a sobrecarga sináptica impede (GDD 4: incapacidade de ações complexas).
 const COMPLEX := ["treat", "craft", "install", "maintain", "build", "repair"]
 
@@ -38,6 +44,10 @@ var alive := true
 var hurt_seq := 0
 ## Esperando o jogador criar um sobrevivente (entrada na sessão ou depois de morrer).
 var pending := false
+## Ação com tempo em andamento (texto, fim no relógio do mundo, duração).
+var busy_label := ""
+var busy_end := 0.0
+var busy_total := 0.0
 
 # ---- locais
 var attack_cd := 0.0
@@ -65,6 +75,8 @@ var _glitch_t := 1.0
 var _step_t := 0.0
 var _fire_cd := 0.0
 var _light: PointLight2D
+## Servidor: ação com tempo em andamento {action, args, partner} ou {passive, partner}.
+var _busy := {}
 
 signal data_changed
 
@@ -109,7 +121,8 @@ func setup_net(owner_peer: int) -> void:
 	peer = owner_peer
 	var own := Net.make_sync(self, [".:net_pos", ".:facing", ".:moving", ".:sprinting", ".:sneaking", ".:attack_seq"], 0.05)
 	own.name = "SyncDono"
-	var srv := Net.make_sync(self, [".:look", ".:alive", ".:hurt_seq", ".:nome", ".:pending"], 0.1)
+	var srv := Net.make_sync(self, [".:look", ".:alive", ".:hurt_seq", ".:nome", ".:pending",
+		".:busy_label", ".:busy_end", ".:busy_total"], 0.1)
 	srv.name = "SyncServidor"
 	# a autoridade é aplicada depois de criar os filhos (set_multiplayer_authority é recursivo)
 	set_multiplayer_authority(owner_peer)
@@ -211,6 +224,7 @@ func _server_tick(delta: float) -> void:
 		look = int(data.has_mask()) | (2 if data.implant_active("braco_d") else 0) | (4 if data.implant_active("olho") else 0) \
 			| (8 if data.lantern_on() else 0)
 		_fire_cd = maxf(0.0, _fire_cd - delta)
+		_tick_busy()
 		if moving:
 			_step_t -= delta
 			if _step_t <= 0.0:
@@ -263,6 +277,8 @@ func _update_light() -> void:
 
 func _animate(delta: float) -> void:
 	_update_light()
+	if busy_label != "":
+		queue_redraw()
 	if hurt_seq != _seen_hurt:
 		_seen_hurt = hurt_seq
 		hurt_flash = 0.25
@@ -328,6 +344,29 @@ func _do_act(action: String, args: Array) -> void:
 		if why != "":
 			Game.tell(peer, why)
 			return
+	if action == "cancel":
+		cancel_busy("Ação cancelada.")
+		return
+	if action == "examine":
+		_examine(int(args[0]))
+		return
+	if is_busy() and (action in TIMED or action in ["attack", "build", "demolish", "interact"]):
+		Game.tell(peer, "Você está ocupado (%s). Mova-se para cancelar." % busy_label)
+		return
+	if action in TIMED:
+		var patient := _patient_of(action, args)
+		if patient == null:
+			return
+		var dur := _duration(action, args, patient)
+		if dur > 0.0:
+			_start_busy(action, args, dur, patient)
+			return
+	_run_act(action, args)
+
+
+func _run_act(action: String, args: Array) -> void:
+	if data == null or not alive:
+		return
 	match action:
 		"use_item":
 			data.use_item(args[0] if (args[0] is int or args[0] is String) else str(args[0]))
@@ -348,15 +387,24 @@ func _do_act(action: String, args: Array) -> void:
 		"store":
 			world.store_into(self, str(args[0]), int(args[1]), int(args[2]))
 		"treat":
-			data.treat(str(args[0]), str(args[1]))
+			var pt := _patient_of(action, args)
+			if pt != null:
+				pt.data.treat(str(args[0]), str(args[1]), data if pt != self else null)
+				pt._sync_t = 0.0
 		"craft":
 			data.craft(str(args[0]))
 		"install":
-			data.install_implant(str(args[0]))
+			var pi := _patient_of(action, args)
+			if pi != null:
+				pi.data.install_implant(str(args[0]), data if pi != self else null)
+				pi._sync_t = 0.0
 		"maintain":
 			data.maintain_implant(str(args[0]))
 		"remove_implant":
-			data.remove_implant(str(args[0]))
+			var pr := _patient_of(action, args)
+			if pr != null:
+				pr.data.remove_implant(str(args[0]), data if pr != self else null)
+				pr._sync_t = 0.0
 		"interact":
 			world.interact(self, str(args[0]))
 		"build":
@@ -373,6 +421,168 @@ func _do_act(action: String, args: Array) -> void:
 	_sync_t = 0.0
 	if is_local():
 		data_changed.emit()
+
+
+# ------------------------------------------------------------------ ações com tempo (servidor)
+func is_busy() -> bool:
+	return not _busy.is_empty() or (busy_label != "" and busy_end > Game.play_time)
+
+
+## Paciente de uma ação médica (o próprio jogador ou um aliado próximo e livre).
+func _patient_of(action: String, args: Array) -> Player:
+	var idx := {"treat": 2, "install": 1, "remove_implant": 1}.get(action, -1) as int
+	if idx < 0 or args.size() <= idx or int(args[idx]) == peer or int(args[idx]) == 0:
+		return self
+	var other: Player = world.players.get(int(args[idx]))
+	if other == null or not other.alive or other.data == null:
+		Game.tell(peer, "O paciente não está disponível.")
+		return null
+	var a := position if is_local() else net_pos
+	var b := other.position if other.is_local() else other.net_pos
+	if Vector2(b.x - a.x, (b.y - a.y) * 2.0).length() > 95.0:
+		Game.tell(peer, "Chegue mais perto de %s." % other.data.nome)
+		return null
+	if other.is_busy() and other._busy.get("partner") != self:
+		Game.tell(peer, "%s está ocupado." % other.data.nome)
+		return null
+	return other
+
+
+func _duration(action: String, args: Array, patient: Player) -> float:
+	var med := 1.0 - 0.06 * float(data.level("medicina"))
+	var cib := 1.0 - 0.05 * float(data.level("cibernetica"))
+	match action:
+		"treat":
+			return {"antibiotico": 2.0, "desinfetar": 3.0, "enfaixar": 4.0, "suturar": 8.0}.get(str(args[1]), 3.0) * med \
+				* (1.25 if patient == self else 1.0)
+		"install":
+			return 14.0 * cib
+		"remove_implant":
+			return 10.0 * cib
+		"maintain":
+			return 5.0 * cib
+		"craft":
+			return 3.5
+		"repair":
+			return 3.0
+		"reload":
+			var gun := data.firearm()
+			if gun.is_empty():
+				return 0.0
+			return (1.6 if int(Items.def(gun["id"])["pente"]) > 2 else 2.4) * (1.0 - 0.06 * float(data.level("pontaria")))
+		"use_item":
+			var inst := data._resolve(args[0] if (args[0] is int or args[0] is String) else str(args[0]))
+			if inst.is_empty():
+				return 0.0
+			var tipo := String(Items.def(inst["id"])["tipo"])
+			# tirar o que está vestido é rápido
+			if tipo in SurvivorData.EQUIP_SLOTS and int(data.equip[tipo].get("u", -1)) == int(inst.get("u", 0)):
+				return 0.0
+			return float(USE_TIME.get(tipo, 0.0))
+	return 0.0
+
+
+func _busy_text(action: String, args: Array, patient: Player) -> String:
+	var who := "" if patient == self else " em %s" % patient.data.nome
+	match action:
+		"treat":
+			var limb: String = "" if str(args[1]) == "antibiotico" else " " + str(SurvivorData.LIMB_NAMES[str(args[0])])
+			return TREAT_NAMES.get(str(args[1]), "Tratando") + limb + who
+		"install":
+			return "Cirurgia: " + DB.item_name(str(args[0])) + who
+		"remove_implant":
+			return "Removendo implante" + who
+		"maintain":
+			return "Manutenção do implante"
+		"craft":
+			return "Fabricando " + String(DB.CRAFTS[str(args[0])]["nome"])
+		"reload":
+			return "Recarregando"
+		"repair":
+			return "Consertando"
+		"use_item":
+			var inst := data._resolve(args[0] if (args[0] is int or args[0] is String) else str(args[0]))
+			return "Usando " + DB.item_name(inst["id"]) if not inst.is_empty() else "Usando"
+	return "Ocupado"
+
+
+func _start_busy(action: String, args: Array, dur: float, patient: Player) -> void:
+	busy_label = _busy_text(action, args, patient)
+	busy_total = dur
+	busy_end = Game.play_time + dur
+	_busy = {"action": action, "args": args, "partner": patient}
+	if patient != self:
+		patient.busy_label = "%s cuida de você" % data.nome
+		patient.busy_total = dur
+		patient.busy_end = busy_end
+		patient._busy = {"passive": true, "partner": self}
+		Game.tell(patient.peer, "%s está tratando você. Fique parado (%ds)." % [data.nome, ceili(dur)])
+
+
+func _clear_busy() -> void:
+	_busy = {}
+	busy_label = ""
+	busy_end = 0.0
+	busy_total = 0.0
+
+
+## Interrompe a ação (e a do parceiro, se houver).
+func cancel_busy(reason: String) -> void:
+	if _busy.is_empty():
+		return
+	var partner: Player = _busy.get("partner")
+	_clear_busy()
+	Game.tell(peer, reason)
+	if partner != null and is_instance_valid(partner) and partner != self and not partner._busy.is_empty():
+		partner._clear_busy()
+		Game.tell(partner.peer, "O procedimento foi interrompido.")
+
+
+func _tick_busy() -> void:
+	if _busy.is_empty():
+		return
+	var partner: Player = _busy.get("partner")
+	if moving:
+		cancel_busy("Ação interrompida: você se moveu.")
+		return
+	if partner != null and (not is_instance_valid(partner) or not partner.alive):
+		cancel_busy("Ação interrompida.")
+		return
+	if _busy.get("passive", false) or Game.play_time < busy_end:
+		return
+	var b := _busy
+	_clear_busy()
+	if partner != null and partner != self:
+		partner._clear_busy()
+	_run_act(b["action"], b["args"])
+	_sync_t = 0.0
+
+
+## Servidor: manda os dados médicos de um aliado próximo para quem pediu (aba Corpo).
+func _examine(target: int) -> void:
+	var other: Player = world.players.get(target)
+	if other == null or other.data == null or not other.alive:
+		return
+	var a := position if is_local() else net_pos
+	var b := other.position if other.is_local() else other.net_pos
+	if Vector2(b.x - a.x, (b.y - a.y) * 2.0).length() > 160.0:
+		return
+	var od := other.data
+	var info := {"nome": od.nome, "limbs": od.limbs.duplicate(true), "blood": od.blood, "pathogen": od.pathogen,
+		"implants": od.implants.duplicate(true), "antibiotic_t": od.antibiotic_t, "cap": od.neural_capacity(),
+		"general": od.general_count()}
+	if is_local():
+		_patient_info(target, info)
+	else:
+		_patient_info.rpc_id(peer, target, info)
+
+
+@rpc("any_peer", "reliable")
+func _patient_info(target: int, info: Dictionary) -> void:
+	if multiplayer.get_remote_sender_id() not in [0, 1]:
+		return
+	if Game.hud != null:
+		Game.hud.patient_info[target] = info
 
 
 func _server_attack(dir_index: int, aim_angle: float) -> void:
@@ -480,8 +690,10 @@ func _create(spec: Dictionary) -> void:
 	world.create_survivor(self, spec)
 
 
-@rpc("authority", "reliable")
+@rpc("any_peer", "reliable")
 func _creation_refused() -> void:
+	if multiplayer.get_remote_sender_id() not in [0, 1]:
+		return
 	if Game.hud != null:
 		Game.hud.creation_refused()
 
@@ -493,6 +705,8 @@ func server_hurt(limb: String, amount: float, pathogen_gain: float) -> void:
 	data.damage_limb(limb, amount)
 	data.pathogen = minf(100.0, data.pathogen + pathogen_gain)
 	hurt_seq += 1
+	if not _busy.is_empty():
+		cancel_busy("Ação interrompida: você foi atacado!")
 
 
 @rpc("any_peer", "reliable")
@@ -620,6 +834,10 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, Color(0.9, 0.9, 1.0, 0.08 if sneaking else 0.12), 1.5)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	GenArt.draw_frame(self, _sheet(), facing, _frame % 100 if _frame >= 0 else 0, Vector2.ZERO, tint)
+	if busy_label != "" and busy_end > Game.play_time and busy_total > 0.0:
+		var k := clampf(1.0 - (busy_end - Game.play_time) / busy_total, 0.0, 1.0)
+		draw_rect(Rect2(-16, -58, 32, 4), Color(0, 0, 0, 0.7))
+		draw_rect(Rect2(-15, -57, 30.0 * k, 2), UITheme.ACCENT)
 	if not is_local() and nome != "":
 		# nome dos outros jogadores sobre a cabeça, na fonte pixelada em escala nativa
 		draw_set_transform(Vector2(0, -50), 0.0, Vector2(0.5, 0.5))
