@@ -48,6 +48,9 @@ var heat: float = 0.0
 var implants := {}
 ## Estresse sináptico (0-100). Ver overloaded().
 var synaptic: float = 0.0
+## Analgésico (segundos restantes) e lanterna acesa (id único da lanterna, 0 = apagada).
+var pain_t: float = 0.0
+var light_u: int = 0
 var alive: bool = true
 ## Invulnerável (cheat de testes, por personagem).
 var god := false
@@ -144,7 +147,7 @@ func used_volume(c: String) -> float:
 
 ## Quantas unidades da instância cabem no recipiente.
 func fits(c: String, inst: Dictionary) -> int:
-	if c == "coldre" and String(Items.def(inst["id"])["tipo"]) != "arma":
+	if c == "coldre" and not String(Items.def(inst["id"])["tipo"]) in ["arma", "arma_fogo"]:
 		return 0
 	var unit := float(Items.def(inst["id"]).get("vol", 0.5))
 	var free := capacity(c) - used_volume(c)
@@ -471,6 +474,7 @@ func tick(delta: float, env: Dictionary) -> void:
 	var moving: bool = env.get("moving", false)
 	var spore: float = env.get("spore", 0.0)
 	_tick_stamina(delta, moving and env.get("sprinting", false))
+	_tick_gear(delta)
 	_tick_metabolism(delta, moving)
 	_tick_implants(delta, moving or env.get("combat", false))
 	_tick_neural(delta)
@@ -491,6 +495,63 @@ func _hurt_internal(limb_id: String, amount: float, cause: String) -> void:
 	var limb: Dictionary = limbs[limb_id]
 	limb["hp"] = maxf(0.0, float(limb["hp"]) - amount)
 	_last_hurt_cause = cause
+
+
+## Analgésico e lanterna.
+func _tick_gear(delta: float) -> void:
+	pain_t = maxf(0.0, pain_t - delta)
+	if light_u != 0:
+		var f := find(light_u)
+		if f.is_empty():
+			light_u = 0
+			return
+		var lamp: Dictionary = f[1]
+		lamp["carga"] = maxf(0.0, float(lamp["carga"]) - 0.4 * delta)
+		if float(lamp["carga"]) <= 0.0:
+			light_u = 0
+			message.emit("A lanterna apagou: pilhas gastas.")
+
+
+func lantern_on() -> bool:
+	return light_u != 0
+
+
+## Ferramentas que faltam (vazio = tem todas).
+func missing_tools(tools: Array) -> String:
+	var miss: Array[String] = []
+	for t in tools:
+		if count(t) <= 0:
+			miss.append(DB.item_name(t))
+	return ", ".join(miss)
+
+
+# ---------------------------------------------------------------- ruído e visibilidade
+## Raio (isométrico, px) do barulho dos passos.
+func step_noise(sprinting: bool, sneaking: bool) -> float:
+	var r := 110.0
+	if sprinting:
+		r = 270.0
+	elif sneaking:
+		r = 35.0
+	r *= 1.0 - 0.06 * float(level("furtividade"))
+	if has_trait("barulhento"):
+		r *= 1.4
+	if load_ratio() > 1.0:
+		r *= 1.25
+	return r
+
+
+## Multiplicador da distância em que os infectados te enxergam.
+func visibility(sprinting: bool, sneaking: bool) -> float:
+	var v := 1.0
+	if sneaking:
+		v = 0.55
+	elif sprinting:
+		v = 1.15
+	v *= 1.0 - 0.05 * float(level("furtividade"))
+	if lantern_on():
+		v *= 1.4
+	return v
 
 
 func has_trait(t: String) -> bool:
@@ -782,7 +843,7 @@ func melee_damage() -> float:
 	if implant_active("braco_d"):
 		dmg += 14.0
 	dmg *= 1.0 + 0.04 * float(level("combate"))
-	if float(limbs["braco_d"]["hp"]) < 30.0:
+	if float(limbs["braco_d"]["hp"]) < 30.0 and pain_t <= 0.0:
 		dmg *= 0.6
 	if stamina < 8.0:
 		dmg *= 0.6
@@ -806,6 +867,8 @@ func speed_mult() -> float:
 	var m := 1.0
 	for l in ["perna_e", "perna_d"]:
 		var hp := float(limbs[l]["hp"])
+		if pain_t > 0.0:
+			break
 		if hp <= 0.0:
 			m -= 0.25
 		elif hp < 40.0:
@@ -895,11 +958,75 @@ func use_item(ref: Variant) -> void:
 			remove_u(u)
 			message.emit("Você estudou: %s." % def["nome"])
 			add_xp(String(def["skill"]), float(def["xp"]))
-		"arma":
+		"arma", "arma_fogo":
 			hand_u = 0 if hand_u == u else u
 			message.emit("Arma %s: %s." % [("na mão" if hand_u == u else "guardada"), def["nome"]])
+		"lanterna":
+			if light_u == u:
+				light_u = 0
+				message.emit("Lanterna apagada.")
+			elif float(inst.get("carga", 0.0)) <= 0.0:
+				message.emit("A lanterna está sem pilhas.")
+			else:
+				light_u = u
+				message.emit("Lanterna acesa: você enxerga melhor, mas é visto de mais longe.")
+		"pilha":
+			var lamp: Dictionary = {}
+			for it in all_items():
+				if it["id"] == "lanterna" and (lamp.is_empty() or float(it["carga"]) < float(lamp["carga"])):
+					lamp = it
+			if lamp.is_empty():
+				message.emit("Você não tem lanterna.")
+				return
+			remove_u(u)
+			lamp["carga"] = 100.0
+			message.emit("Pilhas novas na lanterna.")
+		"cantil":
+			if float(inst.get("carga", 0.0)) >= 1.0:
+				inst["carga"] = maxf(0.0, float(inst["carga"]) - float(def["uso_carga"]))
+				water = minf(100.0, water + 30.0)
+				message.emit("Você bebeu do cantil.")
+			elif take_item("agua_limpa"):
+				inst["carga"] = 100.0
+				message.emit("Cantil cheio (uma garrafa de água limpa).")
+			else:
+				message.emit("O cantil está vazio. Encha com água limpa.")
+		"analgesico":
+			remove_u(u)
+			pain_t = 120.0
+			message.emit("Analgésico: a dor some por 2 minutos.")
 		_:
 			message.emit("Use este item em outra aba.")
+
+
+## Recarrega a arma de fogo da mão com a munição do inventário. Devolve as balas postas.
+func reload() -> int:
+	var w := weapon_inst()
+	if w.is_empty() or not Items.def(w["id"]).has("pente"):
+		message.emit("Você não tem arma de fogo na mão.")
+		return 0
+	var def := Items.def(w["id"])
+	var need := int(def["pente"]) - int(float(w.get("mun", 0.0)))
+	var ammo: String = def["municao"]
+	var n := mini(need, count(ammo))
+	if need <= 0:
+		message.emit("A arma já está carregada.")
+		return 0
+	if n <= 0:
+		message.emit("Sem %s." % DB.item_name(ammo).to_lower())
+		return 0
+	take_item(ammo, n)
+	w["mun"] = float(w.get("mun", 0.0)) + float(n)
+	add_xp("pontaria", 1.0)
+	message.emit("Recarregado: %d/%d." % [int(w["mun"]), int(def["pente"])])
+	return n
+
+
+func firearm() -> Dictionary:
+	var w := weapon_inst()
+	if not w.is_empty() and Items.def(w["id"]).has("pente"):
+		return w
+	return {}
 
 
 ## Gasta combustível dos galões para abastecer um gerador. Devolve o quanto abasteceu
@@ -933,8 +1060,8 @@ func treat(limb_id: String, action: String) -> void:
 		return
 	match action:
 		"desinfetar":
-			if not spend("antisseptico"):
-				message.emit("Sem antisséptico.")
+			if not spend("antisseptico") and not spend("alcool"):
+				message.emit("Sem antisséptico nem álcool.")
 				return
 			limb["disinfected"] = true
 			limb["infection"] = maxf(0.0, float(limb["infection"]) - 15.0)
@@ -944,8 +1071,8 @@ func treat(limb_id: String, action: String) -> void:
 			if limb["bandaged"]:
 				message.emit("Já está enfaixado.")
 				return
-			if not take_item("bandagem"):
-				message.emit("Sem bandagem.")
+			if not take_item("bandagem") and not take_item("gaze"):
+				message.emit("Sem bandagem nem gaze.")
 				return
 			limb["bandaged"] = true
 			add_xp("medicina", 5.0)
@@ -1124,8 +1251,12 @@ func craft(recipe: String) -> void:
 	if not can_afford(def["custo"]):
 		message.emit("Faltam materiais: %s." % DB.cost_text(def["custo"]))
 		return
+	var miss := missing_tools(def.get("ferramentas", []))
+	if miss != "":
+		message.emit("Falta ferramenta: %s." % miss)
+		return
 	pay(def["custo"])
-	give(recipe)
+	give(recipe, int(def.get("qtd", 1)))
 	add_xp_map(def["xp"])
 	message.emit("Fabricado: %s." % def["nome"])
 
@@ -1137,7 +1268,8 @@ func to_dict() -> Dictionary:
 		"bags": bags.duplicate(true), "equip": equip.duplicate(true), "hand_u": hand_u, "next_u": _next_u,
 		"implants": implants.duplicate(true), "suppress_t": suppress_t, "tainted_t": tainted_t,
 		"antibiotic_t": antibiotic_t, "battery": battery, "heat": heat, "time_alive": time_alive,
-		"forca": forca, "resist": resist, "traits": traits.duplicate(), "stamina": stamina, "synaptic": synaptic}
+		"forca": forca, "resist": resist, "traits": traits.duplicate(), "stamina": stamina, "synaptic": synaptic,
+		"pain_t": pain_t, "light_u": light_u}
 
 
 static func from_dict(src: Dictionary) -> SurvivorData:
@@ -1176,6 +1308,8 @@ static func from_dict(src: Dictionary) -> SurvivorData:
 			d.traits.append(str(t))
 	d.stamina = float(src.get("stamina", d.max_stamina()))
 	d.synaptic = float(src.get("synaptic", 0.0))
+	d.pain_t = float(src.get("pain_t", 0.0))
+	d.light_u = int(src.get("light_u", 0))
 	if src.has("bags"):
 		var sb: Dictionary = src["bags"]
 		for c in d.bags:

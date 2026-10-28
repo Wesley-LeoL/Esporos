@@ -153,6 +153,27 @@ const ITEMS := {
 	"combustivel": {"nome": "Galão de combustível", "tipo": "combustivel", "carga": true, "peso": 4.5, "vol": 4.0, "desc": "Abastece geradores com a carga que tiver."},
 	"abridor": {"nome": "Abridor de latas", "tipo": "ferramenta", "peso": 0.1, "vol": 0.1, "desc": "Abre enlatados."},
 	"fita": {"nome": "Fita adesiva", "tipo": "reparo", "carga": true, "uso_carga": 20.0, "peso": 0.15, "vol": 0.2, "desc": "Conserta armas e a vedação da máscara (+30%). 5 usos."},
+	"chave_fenda": {"nome": "Chave de fenda", "tipo": "ferramenta", "peso": 0.15, "vol": 0.2, "desc": "Ferramenta: eletrônica (geradores, torres, baterias)."},
+	"martelo": {"nome": "Martelo", "tipo": "arma", "dano": 9.0, "dur": true, "gasto": 0.8, "peso": 0.8, "vol": 0.8, "desc": "Ferramenta de carpintaria e arma (+9)."},
+	"serra": {"nome": "Serra", "tipo": "ferramenta", "peso": 0.7, "vol": 1.5, "desc": "Ferramenta: corta metal e madeira (torres, selagem)."},
+	"alicate": {"nome": "Alicate", "tipo": "ferramenta", "peso": 0.3, "vol": 0.3, "desc": "Ferramenta: fios e filtros."},
+	"lanterna": {"nome": "Lanterna", "tipo": "lanterna", "carga": true, "peso": 0.4, "vol": 0.5, "desc": "Ilumina, mas os infectados te veem de mais longe. Gasta pilhas."},
+	"pilha": {"nome": "Pilha", "tipo": "pilha", "peso": 0.03, "vol": 0.03, "desc": "Recarrega uma lanterna."},
+	"pregos": {"nome": "Prego", "tipo": "material", "peso": 0.01, "vol": 0.01, "desc": "Material de carpintaria."},
+	"fios": {"nome": "Fio elétrico", "tipo": "material", "peso": 0.1, "vol": 0.2, "desc": "Material de eletrônica."},
+	"sucata_eletronica": {"nome": "Sucata eletrônica", "tipo": "material", "peso": 0.3, "vol": 0.3, "desc": "Placas e componentes."},
+	"cantil": {"nome": "Cantil", "tipo": "cantil", "carga": true, "uso_carga": 34.0, "peso": 0.9, "vol": 1.0, "desc": "3 goles de água limpa. Enche com garrafas de água limpa."},
+	"gaze": {"nome": "Gaze esterilizada", "tipo": "med", "peso": 0.03, "vol": 0.1, "desc": "Serve como bandagem. Aba Corpo."},
+	"alcool": {"nome": "Álcool 70%", "tipo": "med", "carga": true, "uso_carga": 20.0, "peso": 0.4, "vol": 0.5, "desc": "Desinfeta ferimentos (5 usos). Aba Corpo."},
+	"analgesico": {"nome": "Analgésico", "tipo": "analgesico", "peso": 0.02, "vol": 0.05, "desc": "Por 2 min, membros feridos não te deixam lento nem fraco."},
+	"pistola": {"nome": "Pistola 9 mm", "tipo": "arma_fogo", "dano": 30.0, "dur": true, "gasto": 0.3, "municao": "municao_9mm", "pente": 12,
+		"alcance": 430.0, "dispersao": 0.09, "chumbos": 1, "ruido": 900.0, "cadencia": 0.35, "peso": 0.9, "vol": 0.8,
+		"desc": "Pente de 12. Barulhenta: atrai infectados de longe."},
+	"espingarda": {"nome": "Espingarda calibre 12", "tipo": "arma_fogo", "dano": 16.0, "dur": true, "gasto": 0.6, "municao": "cartucho_12", "pente": 2,
+		"alcance": 260.0, "dispersao": 0.26, "chumbos": 6, "ruido": 1300.0, "cadencia": 0.7, "peso": 3.2, "vol": 4.5,
+		"desc": "2 cartuchos, 6 chumbos por tiro. Muito barulhenta."},
+	"municao_9mm": {"nome": "Munição 9 mm", "tipo": "municao", "peso": 0.012, "vol": 0.01, "desc": "Para a pistola. [R] recarrega."},
+	"cartucho_12": {"nome": "Cartucho calibre 12", "tipo": "municao", "peso": 0.04, "vol": 0.03, "desc": "Para a espingarda. [R] recarrega."},
 	"sucata": {"nome": "Sucata", "tipo": "material", "peso": 1.0, "vol": 0.5, "desc": "Material de construção."},
 	"madeira": {"nome": "Madeira", "tipo": "material", "peso": 1.5, "vol": 1.0, "desc": "Material de construção."},
 	"metal": {"nome": "Metal", "tipo": "material", "peso": 2.0, "vol": 0.8, "desc": "Material de construção."},
@@ -203,29 +224,46 @@ const IMPLANTS := {
 		"neuro": 10.0, "efeito": "Malha subdérmica: recebe 25% menos dano."},
 }
 
+## ferramentas: precisam estar no inventário (não são gastas).
 const BUILDS := {
-	"piso": {"nome": "Piso metálico", "custo": {"madeira": 1, "sucata": 1}, "req": {},
+	"piso": {"nome": "Piso metálico", "custo": {"madeira": 1, "sucata": 1}, "req": {}, "ferramentas": [],
 		"xp": {"carpintaria": 3}, "desc": "Altera o terreno (persistente)."},
-	"parede": {"nome": "Parede reforçada", "custo": {"sucata": 2, "madeira": 2}, "req": {},
+	"parede": {"nome": "Parede reforçada", "custo": {"sucata": 2, "madeira": 2, "pregos": 4}, "req": {}, "ferramentas": ["martelo"],
 		"xp": {"carpintaria": 6}, "desc": "Bloqueia infectados."},
-	"porta": {"nome": "Porta", "custo": {"madeira": 3, "sucata": 2}, "req": {"carpintaria": 1},
+	"porta": {"nome": "Porta", "custo": {"madeira": 3, "sucata": 2, "pregos": 6}, "req": {"carpintaria": 1}, "ferramentas": ["martelo"],
 		"xp": {"carpintaria": 10}, "desc": "[E] abre e fecha."},
-	"bau": {"nome": "Baú", "custo": {"madeira": 3, "sucata": 1}, "req": {},
+	"bau": {"nome": "Baú", "custo": {"madeira": 3, "pregos": 4}, "req": {}, "ferramentas": ["martelo"],
 		"xp": {"carpintaria": 4}, "desc": "Guarda itens sem limite de volume. [E] abre."},
-	"gerador": {"nome": "Gerador a combustão", "custo": {"metal": 6, "sucata": 4}, "req": {"eletronica": 3, "metalurgia": 2},
-		"xp": {"eletronica": 25, "metalurgia": 15}, "desc": "Energia num raio de ~10 tiles. Precisa de combustível."},
-	"purificador": {"nome": "Purificador industrial", "custo": {"metal": 8, "sucata": 5, "filtro": 1}, "req": {"eletronica": 4, "metalurgia": 2},
-		"xp": {"eletronica": 30, "metalurgia": 15}, "desc": "Reduz a carga patogênica de quem fica perto. Precisa de energia."},
-	"torre": {"nome": "Torre automatizada", "custo": {"metal": 8, "sucata": 6, "bateria": 1}, "req": {"eletronica": 4, "metalurgia": 3},
-		"xp": {"eletronica": 30, "metalurgia": 20}, "desc": "Atira em infectados. Precisa de energia."},
-	"vedacao": {"nome": "Selagem de ar", "custo": {"metal": 8, "sucata": 4, "madeira": 4}, "req": {"metalurgia": 4, "eletronica": 3, "carpintaria": 2},
+	"gerador": {"nome": "Gerador a combustão", "custo": {"metal": 6, "sucata": 4, "fios": 2}, "req": {"eletronica": 3, "metalurgia": 2},
+		"ferramentas": ["chave_fenda", "alicate"], "xp": {"eletronica": 25, "metalurgia": 15},
+		"desc": "Energia num raio de ~10 tiles. Precisa de combustível."},
+	"purificador": {"nome": "Purificador industrial", "custo": {"metal": 8, "sucata": 5, "filtro": 1, "fios": 2, "sucata_eletronica": 1},
+		"req": {"eletronica": 4, "metalurgia": 2}, "ferramentas": ["chave_fenda", "alicate"], "xp": {"eletronica": 30, "metalurgia": 15},
+		"desc": "Reduz a carga patogênica de quem fica perto. Precisa de energia."},
+	"torre": {"nome": "Torre automatizada", "custo": {"metal": 8, "sucata": 6, "bateria": 1, "fios": 2, "sucata_eletronica": 2},
+		"req": {"eletronica": 4, "metalurgia": 3}, "ferramentas": ["chave_fenda", "alicate", "serra"], "xp": {"eletronica": 30, "metalurgia": 20},
+		"desc": "Atira em infectados (barulhenta). Precisa de energia."},
+	"vedacao": {"nome": "Selagem de ar", "custo": {"metal": 8, "sucata": 4, "madeira": 4, "fios": 2},
+		"req": {"metalurgia": 4, "eletronica": 3, "carpintaria": 2}, "ferramentas": ["martelo", "serra", "chave_fenda"],
 		"xp": {"metalurgia": 30, "eletronica": 20}, "desc": "Zona sem esporos. Precisa de energia."},
 }
 
+## qtd: unidades produzidas.
 const CRAFTS := {
-	"filtro": {"nome": "Filtro de máscara", "custo": {"sucata": 2, "metal": 1}, "req": {"metalurgia": 2}, "xp": {"metalurgia": 14}},
-	"bateria": {"nome": "Bateria", "custo": {"metal": 1, "sucata": 2, "combustivel": 1}, "req": {"eletronica": 2}, "xp": {"eletronica": 12}},
-	"supressor": {"nome": "Supressor químico", "custo": {"antisseptico": 1, "sucata": 1}, "req": {"medicina": 3}, "xp": {"medicina": 12}},
+	"filtro": {"nome": "Filtro de máscara", "custo": {"sucata": 2, "metal": 1}, "req": {"metalurgia": 2}, "ferramentas": ["alicate"],
+		"xp": {"metalurgia": 14}},
+	"bateria": {"nome": "Bateria", "custo": {"sucata_eletronica": 2, "fios": 1, "metal": 1}, "req": {"eletronica": 2}, "ferramentas": ["chave_fenda"],
+		"xp": {"eletronica": 12}},
+	"supressor": {"nome": "Supressor químico", "custo": {"antisseptico": 1, "sucata": 1}, "req": {"medicina": 3}, "ferramentas": [],
+		"xp": {"medicina": 12}},
+	"pregos": {"nome": "Pregos (x12)", "qtd": 12, "custo": {"sucata": 1}, "req": {"metalurgia": 1}, "ferramentas": ["martelo"],
+		"xp": {"metalurgia": 4}},
+	"fios": {"nome": "Fio elétrico (x2)", "qtd": 2, "custo": {"sucata_eletronica": 1}, "req": {"eletronica": 1}, "ferramentas": ["alicate"],
+		"xp": {"eletronica": 4}},
+	"municao_9mm": {"nome": "Munição 9 mm (x8)", "qtd": 8, "custo": {"metal": 1, "sucata": 1, "combustivel": 1}, "req": {"metalurgia": 3, "pontaria": 1},
+		"ferramentas": ["alicate", "martelo"], "xp": {"metalurgia": 10, "pontaria": 4}},
+	"cartucho_12": {"nome": "Cartucho calibre 12 (x4)", "qtd": 4, "custo": {"metal": 1, "sucata": 1, "combustivel": 1}, "req": {"metalurgia": 3, "pontaria": 1},
+		"ferramentas": ["alicate", "martelo"], "xp": {"metalurgia": 10, "pontaria": 4}},
 }
 
 # Cada entrada: [item, peso, mínimo, máximo]
@@ -234,15 +272,20 @@ const LOOT := {
 		["agua_suja", 10, 1, 2], ["barra_cereal", 10, 1, 2], ["bandagem", 9, 1, 2], ["metal", 12, 1, 3],
 		["filtro", 6, 1, 1], ["supressor", 4, 1, 1], ["combustivel", 5, 1, 1], ["bateria", 4, 1, 1],
 		["cano", 3, 1, 1], ["carne_seca", 5, 1, 1], ["maca", 6, 1, 3], ["pao", 4, 1, 1],
-		["fita", 4, 1, 1], ["faca", 3, 1, 1], ["abridor", 4, 1, 1], ["taco", 3, 1, 1], ["mochila_escolar", 3, 1, 1], ["coldre", 2, 1, 1]],
+		["fita", 4, 1, 1], ["faca", 3, 1, 1], ["abridor", 4, 1, 1], ["pregos", 10, 4, 14], ["martelo", 3, 1, 1],
+		["chave_fenda", 3, 1, 1], ["lanterna", 3, 1, 1], ["pilha", 5, 1, 3], ["cantil", 2, 1, 1], ["municao_9mm", 3, 3, 10],
+		["cartucho_12", 2, 2, 5], ["pistola", 1, 1, 1], ["taco", 3, 1, 1], ["mochila_escolar", 3, 1, 1], ["coldre", 2, 1, 1]],
 	"medico": [["bandagem", 30, 1, 3], ["antisseptico", 25, 1, 2], ["kit_sutura", 15, 1, 1], ["antibiotico", 15, 1, 2],
-		["supressor", 12, 1, 2], ["agua_limpa", 8, 1, 2], ["manual_medicina", 4, 1, 1], ["kit_cirurgico", 3, 1, 1]],
+		["supressor", 12, 1, 2], ["agua_limpa", 8, 1, 2], ["gaze", 18, 1, 3], ["alcool", 12, 1, 1],
+		["analgesico", 12, 1, 2], ["manual_medicina", 4, 1, 1], ["kit_cirurgico", 3, 1, 1]],
 	"tecnico": [["metal", 30, 1, 4], ["sucata", 25, 2, 5], ["bateria", 14, 1, 2], ["combustivel", 14, 1, 3],
 		["filtro", 12, 1, 2], ["mascara", 5, 1, 1], ["manual_mecanica", 3, 1, 1], ["manual_metalurgia", 3, 1, 1],
 		["manual_engenharia", 3, 1, 1], ["manual_carpintaria", 3, 1, 1], ["manual_cibernetica", 2, 1, 1], ["implante_pulmao", 1, 1, 1], ["implante_hud", 1, 1, 1],
 		["implante_braco", 1, 1, 1], ["implante_pernas", 1, 1, 1], ["implante_derme", 1, 1, 1],
 		["proc_neural_mk1", 2, 1, 1], ["proc_neural_mk2", 1, 1, 1], ["machete", 2, 1, 1], ["fita", 8, 1, 1], ["mochila_trilha", 2, 1, 1],
-		["mochila_militar", 1, 1, 1], ["coldre", 3, 1, 1]],
+		["mochila_militar", 1, 1, 1], ["coldre", 3, 1, 1], ["fios", 14, 1, 3], ["sucata_eletronica", 14, 1, 3],
+		["alicate", 4, 1, 1], ["serra", 3, 1, 1], ["chave_fenda", 4, 1, 1], ["pilha", 6, 2, 4], ["municao_9mm", 4, 4, 12],
+		["cartucho_12", 3, 2, 6], ["pistola", 1, 1, 1], ["espingarda", 1, 1, 1]],
 }
 
 
@@ -272,6 +315,13 @@ static func roll_loot(table: String, rolls: int, rng: RandomNumberGenerator,
 				counts[key] = int(counts.get(key, 0)) + n
 				break
 	return Items.from_counts(counts, state_rng if state_rng != null else rng, clock)
+
+
+static func tools_text(tools: Array) -> String:
+	var parts: Array[String] = []
+	for t in tools:
+		parts.append(item_name(t))
+	return ", ".join(parts) if not parts.is_empty() else "nenhuma"
 
 
 static func cost_text(cost: Dictionary) -> String:

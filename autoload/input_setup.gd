@@ -14,6 +14,8 @@ const ACTIONS := {
 	"demolish": [KEY_X],
 	"save": [KEY_F5],
 	"sprint": [KEY_SHIFT],
+	"sneak": [KEY_C],
+	"reload": [KEY_R],
 }
 
 

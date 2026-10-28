@@ -189,6 +189,7 @@ func interact(player: Player) -> void:
 			_apply_open()
 			queue_redraw()
 			world.structure_changed(self)
+			world.make_noise(position, 140.0)
 		"gerador":
 			if eternal:
 				Game.tell(player.peer, "O gerador do abrigo funciona sem parar.")
@@ -257,6 +258,7 @@ func _physics_process(delta: float) -> void:
 				world.turret_fx.rpc(cell.x, cell.y, aim, best.position)
 				show_shot(aim, best.position)
 				best.take_damage(20.0, self)
+				world.make_noise(position, 520.0)
 				_cd = 1.0
 		if _tracer_t <= 0.0 and _tracer != Vector2.ZERO:
 			_tracer = Vector2.ZERO

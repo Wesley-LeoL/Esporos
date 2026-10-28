@@ -30,6 +30,11 @@ var _anim_t := 0.0
 var _atk_anim := 0.0
 var _seen_atk := 0
 var _seen_hp := -1.0
+## Barulho ouvido (vai investigar) e memória do último alvo visto.
+var _heard_pos := Vector2.ZERO
+var _heard_t := 0.0
+var _target: Player
+var _chase_t := 0.0
 
 
 func setup(is_elite: bool) -> void:
@@ -86,14 +91,50 @@ func _physics_process(delta: float) -> void:
 	_server_ai(delta)
 
 
-## IA (só no servidor): persegue o jogador vivo mais próximo fora da zona segura.
+## Servidor: ouviu um barulho (passos, tiro, construção) e vai investigar.
+func hear(pos: Vector2) -> void:
+	if _target != null and _chase_t > 0.0:
+		return
+	_heard_pos = pos
+	_heard_t = 10.0
+
+
+## Jogador que este infectado enxerga agora: a distância de visão depende de quanto o
+## jogador se expõe (agachado, correndo, lanterna, Furtividade). Quem já está sendo
+## perseguido é seguido de mais longe por alguns segundos.
+func _pick_target(aggro: float) -> Player:
+	var best: Player = null
+	var best_d := 1e9
+	for p in world.alive_players():
+		if p.data == null or world.in_safe_zone(p.net_pos):
+			continue
+		var off := p.net_pos - position
+		var d := Vector2(off.x, off.y * 2.0).length()
+		var sight := aggro * p.data.visibility(p.sprinting, p.sneaking)
+		if p == _target and _chase_t > 0.0:
+			sight *= 1.6
+		if d < sight and d < best_d:
+			best_d = d
+			best = p
+	return best
+
+
+## IA (só no servidor): persegue quem enxerga, investiga barulhos ou vaga.
 func _server_ai(delta: float) -> void:
 	_cd = maxf(0.0, _cd - delta)
 	_avoid_t = maxf(0.0, _avoid_t - delta)
+	_chase_t = maxf(0.0, _chase_t - delta)
+	_heard_t = maxf(0.0, _heard_t - delta)
 	var aggro := 340.0 if elite else 240.0
-	var target: Player = world.nearest_player(position, aggro)
-	if target != null and world.in_safe_zone(target.net_pos):
-		target = null
+	var target: Player = _pick_target(aggro)
+	if target != null:
+		_target = target
+		_chase_t = 4.0
+	elif _target != null and is_instance_valid(_target) and _chase_t <= 0.0:
+		# perdeu de vista: vai até onde viu por último
+		_heard_pos = _target.net_pos
+		_heard_t = 6.0
+		_target = null
 	var dir := Vector2.ZERO
 	var mult := 1.0
 	var dist := 1e9
@@ -102,6 +143,12 @@ func _server_ai(delta: float) -> void:
 		var iso := Vector2(to_p.x, to_p.y * 2.0)
 		dist = iso.length()
 		dir = iso.normalized()
+	elif _heard_t > 0.0:
+		var to_h := Vector2(_heard_pos.x - position.x, (_heard_pos.y - position.y) * 2.0)
+		if to_h.length() < 24.0:
+			_heard_t = 0.0
+		dir = to_h.normalized()
+		mult = 0.75
 	else:
 		_wander_t -= delta
 		if _wander_t <= 0.0:

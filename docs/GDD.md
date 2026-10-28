@@ -134,6 +134,14 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Sobrecarga:** mais implantes do que o cérebro suporta (bateria vazia, processador danificado ou removido) ou estresse ≥ 80%. Efeitos: o controle chega atrasado e desviado, espasmos empurram o personagem, os golpes saem em direção errada, o HUD treme e muda de cor, ações complexas (tratar, fabricar, operar, construir, consertar) ficam bloqueadas, o calor sobe e a cabeça sofre dano lento.
 - **Implantes novos:** pernas hidráulicas (+12% de velocidade, corrida mais barata) e malha subdérmica (-25% de dano). Implantes podem ser removidos com um kit cirúrgico (Cibernética reduz o risco).
 
+### Itens, armas de fogo, som e furtividade (fase 5)
+
+- **Ferramentas** (não se gastam): martelo (também arma), chave de fenda, alicate e serra. Construções de madeira pedem martelo e pregos; elétricas pedem chave de fenda, alicate, fios e sucata eletrônica; torre e selagem pedem serra. Receitas novas: pregos, fios, munição 9 mm e cartuchos.
+- **Utilidades e médicos:** lanterna (gasta carga; pilhas recarregam), cantil (3 goles, enche com água limpa), gaze (vale como bandagem), álcool 70% (5 usos, vale como antisséptico), analgésico (2 min sem penalidade de membros feridos).
+- **Armas de fogo:** pistola 9 mm (pente 12, 430 px) e espingarda calibre 12 (2 cartuchos, 6 chumbos). Miram no mouse, têm dispersão (Pontaria reduz; cansaço aumenta), desgastam, engasgam quando gastas e quebram. [R] recarrega com a munição do inventário. A pistola cabe no coldre.
+- **Som:** passos (andando 110, correndo 270, agachado 35 px; Furtividade reduz; Barulhento e sobrecarga aumentam), golpes, tiros (900 e 1300 px), portas, construções, demolições e torres fazem barulho. Infectados no raio vão investigar o local.
+- **Furtividade:** [C] agacha (mais lento, quase silencioso, visto de 55% da distância). Correr e lanterna acesa aumentam a distância de visão. Infectados lembram do alvo por alguns segundos e depois vão até onde o viram. Andar agachado perto de infectados treina Furtividade. Camuflagem por áreas escuras fica para quando houver ciclo de luz.
+
 ## Estado da implementação
 
 | Fase | Conteúdo | Situação |
@@ -142,7 +150,7 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 2 | Inventário por peso e volume (bolsos, mochilas, coldre, sobrecarga), itens com estado próprio (durabilidade, validade, cargas), janela de saque, baú, abridor de latas | **feito** |
 | 3 | Criação por pontos (atributos, habilidades, traços), 12 habilidades, estamina e corrida | **feito** |
 | 4 | Cibernética neural (processador, limite de implantes, rejeição, estresse e sobrecarga sináptica, remoção de implantes) | **feito** |
-| 5 | Itens novos, armas que quebram, armas de fogo, som e furtividade | a fazer |
+| 5 | Ferramentas e materiais, lanterna, cantil, médicos novos, armas de fogo com munição, som e furtividade | **feito** |
 | 6 | Ações com tempo e medicina cooperativa | a fazer |
 | 7 | Mundo em chunks, vilas vivas com NPCs e pedidos de socorro | a fazer |
 | 8 | Agricultura e culinária; veículos | a fazer |

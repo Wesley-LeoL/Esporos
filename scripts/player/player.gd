@@ -14,7 +14,7 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant"]
+	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload"]
 ## Ações que a sobrecarga sináptica impede (GDD 4: incapacidade de ações complexas).
 const COMPLEX := ["treat", "craft", "install", "maintain", "build", "repair"]
 
@@ -30,9 +30,10 @@ var net_pos := Vector2.ZERO
 var facing: int = Facing.S
 var moving := false
 var sprinting := false
+var sneaking := false
 var attack_seq := 0
 # ---- replicado pelo servidor
-var look := 1  # bits: 1 máscara, 2 braço cibernético, 4 olho (HUD)
+var look := 1  # bits: 1 máscara, 2 braço cibernético, 4 olho (HUD), 8 lanterna acesa
 var alive := true
 var hurt_seq := 0
 ## Esperando o jogador criar um sobrevivente (entrada na sessão ou depois de morrer).
@@ -61,6 +62,9 @@ var _input_buf: Array[Vector2] = []
 var _spasm_t := 0.0
 var _spasm_dir := Vector2.ZERO
 var _glitch_t := 1.0
+var _step_t := 0.0
+var _fire_cd := 0.0
+var _light: PointLight2D
 
 signal data_changed
 
@@ -103,7 +107,7 @@ func _ready() -> void:
 ## Chamado pela função de spawn antes de o nó entrar na árvore.
 func setup_net(owner_peer: int) -> void:
 	peer = owner_peer
-	var own := Net.make_sync(self, [".:net_pos", ".:facing", ".:moving", ".:sprinting", ".:attack_seq"], 0.05)
+	var own := Net.make_sync(self, [".:net_pos", ".:facing", ".:moving", ".:sprinting", ".:sneaking", ".:attack_seq"], 0.05)
 	own.name = "SyncDono"
 	var srv := Net.make_sync(self, [".:look", ".:alive", ".:hurt_seq", ".:nome", ".:pending"], 0.1)
 	srv.name = "SyncServidor"
@@ -149,9 +153,11 @@ func _local_control(delta: float) -> void:
 	if moving:
 		facing = _vector_to_facing(input)
 	var mult := data.speed_mult() if data != null else 1.0
-	sprinting = moving and Input.is_action_pressed("sprint") and data != null and data.can_sprint()
+	sprinting = moving and not sneaking and Input.is_action_pressed("sprint") and data != null and data.can_sprint()
 	if sprinting:
 		mult *= 1.55
+	elif sneaking:
+		mult *= 0.55
 	velocity = Vector2(input.x, input.y * ISO_Y_SCALE) * SPEED * mult
 	move_and_slide()
 	net_pos = position
@@ -162,9 +168,16 @@ func _local_control(delta: float) -> void:
 		attack_cd = 0.55
 		attack_seq += 1
 		var aim := facing
+		# arma de fogo: mira no mouse (ângulo no espaço isométrico)
+		var to_m := get_global_mouse_position() - position
+		var aim_angle := Vector2(to_m.x, to_m.y * 2.0).angle()
+		if data != null and not data.firearm().is_empty():
+			facing = GenArt.facing_of(to_m)
+			aim = facing
 		if data != null and data.overloaded():
 			aim = posmod(facing + randi_range(-2, 2), 8)  # não consegue mirar
-		act("attack", [aim])
+			aim_angle += randf_range(-1.2, 1.2)
+		act("attack", [aim, aim_angle])
 	if spores != null and world != null:
 		spores.modulate.a = clampf(world.spore_at(position) * 1.6, 0.15, 1.0)
 
@@ -195,7 +208,16 @@ func _server_tick(delta: float) -> void:
 		var pos := position if is_local() else net_pos
 		data.tick(delta, {"spore": world.spore_at(pos), "moving": moving, "sprinting": sprinting, "combat": attack_flash > 0.0,
 			"purifier": world.purifier_near(pos)})
-		look = int(data.has_mask()) | (2 if data.implant_active("braco_d") else 0) | (4 if data.implant_active("olho") else 0)
+		look = int(data.has_mask()) | (2 if data.implant_active("braco_d") else 0) | (4 if data.implant_active("olho") else 0) \
+			| (8 if data.lantern_on() else 0)
+		_fire_cd = maxf(0.0, _fire_cd - delta)
+		if moving:
+			_step_t -= delta
+			if _step_t <= 0.0:
+				_step_t = 0.5
+				world.make_noise(pos, data.step_noise(sprinting, sneaking))
+				if sneaking and world.nearest_infected_dist(pos) < 360.0:
+					data.add_xp("furtividade", 0.3)
 		if not data.alive:
 			alive = false
 			world.on_player_died(self)
@@ -214,7 +236,33 @@ func _server_tick(delta: float) -> void:
 			_receive_data.rpc_id(peer, d)
 
 
+## Luz da lanterna (todos os peers veem quem está com ela acesa).
+func _update_light() -> void:
+	var on := (look & 8) != 0 and alive
+	if on and _light == null:
+		_light = PointLight2D.new()
+		var g := GradientTexture2D.new()
+		g.fill = GradientTexture2D.FILL_RADIAL
+		g.fill_from = Vector2(0.5, 0.5)
+		g.fill_to = Vector2(1.0, 0.5)
+		g.width = 256
+		g.height = 256
+		var grad := Gradient.new()
+		grad.set_color(0, Color(1, 1, 1, 1))
+		grad.set_color(1, Color(1, 1, 1, 0))
+		g.gradient = grad
+		_light.texture = g
+		_light.texture_scale = 1.6
+		_light.color = Color(1.0, 0.9, 0.7)
+		_light.energy = 0.55
+		_light.position = Vector2(0, -10)
+		add_child(_light)
+	if _light != null:
+		_light.visible = on
+
+
 func _animate(delta: float) -> void:
+	_update_light()
 	if hurt_seq != _seen_hurt:
 		_seen_hurt = hurt_seq
 		hurt_flash = 0.25
@@ -316,7 +364,9 @@ func _do_act(action: String, args: Array) -> void:
 		"demolish":
 			world.try_demolish(Vector2i(int(args[0]), int(args[1])), self)
 		"attack":
-			_server_attack(int(args[0]))
+			_server_attack(int(args[0]), float(args[1]) if args.size() > 1 else float(int(args[0])) * PI / 4.0)
+		"reload":
+			data.reload()
 		"save":
 			Game.save_game()
 			Game.tell(peer, "Jogo salvo pelo anfitrião.")
@@ -325,8 +375,12 @@ func _do_act(action: String, args: Array) -> void:
 		data_changed.emit()
 
 
-func _server_attack(dir_index: int) -> void:
+func _server_attack(dir_index: int, aim_angle: float) -> void:
 	attack_flash = 0.15
+	var gun := data.firearm()
+	if not gun.is_empty():
+		_server_fire(gun, aim_angle)
+		return
 	var pos := position if is_local() else net_pos
 	var dir := Vector2.from_angle(float(posmod(dir_index, 8)) * PI / 4.0)
 	data.spend_stamina(data.attack_stamina())
@@ -341,6 +395,60 @@ func _server_attack(dir_index: int) -> void:
 			hit = true
 	if hit:
 		data.on_melee_hit()
+		world.make_noise(pos, 150.0)
+
+
+## Servidor: disparo de arma de fogo (hitscan no espaço isométrico, com dispersão).
+func _server_fire(gun: Dictionary, aim_angle: float) -> void:
+	if _fire_cd > 0.0:
+		return
+	var def := Items.def(gun["id"])
+	_fire_cd = float(def.get("cadencia", 0.4))
+	if float(gun.get("mun", 0.0)) < 1.0:
+		Game.tell(peer, "Clique! Sem munição. [R] recarrega.")
+		return
+	var dur := float(gun.get("dur", 100.0))
+	if dur < 30.0 and randf() < (30.0 - dur) / 60.0:
+		Game.tell(peer, "A arma engasgou!")
+		return
+	gun["mun"] = float(gun["mun"]) - 1.0
+	gun["dur"] = maxf(0.0, dur - float(def.get("gasto", 0.3)))
+	var pos := position if is_local() else net_pos
+	var muzzle := pos + Vector2(0, -16)
+	var aim_lv := float(data.level("pontaria"))
+	var spread := float(def["dispersao"]) * (1.0 - 0.07 * aim_lv)
+	if data.stamina < 8.0:
+		spread *= 1.6
+	var reach := float(def["alcance"])
+	var ends := PackedVector2Array()
+	var hits := 0
+	for i in int(def.get("chumbos", 1)):
+		var dir := Vector2.from_angle(aim_angle + randf_range(-spread, spread))
+		var best: Infected = null
+		var best_t := reach
+		for n in get_tree().get_nodes_in_group("infected"):
+			var e := n as Infected
+			var off := e.position - pos
+			var iso := Vector2(off.x, off.y * 2.0)
+			var t := iso.dot(dir)
+			if t < 0.0 or t > best_t:
+				continue
+			if absf(iso.cross(dir)) < 16.0:
+				best = e
+				best_t = t
+		var end_iso := dir * best_t
+		ends.append(pos + Vector2(end_iso.x, end_iso.y * 0.5) + Vector2(0, -14))
+		if best != null:
+			best.take_damage(float(def["dano"]) * (1.0 - 0.4 * best_t / reach), self)
+			hits += 1
+	data.add_xp("pontaria", 0.6 + 2.0 * float(hits))
+	world.shot_fx.rpc(muzzle, ends)
+	world.make_noise(pos, float(def["ruido"]) * (1.0 - 0.04 * aim_lv))
+	if float(gun["dur"]) <= 0.0:
+		Game.tell(peer, "Sua arma quebrou: %s!" % DB.item_name(gun["id"]))
+		data.remove_u(int(gun["u"]))
+		data.hand_u = 0
+	_sync_t = 0.0
 
 
 ## Dono: envia a ficha de criação ao servidor.
@@ -444,6 +552,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		Game.say("Modo demolição %s." % ("ligado (clique)" if demolish else "desligado"))
 	elif event.is_action_pressed("save"):
 		act("save")
+	elif event.is_action_pressed("sneak"):
+		sneaking = not sneaking
+		Game.say("Agachado: passos quase sem barulho." if sneaking else "Você se levantou.")
+	elif event.is_action_pressed("reload"):
+		act("reload")
 	elif event is InputEventMouseButton and event.pressed:
 		var mb := event as InputEventMouseButton
 		if mb.button_index == MOUSE_BUTTON_RIGHT:
@@ -500,6 +613,12 @@ func _draw() -> void:
 	var tint := Color.WHITE
 	if hurt_flash > 0.0:
 		tint = Color(1.0, 0.45, 0.45)
+	if is_local() and moving and data != null:
+		# raio do barulho dos passos (ajuda a jogar furtivo)
+		var r := data.step_noise(sprinting, sneaking)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
+		draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, Color(0.9, 0.9, 1.0, 0.08 if sneaking else 0.12), 1.5)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	GenArt.draw_frame(self, _sheet(), facing, _frame % 100 if _frame >= 0 else 0, Vector2.ZERO, tint)
 	if not is_local() and nome != "":
 		# nome dos outros jogadores sobre a cabeça, na fonte pixelada em escala nativa

@@ -179,5 +179,42 @@ func _initialize() -> void:
 		cy.tick(1.0, {"moving": false})
 	check(cy.synaptic > 50.0, "estresse sináptico sobe na sobrecarga (%d)" % int(cy.synaptic))
 
+	# fase 5: ferramentas, armas de fogo, som e furtividade
+	var g := SurvivorData.from_spec({"nome": "Gun", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
+	check(g.missing_tools(["martelo"]) != "", "sem martelo: falta ferramenta")
+	g.give("martelo")
+	check(g.missing_tools(["martelo"]) == "", "com martelo: ok")
+	g.skills["metalurgia"]["lv"] = 1
+	g.give("sucata", 1)
+	g.craft("pregos")
+	check(g.count("pregos") == 12, "fabricar pregos rende 12")
+	g.give("pistola")
+	g.use_item("pistola")
+	check(not g.firearm().is_empty(), "pistola na mão")
+	g.give("municao_9mm", 20)
+	check(g.reload() == 12 and g.count("municao_9mm") == 8, "recarga põe 12 e sobram 8")
+	check(g.fits("coldre", Items.make("pistola")[0]) == 0 or g.capacity("coldre") == 0.0, "sem coldre, não cabe no coldre")
+	check(g.step_noise(false, true) < g.step_noise(false, false) and g.step_noise(true, false) > g.step_noise(false, false),
+		"agachado faz menos barulho, correndo mais")
+	var v0 := g.visibility(false, false)
+	g.give("lanterna")
+	g.use_item("lanterna")
+	check(g.lantern_on() and g.visibility(false, false) > v0, "lanterna acesa deixa mais visível")
+	check(g.visibility(false, true) < v0 * 1.4, "agachado é menos visível")
+	g.give("cantil")
+	var c := g.first_of("cantil")
+	c["carga"] = 0.0
+	g.give("agua_limpa")
+	g.use_item(int(c["u"]))
+	check(float(c["carga"]) == 100.0, "cantil enche com água limpa")
+	g.water = 10.0
+	g.use_item(int(c["u"]))
+	check(g.water > 35.0 and float(c["carga"]) < 100.0, "cantil dá água")
+	g.limbs["perna_e"]["hp"] = 10.0
+	var slow := g.speed_mult()
+	g.give("analgesico")
+	g.use_item("analgesico")
+	check(g.speed_mult() > slow, "analgésico tira a lentidão da perna ferida")
+
 	print("FALHAS: %d" % fails)
 	quit(1 if fails > 0 else 0)

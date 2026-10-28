@@ -232,6 +232,19 @@ func debug_command(cmd: String) -> void:
 			var all := p.data.all_items()
 			if not all.is_empty():
 				p.act("drop", [int(all[0]["u"]), int(all[0]["n"])])
+		"reload":
+			p.act("reload")
+		"shoot":
+			# atira no infectado mais próximo (testes)
+			var best: Node2D = null
+			for n in get_tree().get_nodes_in_group("infected"):
+				if best == null or (n as Node2D).position.distance_to(p.position) < best.position.distance_to(p.position):
+					best = n
+			if best != null:
+				var off := best.position - p.position
+				p.act("attack", [p.facing, Vector2(off.x, off.y * 2.0).angle()])
+		"sneak":
+			p.sneaking = not p.sneaking
 		"clock":
 			play_time += float(arg)
 		"take_all_near":

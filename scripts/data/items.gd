@@ -12,7 +12,7 @@ extends RefCounted
 ## sobrevivente cada instância ganha também um "u" (id único, para referências como a arma
 ## na mão). Uma lista de itens é um Array dessas instâncias.
 
-const STATE_KEYS := ["dur", "carga", "venc", "filtro"]
+const STATE_KEYS := ["dur", "carga", "venc", "filtro", "mun"]
 ## Itens renomeados entre versões (id antigo -> novo).
 const RENAMED := {"manual_logica": "manual_metalurgia"}
 
@@ -56,6 +56,8 @@ static func make(id: String, n: int = 1, clock: float = -1.0, r: RandomNumberGen
 			inst2["carga"] = snappedf(r.randf_range(25.0, 100.0), 1.0) if r != null else 100.0
 		if String(d["tipo"]) == "mascara":
 			inst2["filtro"] = 0.0
+		if d.has("pente"):
+			inst2["mun"] = float(r.randi_range(0, int(d["pente"]))) if r != null else 0.0
 		out.append(inst2)
 	return out
 
@@ -245,6 +247,8 @@ static func state_text(inst: Dictionary) -> String:
 		parts.append(("vedação %d%%" if inst["id"] == "mascara" else "durab. %d%%") % int(float(inst["dur"])))
 	if inst.has("filtro"):
 		parts.append("filtro %d%%" % int(float(inst["filtro"])))
+	if inst.has("mun"):
+		parts.append("%d/%d balas" % [int(float(inst["mun"])), int(def(inst["id"]).get("pente", 0))])
 	if inst.has("carga"):
 		var d := def(inst["id"])
 		if d.has("uso_carga"):

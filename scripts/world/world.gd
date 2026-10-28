@@ -437,7 +437,7 @@ func _build_shelter(v: VillageData) -> void:
 	_add_structure("vedacao", v.cell + Vector2i(1, 1)).eternal = true
 	var starter := _add_container(v.cell + Vector2i(-2, 1), "comum", v.id)
 	starter.items = Items.from_counts({"feijao": 3, "agua_limpa": 3, "bandagem": 2, "sucata": 4, "madeira": 4,
-		"metal": 2, "fita": 1, "faca": 1}, null, 0.0)
+		"metal": 2, "fita": 1, "faca": 1, "martelo": 1, "pregos": 16}, null, 0.0)
 
 
 func _scatter_ruins() -> void:
@@ -579,6 +579,14 @@ func nearest_player(pos: Vector2, max_iso := 1e9) -> Player:
 		if d < best_d:
 			best_d = d
 			best = p
+	return best
+
+
+func nearest_infected_dist(pos: Vector2) -> float:
+	var best := 1e9
+	for n in get_tree().get_nodes_in_group("infected"):
+		var off := (n as Node2D).position - pos
+		best = minf(best, Vector2(off.x, off.y * 2.0).length())
 	return best
 
 
@@ -910,7 +918,12 @@ func try_place(kind: String, c: Vector2i, p: Player) -> bool:
 	if not p.data.can_afford(def["custo"]):
 		Game.tell(p.peer, "Faltam materiais: %s." % DB.cost_text(def["custo"]))
 		return false
+	var miss := p.data.missing_tools(def.get("ferramentas", []))
+	if miss != "":
+		Game.tell(p.peer, "Falta ferramenta: %s." % miss)
+		return false
 	p.data.pay(def["custo"])
+	make_noise(ground.map_to_local(c), 240.0)
 	_build_done.rpc(kind, c.x, c.y)
 	p.data.add_xp_map(def["xp"])
 	Game.tell(p.peer, "Construído: %s." % def["nome"])
@@ -955,6 +968,11 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 			p.data.give("sucata", rng.randi_range(3, 5) if big else rng.randi_range(1, 2))
 			if rng.randf() < (0.8 if big else 0.25):
 				p.data.give("metal", rng.randi_range(1, 2) if big else 1)
+			if big and rng.randf() < 0.6:
+				p.data.give("sucata_eletronica", rng.randi_range(1, 2))
+			if big and rng.randf() < 0.4:
+				p.data.give("fios", 1)
+			make_noise(s.position, 320.0)
 			Game.tell(p.peer, "Você desmontou %s (+materiais)." % ("um prédio" if big else "uma ruína"))
 		else:
 			var cost: Dictionary = DB.BUILDS[s.kind]["custo"]
@@ -991,6 +1009,25 @@ func _demolish_done(x: int, y: int, floor_only: bool) -> void:
 	if s.kind == "ruina" or s.kind == "edificio":
 		removed_cells[s.cell] = true
 	_remove_structure(s)
+
+
+# ======================================================================= som
+## Servidor: barulho em 'pos' (raio isométrico em px). Infectados no raio vão investigar.
+func make_noise(pos: Vector2, radius: float) -> void:
+	for n in get_tree().get_nodes_in_group("infected"):
+		var e := n as Infected
+		var off := e.position - pos
+		if Vector2(off.x, off.y * 2.0).length() <= radius:
+			e.hear(pos)
+
+
+## Efeito de tiro em todos os peers (rastros e clarão do cano).
+@rpc("authority", "call_local", "unreliable")
+func shot_fx(from: Vector2, tos: PackedVector2Array) -> void:
+	var fx := ShotFx.new()
+	fx.from = from
+	fx.tos = tos
+	add_child(fx)
 
 
 # ======================================================================= inimigos / loot

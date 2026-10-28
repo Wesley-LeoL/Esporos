@@ -17,8 +17,8 @@ const VITALS := [
 const TAB_DEFS := [["inv", "Inventário", "mochila"], ["corpo", "Corpo", "corpo"], ["skills", "Habilidades", "chip"],
 	["build", "Construção", "martelo"], ["impl", "Implantes", "bateria"], ["mundo", "Mundo", "mundo"],
 	["legado", "Legado", "legado"]]
-const HINTS := [["WASD", "MOVER"], ["SHIFT", "CORRER"], ["ESPAÇO", "ATACAR"], ["E", "INTERAGIR"], ["TAB", "MENU"],
-	["X", "DEMOLIR"], ["F5", "SALVAR"], ["F1", "CONSOLE"]]
+const HINTS := [["SHIFT", "CORRER"], ["C", "AGACHAR"], ["ESPAÇO", "ATACAR"], ["R", "RECARREGAR"], ["E", "INTERAGIR"],
+	["TAB", "MENU"], ["X", "DEMOLIR"], ["F1", "CONSOLE"]]
 const OK_COLOR := Color("#7fe0a0")
 const NO_COLOR := Color("#c07a84")
 const S := UITheme.FONT_S
@@ -709,6 +709,8 @@ func _update_equipment(d: SurvivorData) -> void:
 	(arma[0] as TextureRect).texture = GenArt.icon(w["id"]) if not w.is_empty() else UITheme.icon("arma")
 	(arma[0] as TextureRect).self_modulate = Color.WHITE if not w.is_empty() else Color(1, 1, 1, 0.18)
 	(arma[1] as Label).text = "ARMA" if w.is_empty() else "%d%%" % int(float(w.get("dur", 100.0)))
+	if w.has("mun"):
+		(arma[1] as Label).text = "%d/%d" % [int(float(w["mun"])), int(Items.def(w["id"])["pente"])]
 	(arma[1] as Label).add_theme_color_override("font_color",
 		UITheme.DANGER if not w.is_empty() and float(w.get("dur", 100.0)) < 25.0 else UITheme.MUTED)
 	var mask: Array = slots["filtro"]
@@ -733,6 +735,13 @@ func _update_effects(d: SurvivorData, spore: float) -> void:
 		list.append(["filtro", "FILTRO ESGOTADO", UITheme.DANGER])
 	if d.load_ratio() > 1.0:
 		list.append(["mochila", "SOBRECARGA", UITheme.WARN])
+	var lp := _player()
+	if lp != null and lp.sneaking:
+		list.append(["olho", "AGACHADO", UITheme.ACCENT])
+	if d.lantern_on():
+		list.append(["alerta", "LANTERNA ACESA", UITheme.WARN])
+	if d.pain_t > 0.0:
+		list.append(["antibiotico", "ANALGÉSICO %ds" % int(d.pain_t), OK_COLOR])
 	if d.overloaded():
 		list.append(["cerebro", "SOBRECARGA SINÁPTICA", UITheme.MAGENTA])
 	elif d.synaptic > 60.0:
@@ -898,9 +907,10 @@ func _tab_inventory(d: SurvivorData) -> void:
 		var cdef: Dictionary = DB.CRAFTS[rid]
 		var crow := _row(box)
 		crow.add_child(_item_icon(rid, 48))
-		var ok := d.meets(cdef["req"]) and d.can_afford(cdef["custo"])
-		_lbl(crow, "%s: %s · exige %s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"])],
-			UITheme.TEXT if ok else NO_COLOR)
+		var tools: Array = cdef.get("ferramentas", [])
+		var ok := d.meets(cdef["req"]) and d.can_afford(cdef["custo"]) and d.missing_tools(tools) == ""
+		_lbl(crow, "%s: %s · exige %s · ferramentas: %s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"]),
+			DB.tools_text(tools)], UITheme.TEXT if ok else NO_COLOR)
 		_btn(crow, "Fabricar", _act(func() -> void: _player().act("craft", [rid])), d.meets(cdef["req"]))
 
 
@@ -936,7 +946,11 @@ func _verb_for(d: SurvivorData, inst: Dictionary) -> String:
 		"supressor": return "Aplicar"
 		"bateria": return "Recarregar"
 		"manual": return "Ler"
-		"arma": return "Guardar" if d.hand_u == u else "Empunhar"
+		"arma", "arma_fogo": return "Guardar" if d.hand_u == u else "Empunhar"
+		"lanterna": return "Apagar" if d.light_u == u else "Acender"
+		"pilha": return "Pôr na lanterna" if d.count("lanterna") > 0 else ""
+		"cantil": return "Beber" if float(inst.get("carga", 0.0)) >= 1.0 else ("Encher" if d.count("agua_limpa") > 0 else "")
+		"analgesico": return "Tomar"
 	return ""
 
 
@@ -1048,9 +1062,9 @@ func _tab_body(d: SurvivorData) -> void:
 			st.append("enfaixado")
 		_lbl(row, "saudável" if st.is_empty() else ", ".join(st), UITheme.MUTED if st.is_empty() else UITheme.WARN)
 		var wounded := int(limb["wound"]) > 0
-		_btn(row, "Desinfetar", _act(func() -> void: _player().act("treat", [l, "desinfetar"])), wounded and d.count("antisseptico") > 0)
+		_btn(row, "Desinfetar", _act(func() -> void: _player().act("treat", [l, "desinfetar"])), wounded and d.count("antisseptico") + d.count("alcool") > 0)
 		_btn(row, "Suturar", _act(func() -> void: _player().act("treat", [l, "suturar"])), int(limb["wound"]) == 2 and d.count("kit_sutura") > 0)
-		_btn(row, "Enfaixar", _act(func() -> void: _player().act("treat", [l, "enfaixar"])), wounded and not limb["bandaged"] and d.count("bandagem") > 0)
+		_btn(row, "Enfaixar", _act(func() -> void: _player().act("treat", [l, "enfaixar"])), wounded and not limb["bandaged"] and d.count("bandagem") + d.count("gaze") > 0)
 	_lbl(box, "Dica: feridas profundas só param de sangrar de vez após sutura + bandagem. Feridas abertas deixam esporos entrarem.", UITheme.MUTED)
 
 
@@ -1302,8 +1316,10 @@ func _tab_build(p: Player) -> void:
 		var row := _row(box)
 		var meets := d.meets(def["req"])
 		row.add_child(UITheme.icon_rect("martelo", UITheme.WARN if meets else NO_COLOR, 40))
-		_lbl(row, "%s — %s\nCusto: %s · Exige: %s" % [def["nome"], def["desc"], DB.cost_text(def["custo"]), DB.req_text(def["req"])],
-			UITheme.TEXT if meets else NO_COLOR)
+		var tools2: Array = def.get("ferramentas", [])
+		var has_tools := d.missing_tools(tools2) == ""
+		_lbl(row, "%s — %s\nCusto: %s · Exige: %s · Ferramentas: %s" % [def["nome"], def["desc"], DB.cost_text(def["custo"]),
+			DB.req_text(def["req"]), DB.tools_text(tools2)], UITheme.TEXT if meets and has_tools else NO_COLOR)
 		_btn(row, "Construir", func() -> void:
 			p.build_kind = k
 			p.demolish = false
