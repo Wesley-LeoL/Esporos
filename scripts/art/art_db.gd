@@ -69,7 +69,20 @@ static func add_building_strips(parent: Node2D, art: String, v: int, fp: Vector2
 	var entry: Dictionary = ArtCatalog.DATA[art]
 	if not _textures.has(art):
 		_textures[art] = load("%s%s/%s.png" % [BASE, entry["dir"], art])
-	var tex: Texture2D = _textures[art]
+	var region := Rect2(int(r[0]), int(r[1]), int(r[2]) - int(r[0]) + 1, int(r[3]) - int(r[1]) + 1)
+	# centro da base dentro da região = vértice inferior - deslocamento centro->vértice inferior
+	var w := float(fp.x)
+	var d := float(fp.y)
+	var bottom := Vector2(World.HALF_W * 0.5 * (w - d), World.HALF_H * 0.5 * (w + d))
+	var center := Vector2(int(info["b"][0]) - int(r[0]), int(info["b"][1]) - int(r[1])) - bottom
+	add_strips(parent, _textures[art], region, center, fp, strip)
+
+
+## Versão genérica: 'region' é a área do quadro na textura e 'center' o ponto da região
+## que fica sobre o centro da pegada (a origem do nó). Devolve as faixas criadas (para
+## animações que trocam a região, como as janelas acesas do Town Sampler).
+static func add_strips(parent: Node2D, tex: Texture2D, region: Rect2, center: Vector2, fp: Vector2i,
+		strip: int = 20) -> Array[Sprite2D]:
 	var w := float(fp.x)
 	var d := float(fp.y)
 	var hw := World.HALF_W * 0.5
@@ -77,10 +90,9 @@ static func add_building_strips(parent: Node2D, art: String, v: int, fp: Vector2
 	var left := Vector2(-hw * (w + d), hh * (d - w))
 	var bottom := Vector2(hw * (w - d), hh * (w + d))
 	var right := Vector2(hw * (w + d), hh * (w - d))
-	var rw := int(r[2]) - int(r[0]) + 1
-	var rh := int(r[3]) - int(r[1]) + 1
-	var anchor := Vector2(int(info["b"][0]) - int(r[0]), int(info["b"][1]) - int(r[1]))
-	var p0 := bottom - anchor
+	var rw := int(region.size.x)
+	var p0 := -center
+	var out: Array[Sprite2D] = []
 	var x := 0
 	while x < rw:
 		var sw := mini(strip, rw - x)
@@ -91,11 +103,13 @@ static func add_building_strips(parent: Node2D, art: String, v: int, fp: Vector2
 		sp.texture = tex
 		sp.centered = false
 		sp.region_enabled = true
-		sp.region_rect = Rect2(int(r[0]) + x, int(r[1]), sw, rh)
+		sp.region_rect = Rect2(region.position.x + x, region.position.y, sw, region.size.y)
 		sp.position = Vector2(xa, key)
 		sp.offset = Vector2(0, p0.y - key)
 		parent.add_child(sp)
+		out.append(sp)
 		x += strip
+	return out
 
 
 static func _front_y(x: float, left: Vector2, bottom: Vector2, right: Vector2) -> float:

@@ -1,0 +1,2421 @@
+{
+  "count": 80,
+  "columns": 10,
+  "rows": 8,
+  "editions": {
+    "32": {
+      "sheet": "32px/neon_district_free80_32.png",
+      "cell_size": 32
+    },
+    "64": {
+      "sheet": "64px/neon_district_free80_64.png",
+      "cell_size": 64
+    },
+    "128": {
+      "sheet": "128px/neon_district_free80_128.png",
+      "cell_size": 128
+    }
+  },
+  "objects": [
+    {
+      "id": "cyber_0001",
+      "name": "Noodle vending machine",
+      "height64": 44,
+      "column": 0,
+      "row": 0,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0001.png",
+      "regions": {
+        "32": {
+          "x": 0,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 0,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 0,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0008",
+      "name": "Battery rental station",
+      "height64": 44,
+      "column": 1,
+      "row": 0,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0008.png",
+      "regions": {
+        "32": {
+          "x": 32,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 64,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 128,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0016",
+      "name": "Skewer grill food trolley",
+      "height64": 44,
+      "column": 2,
+      "row": 0,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0016.png",
+      "regions": {
+        "32": {
+          "x": 64,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 128,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 256,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0024",
+      "name": "Street pharmacy dispenser",
+      "height64": 44,
+      "column": 3,
+      "row": 0,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0024.png",
+      "regions": {
+        "32": {
+          "x": 96,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 192,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 384,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0032",
+      "name": "Public payphone booth",
+      "height64": 48,
+      "column": 4,
+      "row": 0,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0032.png",
+      "regions": {
+        "32": {
+          "x": 128,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 256,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 512,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0041",
+      "name": "Angular street trash bin",
+      "height64": 38,
+      "column": 5,
+      "row": 0,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0041.png",
+      "regions": {
+        "32": {
+          "x": 160,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 320,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 640,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0048",
+      "name": "Short security bollard",
+      "height64": 44,
+      "column": 6,
+      "row": 0,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0048.png",
+      "regions": {
+        "32": {
+          "x": 192,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 384,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 768,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0056",
+      "name": "Curved industrial lamp post",
+      "height64": 44,
+      "column": 7,
+      "row": 0,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0056.png",
+      "regions": {
+        "32": {
+          "x": 224,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 448,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 896,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0064",
+      "name": "Round sewer cover",
+      "height64": 38,
+      "column": 8,
+      "row": 0,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0064.png",
+      "regions": {
+        "32": {
+          "x": 256,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 512,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1024,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0072",
+      "name": "Public address speaker column",
+      "height64": 44,
+      "column": 9,
+      "row": 0,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0072.png",
+      "regions": {
+        "32": {
+          "x": 288,
+          "y": 0,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 576,
+          "y": 0,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1152,
+          "y": 0,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0081",
+      "name": "Freestanding wide digital billboard frame",
+      "height64": 44,
+      "column": 0,
+      "row": 1,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0081.png",
+      "regions": {
+        "32": {
+          "x": 0,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 0,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 0,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0088",
+      "name": "Triangular storefront blade sign",
+      "height64": 44,
+      "column": 1,
+      "row": 1,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0088.png",
+      "regions": {
+        "32": {
+          "x": 32,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 64,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 128,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0096",
+      "name": "Public transit map case",
+      "height64": 44,
+      "column": 2,
+      "row": 1,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0096.png",
+      "regions": {
+        "32": {
+          "x": 64,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 128,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 256,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0104",
+      "name": "Restaurant queue display terminal",
+      "height64": 44,
+      "column": 3,
+      "row": 1,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0104.png",
+      "regions": {
+        "32": {
+          "x": 96,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 192,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 384,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0112",
+      "name": "Evacuation direction plaque",
+      "height64": 44,
+      "column": 4,
+      "row": 1,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0112.png",
+      "regions": {
+        "32": {
+          "x": 128,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 256,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 512,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0121",
+      "name": "Large rooftop air conditioning unit",
+      "height64": 44,
+      "column": 5,
+      "row": 1,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0121.png",
+      "regions": {
+        "32": {
+          "x": 160,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 320,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 640,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0128",
+      "name": "Small antenna mast",
+      "height64": 48,
+      "column": 6,
+      "row": 1,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0128.png",
+      "regions": {
+        "32": {
+          "x": 192,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 384,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 768,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0136",
+      "name": "Emergency backup generator",
+      "height64": 44,
+      "column": 7,
+      "row": 1,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0136.png",
+      "regions": {
+        "32": {
+          "x": 224,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 448,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 896,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0144",
+      "name": "Rooftop ladder access hatch",
+      "height64": 48,
+      "column": 8,
+      "row": 1,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0144.png",
+      "regions": {
+        "32": {
+          "x": 256,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 512,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1024,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0152",
+      "name": "Building service intercom panel",
+      "height64": 44,
+      "column": 9,
+      "row": 1,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0152.png",
+      "regions": {
+        "32": {
+          "x": 288,
+          "y": 32,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 576,
+          "y": 64,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1152,
+          "y": 128,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0161",
+      "name": "Compact delivery cargo pod",
+      "height64": 44,
+      "column": 0,
+      "row": 2,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0161.png",
+      "regions": {
+        "32": {
+          "x": 0,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 0,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 0,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0168",
+      "name": "Manual pallet jack",
+      "height64": 38,
+      "column": 1,
+      "row": 2,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0168.png",
+      "regions": {
+        "32": {
+          "x": 32,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 64,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 128,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0176",
+      "name": "Transit card reader pedestal",
+      "height64": 44,
+      "column": 2,
+      "row": 2,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0176.png",
+      "regions": {
+        "32": {
+          "x": 64,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 128,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 256,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0184",
+      "name": "Vehicle battery swap cabinet",
+      "height64": 38,
+      "column": 3,
+      "row": 2,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0184.png",
+      "regions": {
+        "32": {
+          "x": 96,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 192,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 384,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0192",
+      "name": "Freight hook hoist frame",
+      "height64": 44,
+      "column": 4,
+      "row": 2,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0192.png",
+      "regions": {
+        "32": {
+          "x": 128,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 256,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 512,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0201",
+      "name": "Hacker workstation desk with built-in monitors",
+      "height64": 34,
+      "column": 5,
+      "row": 2,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0201.png",
+      "regions": {
+        "32": {
+          "x": 160,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 320,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 640,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0208",
+      "name": "Data tape backup cabinet",
+      "height64": 48,
+      "column": 6,
+      "row": 2,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0208.png",
+      "regions": {
+        "32": {
+          "x": 192,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 384,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 768,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0216",
+      "name": "Satellite communications desk",
+      "height64": 34,
+      "column": 7,
+      "row": 2,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0216.png",
+      "regions": {
+        "32": {
+          "x": 224,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 448,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 896,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0224",
+      "name": "Integrated VR computing station",
+      "height64": 40,
+      "column": 8,
+      "row": 2,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0224.png",
+      "regions": {
+        "32": {
+          "x": 256,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 512,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1024,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0232",
+      "name": "Encrypted data-vault pedestal",
+      "height64": 40,
+      "column": 9,
+      "row": 2,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0232.png",
+      "regions": {
+        "32": {
+          "x": 288,
+          "y": 64,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 576,
+          "y": 128,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1152,
+          "y": 256,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0241",
+      "name": "Fold-down wall bed",
+      "height64": 34,
+      "column": 0,
+      "row": 3,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0241.png",
+      "regions": {
+        "32": {
+          "x": 0,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 0,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 0,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0248",
+      "name": "Tall sliding-door wardrobe",
+      "height64": 48,
+      "column": 1,
+      "row": 3,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0248.png",
+      "regions": {
+        "32": {
+          "x": 32,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 64,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 128,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0256",
+      "name": "Rectangular shower pod",
+      "height64": 40,
+      "column": 2,
+      "row": 3,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0256.png",
+      "regions": {
+        "32": {
+          "x": 64,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 128,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 256,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0264",
+      "name": "Shoe storage locker",
+      "height64": 48,
+      "column": 3,
+      "row": 3,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0264.png",
+      "regions": {
+        "32": {
+          "x": 96,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 192,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 384,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0272",
+      "name": "Lidded domestic recycling station",
+      "height64": 40,
+      "column": 4,
+      "row": 3,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0272.png",
+      "regions": {
+        "32": {
+          "x": 128,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 256,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 512,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0281",
+      "name": "Noodle boiling station with basket wells",
+      "height64": 40,
+      "column": 5,
+      "row": 3,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0281.png",
+      "regions": {
+        "32": {
+          "x": 160,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 320,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 640,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0288",
+      "name": "Stainless food preparation bench",
+      "height64": 34,
+      "column": 6,
+      "row": 3,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0288.png",
+      "regions": {
+        "32": {
+          "x": 192,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 384,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 768,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0296",
+      "name": "Large soup stockpot burner",
+      "height64": 40,
+      "column": 7,
+      "row": 3,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0296.png",
+      "regions": {
+        "32": {
+          "x": 224,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 448,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 896,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0304",
+      "name": "Food order touch-screen pedestal",
+      "height64": 40,
+      "column": 8,
+      "row": 3,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0304.png",
+      "regions": {
+        "32": {
+          "x": 256,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 512,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1024,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0312",
+      "name": "Food delivery pickup locker",
+      "height64": 48,
+      "column": 9,
+      "row": 3,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0312.png",
+      "regions": {
+        "32": {
+          "x": 288,
+          "y": 96,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 576,
+          "y": 192,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1152,
+          "y": 384,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0321",
+      "name": "Surgical operating table",
+      "height64": 34,
+      "column": 0,
+      "row": 4,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0321.png",
+      "regions": {
+        "32": {
+          "x": 0,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 0,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 0,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0328",
+      "name": "Cybernetic calibration bench",
+      "height64": 34,
+      "column": 1,
+      "row": 4,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0328.png",
+      "regions": {
+        "32": {
+          "x": 32,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 64,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 128,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0336",
+      "name": "Portable vital-sign monitor stand",
+      "height64": 34,
+      "column": 2,
+      "row": 4,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0336.png",
+      "regions": {
+        "32": {
+          "x": 64,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 128,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 256,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0344",
+      "name": "Three-cell specimen tank rack",
+      "height64": 48,
+      "column": 3,
+      "row": 4,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0344.png",
+      "regions": {
+        "32": {
+          "x": 96,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 192,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 384,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0352",
+      "name": "Hospital wheeled stretcher",
+      "height64": 40,
+      "column": 4,
+      "row": 4,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0352.png",
+      "regions": {
+        "32": {
+          "x": 128,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 256,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 512,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0361",
+      "name": "Upright racing arcade cabinet",
+      "height64": 48,
+      "column": 5,
+      "row": 4,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0361.png",
+      "regions": {
+        "32": {
+          "x": 160,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 320,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 640,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0368",
+      "name": "Basketball arcade hoop machine",
+      "height64": 40,
+      "column": 6,
+      "row": 4,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0368.png",
+      "regions": {
+        "32": {
+          "x": 192,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 384,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 768,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0376",
+      "name": "Immersive cinema reclining seat",
+      "height64": 48,
+      "column": 7,
+      "row": 4,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0376.png",
+      "regions": {
+        "32": {
+          "x": 224,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 448,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 896,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0384",
+      "name": "Bottle service trolley",
+      "height64": 34,
+      "column": 8,
+      "row": 4,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0384.png",
+      "regions": {
+        "32": {
+          "x": 256,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 512,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1024,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0392",
+      "name": "Ticket redemption counter",
+      "height64": 34,
+      "column": 9,
+      "row": 4,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0392.png",
+      "regions": {
+        "32": {
+          "x": 288,
+          "y": 128,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 576,
+          "y": 256,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1152,
+          "y": 512,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0401",
+      "name": "Shielded transformer cabinet",
+      "height64": 56,
+      "column": 0,
+      "row": 5,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0401.png",
+      "regions": {
+        "32": {
+          "x": 0,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 0,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 0,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0408",
+      "name": "Three-fin thermal radiator",
+      "height64": 56,
+      "column": 1,
+      "row": 5,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0408.png",
+      "regions": {
+        "32": {
+          "x": 32,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 64,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 128,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0416",
+      "name": "UV drinking-water purification column",
+      "height64": 56,
+      "column": 2,
+      "row": 5,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0416.png",
+      "regions": {
+        "32": {
+          "x": 64,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 128,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 256,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0424",
+      "name": "Intake filtration housing",
+      "height64": 56,
+      "column": 3,
+      "row": 5,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0424.png",
+      "regions": {
+        "32": {
+          "x": 96,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 192,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 384,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0432",
+      "name": "Ash collection vacuum drum",
+      "height64": 56,
+      "column": 4,
+      "row": 5,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0432.png",
+      "regions": {
+        "32": {
+          "x": 128,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 256,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 512,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0441",
+      "name": "Robotic arm service pedestal",
+      "height64": 56,
+      "column": 5,
+      "row": 5,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0441.png",
+      "regions": {
+        "32": {
+          "x": 160,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 320,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 640,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0448",
+      "name": "Servo motor test stand",
+      "height64": 56,
+      "column": 6,
+      "row": 5,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0448.png",
+      "regions": {
+        "32": {
+          "x": 192,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 384,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 768,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0456",
+      "name": "Exoskeleton torso service gantry",
+      "height64": 56,
+      "column": 7,
+      "row": 5,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0456.png",
+      "regions": {
+        "32": {
+          "x": 224,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 448,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 896,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0464",
+      "name": "Industrial diagnostic console",
+      "height64": 56,
+      "column": 8,
+      "row": 5,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0464.png",
+      "regions": {
+        "32": {
+          "x": 256,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 512,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1024,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0472",
+      "name": "Inspection microscope pedestal",
+      "height64": 56,
+      "column": 9,
+      "row": 5,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0472.png",
+      "regions": {
+        "32": {
+          "x": 288,
+          "y": 160,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 576,
+          "y": 320,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1152,
+          "y": 640,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0481",
+      "name": "Single-lens wall security camera",
+      "height64": 48,
+      "column": 0,
+      "row": 6,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0481.png",
+      "regions": {
+        "32": {
+          "x": 0,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 0,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 0,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0488",
+      "name": "Motion sensor wall pod",
+      "height64": 48,
+      "column": 1,
+      "row": 6,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0488.png",
+      "regions": {
+        "32": {
+          "x": 32,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 64,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 128,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0496",
+      "name": "Interlocking floor wedge vehicle barrier",
+      "height64": 56,
+      "column": 2,
+      "row": 6,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0496.png",
+      "regions": {
+        "32": {
+          "x": 64,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 128,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 256,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0504",
+      "name": "Security operations console",
+      "height64": 56,
+      "column": 3,
+      "row": 6,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0504.png",
+      "regions": {
+        "32": {
+          "x": 96,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 192,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 384,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0512",
+      "name": "Entrance occupancy status pillar",
+      "height64": 56,
+      "column": 4,
+      "row": 6,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0512.png",
+      "regions": {
+        "32": {
+          "x": 128,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 256,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 512,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0521",
+      "name": "Curved executive workstation",
+      "height64": 56,
+      "column": 5,
+      "row": 6,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0521.png",
+      "regions": {
+        "32": {
+          "x": 160,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 320,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 640,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0528",
+      "name": "Lockable corporate filing cabinet",
+      "height64": 56,
+      "column": 6,
+      "row": 6,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0528.png",
+      "regions": {
+        "32": {
+          "x": 192,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 384,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 768,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0536",
+      "name": "Emergency radio base station",
+      "height64": 56,
+      "column": 7,
+      "row": 6,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0536.png",
+      "regions": {
+        "32": {
+          "x": 224,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 448,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 896,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0544",
+      "name": "X-ray crystallography analysis workstation",
+      "height64": 56,
+      "column": 8,
+      "row": 6,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0544.png",
+      "regions": {
+        "32": {
+          "x": 256,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 512,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1024,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0552",
+      "name": "Portable field-analysis cart",
+      "height64": 56,
+      "column": 9,
+      "row": 6,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0552.png",
+      "regions": {
+        "32": {
+          "x": 288,
+          "y": 192,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 576,
+          "y": 384,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1152,
+          "y": 768,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0561",
+      "name": "Vertical lettuce hydroponic rack",
+      "height64": 56,
+      "column": 0,
+      "row": 7,
+      "source_column": 0,
+      "source_row": 0,
+      "file": "individual/cyber_0561.png",
+      "regions": {
+        "32": {
+          "x": 0,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 0,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 0,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0568",
+      "name": "Modular climbing bean trellis",
+      "height64": 56,
+      "column": 1,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 0,
+      "file": "individual/cyber_0568.png",
+      "regions": {
+        "32": {
+          "x": 32,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 64,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 128,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0576",
+      "name": "Seed-bank cold vault",
+      "height64": 56,
+      "column": 2,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 1,
+      "file": "individual/cyber_0576.png",
+      "regions": {
+        "32": {
+          "x": 64,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 128,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 256,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0584",
+      "name": "Compact atmospheric moisture collector",
+      "height64": 56,
+      "column": 3,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 2,
+      "file": "individual/cyber_0584.png",
+      "regions": {
+        "32": {
+          "x": 96,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 192,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 384,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0592",
+      "name": "Roof rain capture collector",
+      "height64": 56,
+      "column": 4,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 3,
+      "file": "individual/cyber_0592.png",
+      "regions": {
+        "32": {
+          "x": 128,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 256,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 512,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0040",
+      "name": "Fishcake soup service cart",
+      "height64": 44,
+      "column": 5,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 4,
+      "file": "individual/cyber_0040.png",
+      "regions": {
+        "32": {
+          "x": 160,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 320,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 640,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0080",
+      "name": "Sewer ventilation mushroom pipe",
+      "height64": 44,
+      "column": 6,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 4,
+      "file": "individual/cyber_0080.png",
+      "regions": {
+        "32": {
+          "x": 192,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 384,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 768,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0120",
+      "name": "Decorative gate emblem panel",
+      "height64": 44,
+      "column": 7,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 4,
+      "file": "individual/cyber_0120.png",
+      "regions": {
+        "32": {
+          "x": 224,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 448,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 896,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0160",
+      "name": "Emergency battery storage rack",
+      "height64": 44,
+      "column": 8,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 4,
+      "file": "individual/cyber_0160.png",
+      "regions": {
+        "32": {
+          "x": 256,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 512,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1024,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    },
+    {
+      "id": "cyber_0200",
+      "name": "Station luggage locker bank",
+      "height64": 44,
+      "column": 9,
+      "row": 7,
+      "source_column": 7,
+      "source_row": 4,
+      "file": "individual/cyber_0200.png",
+      "regions": {
+        "32": {
+          "x": 288,
+          "y": 224,
+          "width": 32,
+          "height": 32
+        },
+        "64": {
+          "x": 576,
+          "y": 448,
+          "width": 64,
+          "height": 64
+        },
+        "128": {
+          "x": 1152,
+          "y": 896,
+          "width": 128,
+          "height": 128
+        }
+      }
+    }
+  ]
+}

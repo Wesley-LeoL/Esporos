@@ -23,7 +23,7 @@ Abra a pasta no Godot 4.7+ (versão padrão, não .NET) e aperte F5. O projeto j
 `F1` ou `` ` `` abre o terminal (pausa o jogo). Digite `ajuda`. Comandos: `dar <item> [qtd]`, `dano <membro|todos> <n>`, `spawn [normal|elite] [n]`, `tp <x> <y>` (ou `abrigo`, `vila <n>`, `borda`, `cadaver`, `elite`), `set` (patogeno, sangue, calorias, agua, bateria, filtro, calor), `skill`, `curar`, `restaurar`, `implante`, `god`, `matar`, `infectar`, `limpar`, `pos`, `salvar`. Códigos prontos: `kit`, `kit_medico`, `kit_build`, `kit_cyber`. Tab completa, ↑↓ navega no histórico.
 
 ## Arte
-Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no mesmo estilo para personagens, construções, caixas, chão e ícones. A interface (HUD, menu, título, tela de morte) é pixel art ciberpunk gerada por `tools/gen_ui.py`, com a fonte Jersey 10 (OFL). Detalhes e como regerar em [`assets/art/README.md`](assets/art/README.md).
+Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no mesmo estilo para personagens, construções, caixas, chão e ícones. Prédios noturnos do *Town Sampler* e objetos de rua do *Neon District* completam a cidade. A interface (HUD, menu, título, tela de morte) é pixel art ciberpunk gerada por `tools/gen_ui.py`, com a fonte Jersey 10 (OFL). Detalhes e como regerar em [`assets/art/README.md`](assets/art/README.md).
 
 ## Estrutura
 ```

@@ -1,0 +1,6 @@
+FREE ISOMETRIC PIXEL TOWN SAMPLER - LICENSE
+Copyright (c) 2026 Antahonist
+
+You MAY use the sprites in unlimited commercial and non-commercial games, apps and videos, and modify them.
+You may NOT resell, share or redistribute the sprites on their own or in another asset pack, or use them to train AI models.
+Credit is appreciated but not required: "Town sprites by Antahonist".

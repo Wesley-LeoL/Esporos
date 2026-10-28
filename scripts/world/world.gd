@@ -22,6 +22,10 @@ enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA }
 const BUILDINGS: Array = [["BuildingBlock1", 15], ["BuildingBlock2", 15], ["BuildingBlock18", 20],
 	["BuildingBlock19", 20], ["BuildingBlock24", 25], ["Building3", 5]]
 const PROPS: Array[String] = ["Advertising5", "Advertising6", "Advertising7", "SateliteDish2"]
+## Peso dos prédios do pacote FreeSample contra os do Town Sampler (ExtraCatalog).
+const FS_WEIGHT := 60.0
+## Versão do save: muda quando a geração do mundo muda (saves antigos não batem com o mapa).
+const SAVE_VERSION := 2
 const VILLAGE_NAMES: Array[String] = ["Abrigo Alfa", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
 	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix"]
 
@@ -80,6 +84,7 @@ func generate(new_seed: int) -> void:
 	_decorate_villages()
 	_scatter_ruins()
 	_flush_ground_art()
+	_decorate_roads()
 	player = Player.new()
 	player.world = self
 	entities.add_child(player)
@@ -243,10 +248,13 @@ func _decorate_villages() -> void:
 		if v.safe:
 			_build_shelter(v)
 			for i in 3:
-				_place_random_building(v.cell, 5, 8)
+				_place_random_building(v.cell, 5, 8, "vila")
+			_scatter_props(v.cell, 3, 5, 5, _neon_group("abrigo"), "neon")
 		else:
-			for i in 5:
-				_place_random_building(v.cell, 3, 8)
+			for i in 6:
+				_place_random_building(v.cell, 3, 8, "vila")
+			_scatter_props(v.cell, 1, 6, 6, _neon_group("vila"), "neon")
+			_scatter_props(v.cell, 2, 6, 2, ["neon_vending_machine"], "town")
 			for i in 4:
 				var c2 := v.cell + Vector2i(rng.randi_range(-4, 4), rng.randi_range(-4, 4))
 				if _free_cell(c2):
@@ -258,16 +266,26 @@ func _decorate_villages() -> void:
 				_add_prop(PROPS[rng.randi() % PROPS.size()], rng.randi() % 4, pc)
 
 
-func _pick_building() -> String:
-	var total := 0.0
-	for b in BUILDINGS:
-		total += float(b[1])
+## Sorteia um prédio: {"town": nome} (Town Sampler) ou {"art": nome} (FreeSample).
+## 'context' é "vila" ou "ruina" e escolhe os pesos do Town Sampler.
+func _pick_building(context: String) -> Dictionary:
+	var key := "peso_vila" if context == "vila" else "peso_ruina"
+	var total := FS_WEIGHT
+	for n in ExtraCatalog.BUILDINGS:
+		total += float(ExtraCatalog.BUILDINGS[n][key])
 	var r := rng.randf() * total
+	if r >= FS_WEIGHT:
+		r -= FS_WEIGHT
+		for n in ExtraCatalog.BUILDINGS:
+			r -= float(ExtraCatalog.BUILDINGS[n][key])
+			if r <= 0.0:
+				return {"town": n}
+	var t := rng.randf() * 100.0
 	for b in BUILDINGS:
-		r -= float(b[1])
-		if r <= 0.0:
-			return b[0]
-	return BUILDINGS[0][0]
+		t -= float(b[1])
+		if t <= 0.0:
+			return {"art": b[0]}
+	return {"art": BUILDINGS[0][0]}
 
 
 func _footprint_free(c: Vector2i, fp: Vector2i) -> bool:
@@ -279,23 +297,29 @@ func _footprint_free(c: Vector2i, fp: Vector2i) -> bool:
 
 
 ## Tenta colocar um prédio em um anel [rmin, rmax] (distância de xadrez) ao redor de center.
-func _place_random_building(center: Vector2i, rmin: int, rmax: int) -> bool:
+func _place_random_building(center: Vector2i, rmin: int, rmax: int, context := "ruina") -> bool:
 	for attempt in 40:
-		var art := _pick_building()
+		var pick := _pick_building(context)
 		var v := rng.randi() % 4
-		var fp := ArtDB.footprint(art, v)
+		var fp: Vector2i
+		if pick.has("town"):
+			var f: Array = ExtraCatalog.BUILDINGS[pick["town"]]["fp"]
+			fp = Vector2i(int(f[0]), int(f[1]))
+		else:
+			fp = ArtDB.footprint(pick["art"], v)
 		var c := center + Vector2i(rng.randi_range(-rmax, rmax), rng.randi_range(-rmax, rmax))
 		if maxi(absi(c.x - center.x), absi(c.y - center.y)) < rmin:
 			continue
 		if _footprint_free(c, fp):
-			_add_building(art, v, c, fp)
+			_add_building(pick.get("art", ""), v, c, fp, pick.get("town", ""))
 			return true
 	return false
 
 
-func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i) -> Structure:
+func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i, town := "") -> Structure:
 	var s := Structure.new()
 	s.kind = "edificio"
+	s.town = town
 	s.cell = c
 	s.world = self
 	s.art = art
@@ -313,13 +337,73 @@ func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i) -> Structure:
 	return s
 
 
-func _add_prop(art: String, v: int, c: Vector2i) -> void:
+func _add_prop(art: String, v: int, c: Vector2i, source := "fs") -> void:
 	var pr := Prop.new()
 	pr.art = art
 	pr.variant = v
+	pr.source = source
 	pr.position = ground.map_to_local(c)
 	entities.add_child(pr)
 	occupied[c] = true
+
+
+## Objetos do Neon District por grupo (rua, vila, industria, abrigo, chao).
+func _neon_group(group: String) -> Array[String]:
+	var out: Array[String] = []
+	for id in ExtraCatalog.NEON:
+		if ExtraCatalog.NEON[id]["grupo"] == group:
+			out.append(id)
+	return out
+
+
+func _pick(list: Array):
+	return list[rng.randi() % list.size()]
+
+
+## Coloca 'count' objetos de 'list' em células livres no anel [rmin, rmax] ao redor de center.
+func _scatter_props(center: Vector2i, rmin: int, rmax: int, count: int, list: Array, source: String) -> void:
+	var placed := 0
+	for attempt in count * 8:
+		if placed >= count:
+			return
+		var c := center + Vector2i(rng.randi_range(-rmax, rmax), rng.randi_range(-rmax, rmax))
+		if maxi(absi(c.x - center.x), absi(c.y - center.y)) < rmin or not _free_cell(c):
+			continue
+		_add_prop(_pick(list), 0, c, source)
+		placed += 1
+
+
+## Mobiliário urbano ao longo das estradas: postes, frades, lixeiras e alto-falantes na
+## beira da pista e bueiros no próprio asfalto (planos, na camada do chão).
+func _decorate_roads() -> void:
+	var street := _neon_group("rua")
+	var lamps: Array[String] = ["neon_neon_lamp", "soviet_lamp_post"]
+	var covers := _neon_group("chao")
+	var blocks: Array = road_blocks.keys()
+	blocks.sort()
+	for origin: Vector2i in blocks:
+		if rng.randf() < 0.1 and not covers.is_empty():
+			var cover: String = _pick(covers)
+			var e: Dictionary = ExtraCatalog.NEON[cover]
+			var sp := Sprite2D.new()
+			sp.texture = load(ExtraCatalog.NEON_DIR + cover + ".png")
+			var r: Array = e["r"]
+			sp.region_enabled = true
+			sp.region_rect = Rect2(r[0], r[1], int(r[2]) - int(r[0]) + 1, int(r[3]) - int(r[1]) + 1)
+			sp.position = ground.map_to_local(origin) + Vector2(0, HALF_H)
+			art_ground.add_child(sp)
+		if rng.randf() > 0.55:
+			continue
+		# célula vizinha ao bloco, fora da pista
+		var side := [Vector2i(-1, rng.randi_range(0, 1)), Vector2i(2, rng.randi_range(0, 1)),
+			Vector2i(rng.randi_range(0, 1), -1), Vector2i(rng.randi_range(0, 1), 2)]
+		var c: Vector2i = origin + side[rng.randi() % 4]
+		if not _free_cell(c) or Vector2(c).length() < 4.0:
+			continue
+		if rng.randf() < 0.4:
+			_add_prop(_pick(lamps), 0, c, "town")
+		else:
+			_add_prop(_pick(street), 0, c, "neon")
 
 
 func _remove_structure(s: Structure) -> void:
@@ -357,6 +441,8 @@ func _scatter_ruins() -> void:
 			var pc := c + Vector2i(rng.randi_range(-3, 3), rng.randi_range(-3, 3))
 			if _free_cell(pc):
 				_add_prop(PROPS[rng.randi() % PROPS.size()], rng.randi() % 4, pc)
+		if rng.randf() < 0.55:
+			_scatter_props(c, 1, 4, rng.randi_range(1, 3), _neon_group("industria"), "neon")
 
 
 func _free_cell(c: Vector2i) -> bool:
@@ -757,7 +843,7 @@ func to_dict() -> Dictionary:
 	var vil: Array = []
 	for v in villages:
 		vil.append(v.to_dict())
-	return {"version": 1, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
+	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
 		"containers": cont, "corpses": corpses, "elites": elites, "villages": vil,
 		"survivor": player.data.to_dict() if player.data != null else {},
 		"player_pos": [player.position.x, player.position.y]}

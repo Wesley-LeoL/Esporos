@@ -1,0 +1,210 @@
+{
+ "scale": "14 m = 192 px; cell 64 x 32 px; floor 32 px",
+ "anim_frames": 16,
+ "lightson_frames": 12,
+ "frame_ms": 120,
+ "buildings": [
+  {
+   "name": "neon_noodle_corner",
+   "town": "Neon City",
+   "w": 199,
+   "h": 215,
+   "foot": {
+    "x": 48,
+    "y": 151
+   }
+  },
+  {
+   "name": "neon_shop_row",
+   "town": "Neon City",
+   "w": 207,
+   "h": 195,
+   "foot": {
+    "x": 47,
+    "y": 124
+   }
+  },
+  {
+   "name": "soviet_khrushchyovka",
+   "town": "Soviet City",
+   "w": 390,
+   "h": 365,
+   "foot": {
+    "x": 147,
+    "y": 263
+   }
+  },
+  {
+   "name": "soviet_bus_station",
+   "town": "Soviet City",
+   "w": 501,
+   "h": 321,
+   "foot": {
+    "x": 230,
+    "y": 195
+   }
+  },
+  {
+   "name": "spooky_witch_house",
+   "town": "Spooky Town",
+   "w": 267,
+   "h": 328,
+   "foot": {
+    "x": 69,
+    "y": 258
+   }
+  },
+  {
+   "name": "spooky_coffin_shop",
+   "town": "Spooky Town",
+   "w": 235,
+   "h": 255,
+   "foot": {
+    "x": 76,
+    "y": 194
+   }
+  },
+  {
+   "name": "arcane_alchemist_shop",
+   "town": "Arcane Quarter",
+   "w": 301,
+   "h": 328,
+   "foot": {
+    "x": 98,
+    "y": 248
+   }
+  },
+  {
+   "name": "arcane_rune_circle",
+   "town": "Arcane Quarter",
+   "w": 304,
+   "h": 223,
+   "foot": {
+    "x": 130,
+    "y": 146
+   }
+  },
+  {
+   "name": "edo_tea_house",
+   "town": "Edo Town",
+   "w": 315,
+   "h": 248,
+   "foot": {
+    "x": 138,
+    "y": 164
+   }
+  },
+  {
+   "name": "edo_machiya",
+   "town": "Edo Town",
+   "w": 279,
+   "h": 248,
+   "foot": {
+    "x": 107,
+    "y": 176
+   }
+  }
+ ],
+ "props": [
+  {
+   "name": "neon_neon_lamp",
+   "town": "Neon City",
+   "w": 140,
+   "h": 136,
+   "foot": {
+    "x": 50,
+    "y": 100
+   }
+  },
+  {
+   "name": "neon_vending_machine",
+   "town": "Neon City",
+   "w": 140,
+   "h": 136,
+   "foot": {
+    "x": 50,
+    "y": 100
+   }
+  },
+  {
+   "name": "soviet_kvass_barrel",
+   "town": "Soviet City",
+   "w": 227,
+   "h": 210,
+   "foot": {
+    "x": 84,
+    "y": 152
+   }
+  },
+  {
+   "name": "soviet_lamp_post",
+   "town": "Soviet City",
+   "w": 227,
+   "h": 210,
+   "foot": {
+    "x": 84,
+    "y": 152
+   }
+  },
+  {
+   "name": "spooky_jack_o_lantern",
+   "town": "Spooky Town",
+   "w": 162,
+   "h": 137,
+   "foot": {
+    "x": 64,
+    "y": 95
+   }
+  },
+  {
+   "name": "spooky_gothic_lamp",
+   "town": "Spooky Town",
+   "w": 162,
+   "h": 137,
+   "foot": {
+    "x": 64,
+    "y": 95
+   }
+  },
+  {
+   "name": "arcane_crystal_cluster",
+   "town": "Arcane Quarter",
+   "w": 162,
+   "h": 137,
+   "foot": {
+    "x": 64,
+    "y": 95
+   }
+  },
+  {
+   "name": "arcane_magic_lamp",
+   "town": "Arcane Quarter",
+   "w": 162,
+   "h": 137,
+   "foot": {
+    "x": 64,
+    "y": 95
+   }
+  },
+  {
+   "name": "edo_stone_lantern",
+   "town": "Edo Town",
+   "w": 162,
+   "h": 137,
+   "foot": {
+    "x": 64,
+    "y": 95
+   }
+  },
+  {
+   "name": "edo_lantern_post",
+   "town": "Edo Town",
+   "w": 162,
+   "h": 137,
+   "foot": {
+    "x": 64,
+    "y": 95
+   }
+  }
+ ]
+}

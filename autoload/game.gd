@@ -49,7 +49,10 @@ static func v2(a: Array) -> Vector2:
 
 
 func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_PATH)
+	if not FileAccess.file_exists(SAVE_PATH):
+		return false
+	# saves de versões anteriores da geração do mundo não batem com o mapa atual
+	return int(read_save().get("version", 0)) == World.SAVE_VERSION
 
 
 func read_save() -> Dictionary:
@@ -135,6 +138,23 @@ func debug_command(cmd: String) -> void:
 					Vector2(World.HALF_W * 0.5 * (w - d), World.HALF_H * 0.5 * (w + d)), side)
 				p.position = front + Vector2(0, 14)
 				p.camera.reset_smoothing()
+		"tproad":
+			# teleporta para um trecho de estrada longe das vilas (teste do mobiliário urbano)
+			var blocks: Array = world.road_blocks.keys()
+			blocks.sort()
+			var n := int(arg) if arg != "" else 0
+			var count := 0
+			for b: Vector2i in blocks:
+				var far := true
+				for v in world.villages:
+					if (Vector2(b - v.cell)).length() < 12.0:
+						far = false
+				if far:
+					if count == n:
+						p.position = world.ground.map_to_local(b) + Vector2(0, World.HALF_H)
+						p.camera.reset_smoothing()
+						break
+					count += 1
 		"con":
 			console.execute(arg)
 		"conopen":
