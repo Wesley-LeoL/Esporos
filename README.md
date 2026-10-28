@@ -7,6 +7,9 @@ Abra a pasta no Godot 4.7+ (versão padrão, não .NET) e aperte F5. O projeto j
 
 **Controles:** `WASD` mover · `Espaço`/clique atacar · `E` interagir · `Tab` ou `I` menu · `X` demolir · `F5` salvar · `Esc` cancelar · `F1` ou `` ` `` console de testes.
 
+## Controles
+WASD move · Shift corre · C agacha · Espaço/clique ataca (armas de fogo miram no mouse) · R recarrega · E interage (caixas, NPCs, veículos; dentro do veículo, sai) · Tab abre o terminal (inventário, corpo, habilidades, construção, implantes, mundo, legado, vila, veículo) · X demolição · F5 salva · F1 console.
+
 ## Co-op (2 a 4 jogadores)
 - **Hospedar:** na tela de título, ligue **CO-OP: ABERTO** e clique em Novo jogo ou Continuar. O jogo abre a porta UDP **7777**, e o anfitrião é a autoridade da sessão: simula o mundo e guarda o save.
 - **Entrar:** digite o IP do anfitrião e clique em **ENTRAR NA SESSÃO**. O mundo é gerado pela mesma seed, e só as alterações vêm pela rede.
@@ -23,6 +26,7 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **Inventário por peso e volume**: bolsos, mochilas e coldre com capacidade em litros, sobrecarga que deixa lento, itens com durabilidade (armas e máscara), validade (perecíveis estragam) e carga (bateria, combustível, antisséptico, fita). Janela de saque com o recipiente e o inventário lado a lado; baú para guardar.
 - **Armas de fogo, som e furtividade**: pistola e espingarda com munição, mira no mouse e dispersão; passos, tiros e construções fazem barulho que os infectados investigam; [C] agacha. Ferramentas (martelo, chave de fenda, alicate, serra) e materiais (pregos, fios, sucata eletrônica) para construir.
 - **Ações com tempo e medicina cooperativa**: curativos, cirurgias, recarga e consumo levam tempo e são interrompidos por movimento ou dano; na aba Corpo dá para tratar e operar um aliado próximo.
+- **Agricultura, culinária e veículos**: canteiros com sementes, rega e colheita (esporos densos matam a plantação); fogareiro e panela para cozinhar e ferver água; picape blindada e moto elétrica abandonadas, com ligação direta, energia, conserto, porta-malas e passageiros.
 - **Metabolismo**: fome (calorias) e sede (água limpa vs. suja); carboidratos e proteínas foram removidos do protótipo.
 - **Medicina por membros**: 6 membros com ferida leve/profunda, sangramento, desinfecção, sutura, bandagem, antibiótico, sepse e infecção fúngica por ferida aberta.
 - **Cibernética**: implantes (filtro pulmonar, HUD, braço, pernas hidráulicas, malha subdérmica) com bateria, estresse térmico, integridade e manutenção. O **núcleo neural** limita os implantes (1 sem processador; Mk1 e Mk2 ampliam); passar do limite dá rejeição ou **sobrecarga sináptica** (controle atrasado, espasmos, HUD distorcido, sem ações complexas).
@@ -35,7 +39,7 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **Persistência de deltas**: só construções, terreno, caixas saqueadas, baús, cadáveres, elites, vilas e legado vão para o save (saves da versão anterior são convertidos).
 
 ## Console de testes (cheats)
-`F1` ou `` ` `` abre o terminal (pausa o jogo). Digite `ajuda`. Comandos: `dar <item> [qtd]`, `dano <membro|todos> <n>`, `spawn [normal|elite] [n]`, `tp <x> <y>` (ou `abrigo`, `vila <n>`, `borda`, `cadaver`, `elite`), `set` (patogeno, sangue, calorias, agua, bateria, filtro, calor), `skill`, `curar`, `restaurar`, `implante`, `god`, `matar`, `infectar`, `limpar`, `pos`, `salvar`. Códigos prontos: `kit`, `kit_medico`, `kit_build`, `kit_cyber`. Tab completa, ↑↓ navega no histórico.
+`F1` ou `` ` `` abre o terminal (pausa o jogo). Digite `ajuda`. Comandos: `dar <item> [qtd]`, `dano <membro|todos> <n>`, `spawn [normal|elite] [n]`, `tp <x> <y>` (ou `abrigo`, `vila <n>`, `borda`, `cadaver`, `elite`), `set` (patogeno, sangue, calorias, agua, bateria, filtro, calor, estamina), `skill`, `curar`, `restaurar`, `implante`, `god`, `matar`, `infectar`, `limpar`, `pos`, `salvar`. Códigos prontos: `kit`, `kit_medico`, `kit_build`, `kit_cyber`. Tab completa, ↑↓ navega no histórico.
 
 ## Arte
 Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no mesmo estilo para personagens, construções, caixas, chão e ícones. Prédios noturnos do *Town Sampler* e objetos de rua do *Neon District* completam a cidade. A interface (HUD, menu, título, tela de morte) é pixel art ciberpunk gerada por `tools/gen_ui.py`, com a fonte Jersey 10 (OFL). Detalhes e como regerar em [`assets/art/README.md`](assets/art/README.md).
@@ -45,7 +49,7 @@ Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no m
 autoload/   input_setup.gd (ações) · net.gd (sessão co-op, ENet, replicação) · game.gd (mensagens, save, legado, debug)
 scripts/data/      db.gd (itens, implantes, construções) · items.gd (instâncias e listas de itens) · survivor_data.gd (toda a lógica de sobrevivência)
 scripts/world/     world.gd (mundo, spawn, vilas, construção, morte) · village_data.gd
-scripts/entities/  structure · infected · npc · corpse · loot_container · caravan · build_ghost · shot_fx
+scripts/entities/  structure · infected · npc · vehicle · corpse · loot_container · caravan · build_ghost · shot_fx
 scripts/player/    player.gd
 scripts/ui/        hud.gd (layout) · ui_theme.gd (cores, fonte, tema) · pixel_bar.gd · scan_overlay.gd · dev_console.gd
 tools/             setup.sh · screenshot.sh/.gd (prints headless) · gen_art.py, art_models.py, art_render.py (arte gerada) · build_art_catalog.py

@@ -16,7 +16,8 @@ const DONATE_REP := {"comida": 2.0, "med": 3.0, "material": 1.0, "eletronico": 3
 const REQUEST_TIME := 360.0
 ## Ofertas do comerciante por especialidade: [item, preço em reputação, nível mínimo].
 const OFFERS := {
-	"comida": [["feijao", 4, 0], ["pao", 3, 0], ["agua_limpa", 3, 0], ["cantil", 10, 1], ["abridor", 3, 0], ["carne_seca", 4, 1]],
+	"comida": [["feijao", 4, 0], ["pao", 3, 0], ["agua_limpa", 3, 0], ["cantil", 10, 1], ["abridor", 3, 0], ["carne_seca", 4, 1],
+		["semente_batata", 3, 0], ["semente_milho", 3, 0], ["semente_tomate", 3, 1], ["enxada", 8, 1], ["panela", 6, 0]],
 	"sucata": [["pregos", 5, 0], ["fios", 6, 0], ["metal", 4, 0], ["martelo", 8, 0], ["alicate", 9, 1], ["serra", 12, 2],
 		["municao_9mm", 10, 2]],
 	"medico": [["bandagem", 3, 0], ["gaze", 3, 0], ["antisseptico", 6, 0], ["kit_sutura", 8, 1], ["antibiotico", 10, 1],

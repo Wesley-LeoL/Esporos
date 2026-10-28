@@ -62,6 +62,22 @@ const TRAITS := {
 	"lento": {"nome": "Lento", "custo": -4, "desc": "-8% de velocidade."},
 	"barulhento": {"nome": "Barulhento", "custo": -2, "desc": "Seus passos fazem mais barulho."},
 }
+## Culturas: semente, tempo para amadurecer regada (s) e colheita [mín, máx].
+const CROPS := {
+	"batata": {"semente": "semente_batata", "tempo": 300.0, "colheita": [2, 4]},
+	"milho": {"semente": "semente_milho", "tempo": 360.0, "colheita": [2, 3]},
+	"tomate": {"semente": "semente_tomate", "tempo": 240.0, "colheita": [2, 4]},
+}
+
+## Veículos (fase 8): velocidade (x a pé), lugares, porta-malas (L), energia
+## ("combustivel" = galões, "bateria" = baterias), gasto por 100 px, ruído e dano ao atropelar.
+const VEHICLES := {
+	"picape": {"nome": "Picape blindada", "vel": 2.4, "lugares": 4, "porta_malas": 60.0, "energia": "combustivel",
+		"gasto": 0.18, "ruido": 520.0, "atropelo": 30.0},
+	"moto": {"nome": "Moto elétrica", "vel": 3.2, "lugares": 1, "porta_malas": 8.0, "energia": "bateria",
+		"gasto": 0.12, "ruido": 240.0, "atropelo": 12.0},
+}
+
 ## Pares que não combinam.
 const TRAIT_CONFLICTS := [["pulmao_aco", "pulmao_fraco"], ["metabolismo_lento", "glutao"], ["atleta", "asmatico"]]
 ## Traços negativos devolvem no máximo isto.
@@ -139,6 +155,18 @@ const ITEMS := {
 	"barra_cereal": {"nome": "Barra de cereal", "tipo": "comida", "cal": 210.0, "peso": 0.05, "vol": 0.1, "desc": "Não estraga."},
 	"maca": {"nome": "Maçã", "tipo": "comida", "cal": 120.0, "peso": 0.2, "vol": 0.3, "validade": 900.0, "desc": "Perecível: estraga rápido."},
 	"pao": {"nome": "Pão", "tipo": "comida", "cal": 420.0, "peso": 0.4, "vol": 0.8, "validade": 1200.0, "desc": "Perecível."},
+	"batata": {"nome": "Batata", "tipo": "comida", "cal": 160.0, "peso": 0.2, "vol": 0.25, "validade": 2400.0, "desc": "Colhida no canteiro. Melhor cozida."},
+	"milho": {"nome": "Espiga de milho", "tipo": "comida", "cal": 120.0, "peso": 0.25, "vol": 0.3, "validade": 1800.0, "desc": "Colhida no canteiro. Asse no fogareiro."},
+	"tomate": {"nome": "Tomate", "tipo": "comida", "cal": 60.0, "agua": 6.0, "peso": 0.15, "vol": 0.2, "validade": 900.0, "desc": "Mata um pouco a sede."},
+	"sopa": {"nome": "Sopa de batata", "tipo": "comida", "cal": 600.0, "cozido": true, "peso": 0.5, "vol": 0.6, "validade": 900.0, "desc": "Comida quente: estamina recupera mais rápido por 3 min."},
+	"ensopado": {"nome": "Ensopado", "tipo": "comida", "cal": 780.0, "cozido": true, "peso": 0.6, "vol": 0.6, "validade": 1200.0, "desc": "Comida quente: estamina recupera mais rápido por 3 min."},
+	"milho_assado": {"nome": "Milho assado", "tipo": "comida", "cal": 300.0, "cozido": true, "peso": 0.25, "vol": 0.3, "validade": 1500.0, "desc": "Comida quente: estamina recupera mais rápido por 3 min."},
+	"semente_batata": {"nome": "Sementes de batata", "tipo": "semente", "cultura": "batata", "peso": 0.02, "vol": 0.05, "desc": "Plante num canteiro (precisa de enxada)."},
+	"semente_milho": {"nome": "Sementes de milho", "tipo": "semente", "cultura": "milho", "peso": 0.02, "vol": 0.05, "desc": "Plante num canteiro (precisa de enxada)."},
+	"semente_tomate": {"nome": "Sementes de tomate", "tipo": "semente", "cultura": "tomate", "peso": 0.02, "vol": 0.05, "desc": "Plante num canteiro (precisa de enxada)."},
+	"enxada": {"nome": "Enxada", "tipo": "ferramenta", "peso": 1.2, "vol": 2.0, "desc": "Ferramenta: preparar o canteiro e plantar."},
+	"regador": {"nome": "Regador", "tipo": "regador", "carga": true, "uso_carga": 25.0, "peso": 0.6, "vol": 1.5, "desc": "4 regas. Enche com uma garrafa de água (limpa ou suja)."},
+	"panela": {"nome": "Panela", "tipo": "ferramenta", "peso": 0.9, "vol": 1.5, "desc": "Ferramenta: cozinhar no fogareiro."},
 	"agua_limpa": {"nome": "Água limpa", "tipo": "bebida", "agua": 45.0, "limpa": true, "peso": 0.55, "vol": 0.6, "desc": "Água segura."},
 	"agua_suja": {"nome": "Água contaminada", "tipo": "bebida", "agua": 45.0, "limpa": false, "peso": 0.55, "vol": 0.6, "desc": "Mata a sede, mas acelera a infecção."},
 	"mascara": {"nome": "Máscara de gás", "tipo": "mascara", "dur": true, "gasto": 0.0, "peso": 0.8, "vol": 1.5, "desc": "Vista para proteger. A vedação (durabilidade) gasta com golpes na cabeça."},
@@ -243,13 +271,26 @@ const BUILDS := {
 	"torre": {"nome": "Torre automatizada", "custo": {"metal": 8, "sucata": 6, "bateria": 1, "fios": 2, "sucata_eletronica": 2},
 		"req": {"eletronica": 4, "metalurgia": 3}, "ferramentas": ["chave_fenda", "alicate", "serra"], "xp": {"eletronica": 30, "metalurgia": 20},
 		"desc": "Atira em infectados (barulhenta). Precisa de energia."},
+	"canteiro": {"nome": "Canteiro", "custo": {"madeira": 3, "pregos": 4}, "req": {}, "ferramentas": ["martelo"],
+		"xp": {"carpintaria": 3, "agricultura": 3}, "desc": "Plante, regue e colha. Esporos densos matam a plantação."},
+	"fogareiro": {"nome": "Fogareiro", "custo": {"metal": 2, "sucata": 3}, "req": {}, "ferramentas": ["martelo"],
+		"xp": {"metalurgia": 4}, "desc": "Cozinhe por perto (aba Inventário, com panela)."},
 	"vedacao": {"nome": "Selagem de ar", "custo": {"metal": 8, "sucata": 4, "madeira": 4, "fios": 2},
 		"req": {"metalurgia": 4, "eletronica": 3, "carpintaria": 2}, "ferramentas": ["martelo", "serra", "chave_fenda"],
 		"xp": {"metalurgia": 30, "eletronica": 20}, "desc": "Zona sem esporos. Precisa de energia."},
 }
 
-## qtd: unidades produzidas.
+## qtd: unidades produzidas; saida: item produzido (padrão: o id da receita);
+## estacao: construção que precisa estar perto (cozinhar no fogareiro).
 const CRAFTS := {
+	"sopa": {"nome": "Sopa de batata", "custo": {"batata": 2, "agua_limpa": 1}, "req": {}, "ferramentas": ["panela"],
+		"estacao": "fogareiro", "xp": {"culinaria": 8}},
+	"ensopado": {"nome": "Ensopado", "custo": {"feijao": 1, "batata": 1, "tomate": 1}, "req": {"culinaria": 1}, "ferramentas": ["panela"],
+		"estacao": "fogareiro", "xp": {"culinaria": 10}},
+	"milho_assado": {"nome": "Milho assado (x2)", "qtd": 2, "custo": {"milho": 2}, "req": {}, "ferramentas": [],
+		"estacao": "fogareiro", "xp": {"culinaria": 5}},
+	"agua_fervida": {"nome": "Ferver água suja", "saida": "agua_limpa", "custo": {"agua_suja": 1}, "req": {}, "ferramentas": ["panela"],
+		"estacao": "fogareiro", "xp": {"culinaria": 3}},
 	"filtro": {"nome": "Filtro de máscara", "custo": {"sucata": 2, "metal": 1}, "req": {"metalurgia": 2}, "ferramentas": ["alicate"],
 		"xp": {"metalurgia": 14}},
 	"bateria": {"nome": "Bateria", "custo": {"sucata_eletronica": 2, "fios": 1, "metal": 1}, "req": {"eletronica": 2}, "ferramentas": ["chave_fenda"],
@@ -274,7 +315,8 @@ const LOOT := {
 		["cano", 3, 1, 1], ["carne_seca", 5, 1, 1], ["maca", 6, 1, 3], ["pao", 4, 1, 1],
 		["fita", 4, 1, 1], ["faca", 3, 1, 1], ["abridor", 4, 1, 1], ["pregos", 10, 4, 14], ["martelo", 3, 1, 1],
 		["chave_fenda", 3, 1, 1], ["lanterna", 3, 1, 1], ["pilha", 5, 1, 3], ["cantil", 2, 1, 1], ["municao_9mm", 3, 3, 10],
-		["cartucho_12", 2, 2, 5], ["pistola", 1, 1, 1], ["taco", 3, 1, 1], ["mochila_escolar", 3, 1, 1], ["coldre", 2, 1, 1]],
+		["cartucho_12", 2, 2, 5], ["pistola", 1, 1, 1], ["semente_batata", 4, 2, 4],
+		["semente_milho", 3, 2, 4], ["semente_tomate", 3, 2, 4], ["enxada", 2, 1, 1], ["regador", 2, 1, 1], ["panela", 3, 1, 1], ["taco", 3, 1, 1], ["mochila_escolar", 3, 1, 1], ["coldre", 2, 1, 1]],
 	"medico": [["bandagem", 30, 1, 3], ["antisseptico", 25, 1, 2], ["kit_sutura", 15, 1, 1], ["antibiotico", 15, 1, 2],
 		["supressor", 12, 1, 2], ["agua_limpa", 8, 1, 2], ["gaze", 18, 1, 3], ["alcool", 12, 1, 1],
 		["analgesico", 12, 1, 2], ["manual_medicina", 4, 1, 1], ["kit_cirurgico", 3, 1, 1]],

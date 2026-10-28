@@ -263,6 +263,42 @@ func debug_command(cmd: String) -> void:
 			v2.stock["comida"] = 5.0
 		"deliver":
 			p.act("deliver", [int(arg)])
+		"goto_veh":
+			var bv: Node2D = null
+			for n in get_tree().get_nodes_in_group("vehicles"):
+				if bv == null or (n as Node2D).position.distance_to(p.position) < bv.position.distance_to(p.position):
+					bv = n
+			if bv != null:
+				p.teleport(bv.position + Vector2(0, 20))
+		"veh":
+			var vv: Node2D = null
+			for n in get_tree().get_nodes_in_group("vehicles"):
+				if vv == null or (n as Node2D).position.distance_to(p.position) < vv.position.distance_to(p.position):
+					vv = n
+			if vv != null:
+				p.act("vehicle", [world.key_of(vv), arg])
+		"vehtab":
+			for n in get_tree().get_nodes_in_group("vehicles"):
+				if (n as Node2D).position.distance_to(p.position) < 140.0:
+					hud.open_vehicle(n)
+		"press":
+			Input.action_press(arg)
+		"release":
+			Input.action_release(arg)
+		"vehpos":
+			for n in get_tree().get_nodes_in_group("vehicles"):
+				if (n as Node2D).position.distance_to(p.position) < 60.0:
+					print("veiculo %s em %s · energia %.1f · jogador em %s" % [(n as Vehicle).kind, (n as Node2D).position, (n as Vehicle).fuel, p.position])
+		"goto_kind":
+			var bs: Node2D = null
+			for c in world.structures:
+				var st: Structure = world.structures[c]
+				if st.kind == arg and (bs == null or st.position.distance_to(p.position) < bs.position.distance_to(p.position)):
+					bs = st
+			if bs != null:
+				p.teleport(bs.position + Vector2(0, 14))
+		"craft":
+			p.act("craft", [arg])
 		"chunks":
 			print("chunks carregados: %d · estruturas: %d · caixas: %d · infectados: %d" % [world.loaded.size(),
 				world.structures.size(), world.container_nodes.size(), get_tree().get_nodes_in_group("infected").size()])

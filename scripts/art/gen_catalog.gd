@@ -5,13 +5,17 @@ extends RefCounted
 ## fica o pé / centro da célula (a origem do nó), cols/rows = quadros por linha/linhas.
 
 const SHEETS := {
+	"canteiro": {"path": "res://assets/art/generated/structures/canteiro.png", "fw": 70, "fh": 61, "ox": 35, "oy": 43, "cols": 5, "rows": 1},
 	"caravan": {"path": "res://assets/art/generated/props/caravan.png", "fw": 62, "fh": 70, "ox": 31, "oy": 56, "cols": 4, "rows": 1},
 	"containers": {"path": "res://assets/art/generated/props/containers.png", "fw": 43, "fh": 56, "ox": 25, "oy": 47, "cols": 7, "rows": 1},
 	"corpse": {"path": "res://assets/art/generated/characters/corpse.png", "fw": 30, "fh": 31, "ox": 15, "oy": 19, "cols": 2, "rows": 1},
 	"elite": {"path": "res://assets/art/generated/characters/elite.png", "fw": 58, "fh": 69, "ox": 29, "oy": 63, "cols": 6, "rows": 8},
+	"fogareiro": {"path": "res://assets/art/generated/structures/fogareiro.png", "fw": 44, "fh": 44, "ox": 22, "oy": 33, "cols": 2, "rows": 1},
 	"gerador": {"path": "res://assets/art/generated/structures/gerador.png", "fw": 54, "fh": 59, "ox": 27, "oy": 45, "cols": 2, "rows": 1},
 	"infected": {"path": "res://assets/art/generated/characters/infected.png", "fw": 52, "fh": 53, "ox": 26, "oy": 48, "cols": 6, "rows": 8},
+	"moto": {"path": "res://assets/art/generated/props/moto.png", "fw": 52, "fh": 49, "ox": 26, "oy": 38, "cols": 8, "rows": 1},
 	"parede": {"path": "res://assets/art/generated/structures/parede.png", "fw": 78, "fh": 81, "ox": 39, "oy": 62, "cols": 2, "rows": 1},
+	"picape": {"path": "res://assets/art/generated/props/picape.png", "fw": 78, "fh": 66, "ox": 39, "oy": 50, "cols": 8, "rows": 1},
 	"porta": {"path": "res://assets/art/generated/structures/porta.png", "fw": 78, "fh": 81, "ox": 39, "oy": 62, "cols": 2, "rows": 1},
 	"purificador": {"path": "res://assets/art/generated/structures/purificador.png", "fw": 53, "fh": 57, "ox": 24, "oy": 45, "cols": 2, "rows": 1},
 	"survivor_m0_a0_e0": {"path": "res://assets/art/generated/characters/survivor_m0_a0_e0.png", "fw": 54, "fh": 67, "ox": 27, "oy": 62, "cols": 9, "rows": 8},
@@ -94,6 +98,18 @@ const ICONS := {
 	"espingarda": 57,
 	"municao_9mm": 58,
 	"cartucho_12": 59,
+	"semente_batata": 60,
+	"semente_milho": 61,
+	"semente_tomate": 62,
+	"batata": 63,
+	"milho": 64,
+	"tomate": 65,
+	"enxada": 66,
+	"regador": 67,
+	"panela": 68,
+	"sopa": 69,
+	"ensopado": 70,
+	"milho_assado": 71,
 }
 
 const GROUND_PATH := "res://assets/art/generated/world/ground.png"

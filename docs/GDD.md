@@ -109,7 +109,7 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 
 - **Modelo de rede:** um jogador hospeda e é a autoridade (servidor ENet, porta 7777). Os outros entram pelo IP. O jogo solo usa o mesmo código, numa sessão local sem rede.
 - **Jogadores por sessão:** de 2 a 4.
-- **Veículos:** entram no escopo (habilidade Mecânica: reparo e ligação direta). Os modelos ainda serão escolhidos e depois registrados aqui.
+- **Veículos:** entram no escopo (habilidade Mecânica: reparo e ligação direta). Modelos escolhidos na fase 8: picape blindada e moto elétrica (detalhes abaixo).
 - **Matemática/Lógica:** sai da árvore de habilidades. Os requisitos de construção que a usavam passam para Eletrônica, Carpintaria e Metalurgia (fase 3).
 
 ### Inventário (fase 2)
@@ -156,6 +156,15 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Zonas mortas:** vila que cai fica sem NPCs, cercada de infectados e com esporos densos ao redor. Limpar a área por 30 s liberta a vila.
 - Saves de antes desta fase: o mapa mudou, então só os sobreviventes (de volta ao abrigo), o legado e o tempo de jogo são aproveitados.
 
+### Agricultura, culinária e veículos (fase 8)
+
+- **Agricultura:** canteiro (3 madeiras + 4 pregos, martelo). [E] com enxada e sementes planta; regar (regador com 4 regas ou uma garrafa de água, limpa ou suja) dá ~150 s de água; a planta só cresce regada e com ar limpo (esporos < 0,35, ou dentro de uma selagem de ar); em esporos densos (≥ 0,6) ela morre. Batata (5 min), milho (6 min) e tomate (4 min). Agricultura acelera o crescimento e aumenta a colheita e a chance de recuperar sementes. O crescimento é calculado pelo relógio do mundo, então continua mesmo com o chunk descarregado.
+- **Culinária:** fogareiro (2 metais + 3 sucatas) e panela. Receitas: sopa de batata, ensopado (feijão + batata + tomate), milho assado e ferver água suja (vira água limpa). Comida cozida dá "bem alimentado" por 3 min (estamina recupera 50% mais rápido). Sem prática, a comida pode queimar; Culinária também reduz a intoxicação de comida estragada.
+- **Veículos (escolhidos):**
+  - *Picape blindada:* 2,4x a velocidade a pé, 4 lugares (motorista + 3), porta-malas de 60 L, gasta combustível (galões), barulhenta (520 px), atropela forte.
+  - *Moto elétrica:* 3,2x, só o piloto, porta-malas de 8 L, gasta baterias, quase silenciosa (240 px), atropela fraco.
+  - Ficam abandonados na beira das estradas, trancados, com pouca energia e desgastados. Ligação direta exige Mecânica 2 (pode dar choque); consertar pede martelo, chave de fenda, 1 metal e 2 sucatas. Atropelar desgasta; abaixo de 30% de estado o veículo perde velocidade e a 0% não anda. Quem dirige controla o movimento (como a pé); passageiros acompanham. O porta-malas abre na janela de saque e os veículos vão para o save.
+
 ## Estado da implementação
 
 | Fase | Conteúdo | Situação |
@@ -167,4 +176,4 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 5 | Ferramentas e materiais, lanterna, cantil, médicos novos, armas de fogo com munição, som e furtividade | **feito** |
 | 6 | Ações com tempo (barra, interrupção por movimento ou dano) e medicina cooperativa (curativos e cirurgias em aliados) | **feito** |
 | 7 | Mundo em chunks (raio 150), vilas vivas com NPCs, prosperidade, reputação, comércio, pedidos de socorro e zonas mortas | **feito** |
-| 8 | Agricultura e culinária; veículos | a fazer |
+| 8 | Agricultura (canteiro, sementes, rega, colheita), culinária (fogareiro, receitas, água fervida) e veículos (picape blindada e moto elétrica) | **feito** |

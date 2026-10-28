@@ -16,7 +16,7 @@ const VITALS := [
 ]
 const TAB_DEFS := [["inv", "Inventário", "mochila"], ["corpo", "Corpo", "corpo"], ["skills", "Habilidades", "chip"],
 	["build", "Construção", "martelo"], ["impl", "Implantes", "bateria"], ["mundo", "Mundo", "mundo"],
-	["legado", "Legado", "legado"], ["vila", "Vila", "pessoa"]]
+	["legado", "Legado", "legado"], ["vila", "Vila", "pessoa"], ["veiculo", "Veículo", "carro"]]
 const HINTS := [["SHIFT", "CORRER"], ["C", "AGACHAR"], ["ESPAÇO", "ATACAR"], ["R", "RECARREGAR"], ["E", "INTERAGIR"],
 	["TAB", "MENU"], ["X", "DEMOLIR"], ["F1", "CONSOLE"]]
 const OK_COLOR := Color("#7fe0a0")
@@ -527,6 +527,15 @@ func _player() -> Player:
 
 
 # ------------------------------------------------------------------ menu
+## Veículo perto: abre a aba Veículo.
+var vehicle_node: Vehicle
+
+
+func open_vehicle(v: Vehicle) -> void:
+	vehicle_node = v
+	open_menu(8)
+
+
 ## Conversa com um NPC: abre a aba Vila.
 func open_village(vid: int) -> void:
 	village_open = vid
@@ -559,6 +568,7 @@ func open_menu(tab: int = -1) -> void:
 func close_menu() -> void:
 	loot_node = null
 	village_open = -1
+	vehicle_node = null
 	menu_root.visible = false
 	get_tree().paused = false
 
@@ -637,7 +647,12 @@ func _process(delta: float) -> void:
 	_neural_glitch(d)
 
 	# aviso de interação
-	if p.nearby != null and is_instance_valid(p.nearby) and not menu_root.visible and p.build_kind == "":
+	var in_veh := Game.world.vehicle_of(p.peer) != null
+	if in_veh and not menu_root.visible:
+		prompt_panel.visible = true
+		prompt_key.visible = true
+		prompt_label.text = "SAIR DO VEÍCULO"
+	elif p.nearby != null and is_instance_valid(p.nearby) and not menu_root.visible and p.build_kind == "":
 		var txt: String = p.nearby.prompt()
 		prompt_panel.visible = txt != ""
 		prompt_key.visible = txt.begins_with("[E]")
@@ -784,6 +799,8 @@ func _update_effects(d: SurvivorData, spore: float) -> void:
 		list.append(["olho", "AGACHADO", UITheme.ACCENT])
 	if d.lantern_on():
 		list.append(["alerta", "LANTERNA ACESA", UITheme.WARN])
+	if d.well_fed_t > 0.0:
+		list.append(["panela", "BEM ALIMENTADO %ds" % int(d.well_fed_t), OK_COLOR])
 	if d.pain_t > 0.0:
 		list.append(["antibiotico", "ANALGÉSICO %ds" % int(d.pain_t), OK_COLOR])
 	if d.overloaded():
@@ -909,6 +926,7 @@ func _rebuild() -> void:
 		5: _tab_world(p)
 		6: _tab_legacy(d)
 		7: _tab_village(p)
+		8: _tab_vehicle(p)
 
 
 func _act(cb: Callable) -> Callable:
@@ -951,11 +969,14 @@ func _tab_inventory(d: SurvivorData) -> void:
 	for rid: String in DB.CRAFTS:
 		var cdef: Dictionary = DB.CRAFTS[rid]
 		var crow := _row(box)
-		crow.add_child(_item_icon(rid, 48))
+		crow.add_child(_item_icon(String(cdef.get("saida", rid)), 48))
 		var tools: Array = cdef.get("ferramentas", [])
-		var ok := d.meets(cdef["req"]) and d.can_afford(cdef["custo"]) and d.missing_tools(tools) == ""
-		_lbl(crow, "%s: %s · exige %s · ferramentas: %s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"]),
-			DB.tools_text(tools)], UITheme.TEXT if ok else NO_COLOR)
+		var station := String(cdef.get("estacao", ""))
+		var near := station == "" or Game.world.station_near(_player().position, station)
+		var ok := d.meets(cdef["req"]) and d.can_afford(cdef["custo"]) and d.missing_tools(tools) == "" and near
+		_lbl(crow, "%s: %s · exige %s · ferramentas: %s%s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"]),
+			DB.tools_text(tools), ("" if station == "" else " · perto de: %s" % String(DB.BUILDS[station]["nome"]).to_lower())],
+			UITheme.TEXT if ok else NO_COLOR)
 		_btn(crow, "Fabricar", _act(func() -> void: _player().act("craft", [rid])), d.meets(cdef["req"]))
 
 
@@ -996,6 +1017,7 @@ func _verb_for(d: SurvivorData, inst: Dictionary) -> String:
 		"pilha": return "Pôr na lanterna" if d.count("lanterna") > 0 else ""
 		"cantil": return "Beber" if float(inst.get("carga", 0.0)) >= 1.0 else ("Encher" if d.count("agua_limpa") > 0 else "")
 		"analgesico": return "Tomar"
+		"regador": return "Encher" if float(inst.get("carga", 0.0)) < 99.0 and d.count("agua_suja") + d.count("agua_limpa") > 0 else ""
 	return ""
 
 
@@ -1516,6 +1538,60 @@ func _tab_implants(d: SurvivorData) -> void:
 					_btn(row2, "Instalar", _act(func() -> void: _player().act("install", [id])), d.count("kit_cirurgico") > 0)
 			if not found:
 				_lbl(box, "Vazio. Encontre um implante e um kit cirúrgico.", UITheme.MUTED)
+
+
+func _tab_vehicle(p: Player) -> void:
+	var box: VBoxContainer = boxes["veiculo"]
+	_clear(box)
+	var v := vehicle_node
+	if v == null or not is_instance_valid(v):
+		var best := 1e9
+		for n in get_tree().get_nodes_in_group("vehicles"):
+			var dd := (n as Node2D).position.distance_to(p.position)
+			if dd < best and dd < 140.0:
+				best = dd
+				v = n
+	if v == null or not is_instance_valid(v) or v.position.distance_to(p.position) > 160.0:
+		_lbl(box, "Chegue perto de um veículo e aperte [E].", UITheme.MUTED)
+		return
+	var key := Game.world.key_of(v)
+	var def := v.def()
+	var top := _row(box)
+	top.add_child(UITheme.icon_rect("carro", UITheme.ACCENT, 44))
+	var info := _vbox(4)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(info)
+	info.add_child(_label("%s · %s · %d/%d LUGARES · PORTA-MALAS %.0f/%.0f L" % [String(def["nome"]).to_upper(),
+		"TRANCADO" if v.locked else "DESTRANCADO", v.occupants().size(), int(def["lugares"]), v.trunk_volume(),
+		float(def["porta_malas"])], S, UITheme.ACCENT))
+	var bars_row := _hbox(14)
+	info.add_child(bars_row)
+	bars_row.add_child(_label("ENERGIA", S, UITheme.MUTED))
+	_bar(bars_row, v.fuel, 100.0, UITheme.WARN, 240, 14)
+	bars_row.add_child(_label("ESTADO", S, UITheme.MUTED))
+	_bar(bars_row, v.cond, 100.0, OK_COLOR, 240, 14)
+	var d := p.data
+	var inside := Game.world.vehicle_of(p.peer) == v
+	var row := _row(box)
+	if inside:
+		_btn(row, "Sair do veículo", _act(func() -> void: _player().act("vehicle", [key, "exit"])))
+	else:
+		_btn(row, "Dirigir", _act(func() -> void:
+			_player().act("vehicle", [key, "drive"])
+			close_menu()), not v.locked and v.driver == 0 and v.seats_free() > 0)
+		_btn(row, "Entrar como passageiro", _act(func() -> void:
+			_player().act("vehicle", [key, "ride"])
+			close_menu()), not v.locked and v.seats_free() > 0 and int(def["lugares"]) > 1)
+	_btn(row, "Porta-malas", func() -> void:
+		close_menu()
+		open_loot(v))
+	var energy := "galão de combustível" if String(def["energia"]) == "combustivel" else "bateria"
+	var row2 := _row(box)
+	_btn(row2, "Abastecer (%s)" % energy, _act(func() -> void: _player().act("vehicle", [key, "refuel"])),
+		d.count("combustivel" if energy.begins_with("galão") else "bateria") > 0)
+	_btn(row2, "Ligação direta", _act(func() -> void: _player().act("vehicle", [key, "hotwire"])), v.locked)
+	_btn(row2, "Consertar (1 metal + 2 sucatas)", _act(func() -> void: _player().act("vehicle", [key, "repair"])), v.cond < 99.0)
+	_lbl(box, "Veículos abandonados ficam trancados: a ligação direta exige Mecânica 2 (pode dar choque). A picape gasta combustível e leva até 4 pessoas; a moto elétrica é rápida e silenciosa, mas leva só o piloto e gasta baterias. Atropelar infectados desgasta o veículo; o motor faz barulho.", UITheme.MUTED)
 
 
 func _tab_world(p: Player) -> void:

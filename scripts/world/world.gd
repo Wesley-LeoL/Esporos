@@ -81,6 +81,9 @@ var occupied := {}
 ## Chunks carregados: chunk -> {"nodes": Array, "art": Node2D}.
 var loaded := {}
 var _chunk_t := 0.0
+## Vagas de veículos abandonados (planejadas): [{"kind", "cell"}]. Só o anfitrião cria os
+## veículos (entidades replicadas) num mundo novo; depois eles vão para o save.
+var vehicle_spots: Array = []
 var terrain_deltas := {}
 var removed_cells := {}
 var road_cells := {}
@@ -452,6 +455,16 @@ func _decorate_roads() -> void:
 			_add_prop(_pick(lamps), 0, c, "town")
 		else:
 			_add_prop(_pick(street), 0, c, "neon")
+	# veículos abandonados na beira das estradas (gerador próprio: não muda o resto do mapa)
+	var vr := RandomNumberGenerator.new()
+	vr.seed = seed_value + 991
+	for origin: Vector2i in blocks:
+		if vr.randf() > 0.06 or Vector2(origin).length() < 6.0 or Vector2(origin).length() > RADIUS * 0.8:
+			continue
+		var c2: Vector2i = origin + [Vector2i(-1, 0), Vector2i(2, 1), Vector2i(0, -1), Vector2i(1, 2)][vr.randi() % 4]
+		if not _free_cell(c2):
+			continue
+		vehicle_spots.append({"kind": "moto" if vr.randf() < 0.3 else "picape", "cell": c2})
 
 
 ## Tira o nó de uma estrutura carregada (não mexe nos dados).
@@ -508,6 +521,13 @@ func _make_structure(c: Vector2i, d: Dictionary) -> Structure:
 	s.eternal = bool(d.get("eternal", false))
 	s.fuel = float(d.get("fuel", 0.0))
 	s.open = bool(d.get("open", false))
+	if s.kind == "canteiro":
+		s.crop = str(d.get("crop", ""))
+		s.grow = float(d.get("grow", 0.0))
+		s.water_until = float(d.get("water_until", 0.0))
+		s.crop_last = float(d.get("crop_last", Game.play_time))
+		s.dead = bool(d.get("dead", false))
+		s._agri_k = float(d.get("agri", 1.0))
 	s.position = ground.map_to_local(c)
 	entities.add_child(s)
 	structures[c] = s
@@ -687,6 +707,8 @@ func _unload_chunk(ch: Vector2i) -> void:
 			if built.has(st.cell):
 				built[st.cell]["fuel"] = st.fuel
 				built[st.cell]["open"] = st.open
+				if st.kind == "canteiro":
+					built[st.cell].merge(st.crop_state(), true)
 			_free_structure_node(st)
 			continue
 		if node is LootContainer:
@@ -908,6 +930,17 @@ func _spawn_entity(d: Dictionary) -> Node:
 			npc.home = Game.v2(d.get("home", d["pos"]))
 			npc.setup_net()
 			node = npc
+		"veh":
+			var vh := Vehicle.new()
+			vh.world = self
+			vh.kind = str(d["kind"])
+			vh.position = Game.v2(d["pos"])
+			vh.fuel = float(d.get("fuel", 0.0))
+			vh.cond = float(d.get("cond", 50.0))
+			vh.locked = bool(d.get("locked", true))
+			vh.items = Items.sanitize(d.get("items", []))
+			vh.setup_net()
+			node = vh
 		"car":
 			var car := Caravan.new()
 			car.world = self
@@ -969,7 +1002,7 @@ func interact(p: Player, key: String) -> void:
 ## Recipiente do mundo (caixa, baú, saco no chão ou cadáver) ao alcance do jogador.
 func _loot_node(p: Player, key: String) -> Node2D:
 	var node := node_of(key) as Node2D
-	if node == null or not (node is LootContainer or node is Corpse) or not _near(p, node, 110.0):
+	if node == null or not (node is LootContainer or node is Corpse or node is Vehicle) or not _near(p, node, 110.0):
 		return null
 	return node
 
@@ -1016,6 +1049,14 @@ func store_into(p: Player, key: String, u: int, n: int) -> void:
 	var node := _loot_node(p, key)
 	if node == null:
 		return
+	if node is Vehicle:
+		var f := p.data.find(u)
+		if f.is_empty():
+			return
+		var vol := float(Items.def(f[1]["id"]).get("vol", 0.5)) * float(mini(maxi(1, n), int(f[1]["n"])))
+		if (node as Vehicle).trunk_volume() + vol > float((node as Vehicle).def()["porta_malas"]):
+			Game.tell(p.peer, "O porta-malas está cheio (%d L)." % int((node as Vehicle).def()["porta_malas"]))
+			return
 	var part := p.data.remove_u(u, maxi(1, n))
 	if part.is_empty():
 		return
@@ -1081,21 +1122,35 @@ func _container_items(key: String, items: Array) -> void:
 
 ## Servidor: estado de uma estrutura (combustível, porta) mudou.
 func structure_changed(st: Structure) -> void:
+	var extra := st.crop_state() if st.kind == "canteiro" else {}
 	if built.has(st.cell):
 		built[st.cell]["fuel"] = st.fuel
 		built[st.cell]["open"] = st.open
-	_structure_state.rpc(st.cell.x, st.cell.y, st.fuel, st.open)
+		built[st.cell].merge(extra, true)
+	_structure_state.rpc(st.cell.x, st.cell.y, st.fuel, st.open, extra)
 
 
 @rpc("authority", "reliable")
-func _structure_state(x: int, y: int, fuel: float, open: bool) -> void:
+func _structure_state(x: int, y: int, fuel: float, open: bool, extra: Dictionary) -> void:
 	var c := Vector2i(x, y)
 	if built.has(c):
 		built[c]["fuel"] = fuel
 		built[c]["open"] = open
+		built[c].merge(extra, true)
 	var st: Structure = structures.get(c)
 	if st != null:
 		st.apply_state(fuel, open)
+		if not extra.is_empty():
+			st.apply_crop(extra)
+
+
+## Há uma construção desse tipo perto (cozinhar no fogareiro)?
+func station_near(pos: Vector2, kind: String) -> bool:
+	for n in get_tree().get_nodes_in_group("stoves" if kind == "fogareiro" else kind):
+		var off := (n as Node2D).position - pos
+		if Vector2(off.x, off.y * 2.0).length() < 110.0:
+			return true
+	return false
 
 
 @rpc("authority", "unreliable")
@@ -1616,6 +1671,101 @@ func buy(p: Player, vid: int, item_id: String) -> void:
 		return
 
 
+# ======================================================================= veículos (fase 8)
+func vehicle_of(peer: int) -> Vehicle:
+	for n in get_tree().get_nodes_in_group("vehicles"):
+		var v := n as Vehicle
+		if v.driver == peer or peer in v.passengers:
+			return v
+	return null
+
+
+## Servidor: ações num veículo (entrar, sair, ligação direta, abastecer, consertar).
+func vehicle_action(p: Player, key: String, op: String) -> void:
+	var v := node_of(key) as Vehicle
+	var inside := vehicle_of(p.peer)
+	if op == "exit":
+		if inside == null:
+			return
+		if inside.driver == p.peer:
+			inside.driver = 0
+		inside.passengers.erase(p.peer)
+		p.teleport(inside.position + Vector2(0, 26))
+		Game.tell(p.peer, "Você saiu do veículo.")
+		return
+	if v == null or not _near(p, v, 120.0):
+		return
+	var d := p.data
+	match op:
+		"drive", "ride":
+			if inside != null:
+				return
+			if v.locked:
+				Game.tell(p.peer, "Está trancado. Faça uma ligação direta (Mecânica 2).")
+				return
+			if v.seats_free() <= 0:
+				Game.tell(p.peer, "Não há lugar.")
+				return
+			if op == "drive" and v.driver == 0:
+				v.driver = p.peer
+				p.teleport(v.position)
+				Game.tell(p.peer, "Você assumiu o volante. [E] sai." + ("" if v.can_run() else " Sem energia ou quebrado: não anda."))
+			else:
+				v.passengers.append(p.peer)
+				Game.tell(p.peer, "Você entrou como passageiro. [E] sai.")
+		"refuel":
+			var need := 100.0 - v.fuel
+			if need <= 0.5:
+				Game.tell(p.peer, "Já está cheio.")
+				return
+			if String(v.def()["energia"]) == "combustivel":
+				var got := d.pour_fuel(need / 2.0) * 2.0
+				if got <= 0.0:
+					Game.tell(p.peer, "Você precisa de um galão de combustível.")
+					return
+				v.fuel = minf(100.0, v.fuel + got)
+			else:
+				var bat := d.first_of("bateria")
+				if bat.is_empty():
+					Game.tell(p.peer, "Você precisa de uma bateria.")
+					return
+				var add := minf(need, float(bat["carga"]) * 0.5)
+				bat["carga"] = float(bat["carga"]) - add / 0.5
+				if float(bat["carga"]) <= 0.5:
+					d.remove_u(int(bat["u"]))
+				v.fuel = minf(100.0, v.fuel + add)
+			Game.tell(p.peer, "Energia do veículo: %d%%." % int(v.fuel))
+		"hotwire":
+			if not v.locked:
+				return
+			if d.level("mecanica") < 2:
+				Game.tell(p.peer, "Ligação direta exige Mecânica 2.")
+				return
+			if randf() < maxf(0.05, 0.35 - 0.08 * float(d.level("mecanica"))):
+				d.damage_limb("braco_d", 6.0)
+				d.add_xp("mecanica", 4.0)
+				Game.tell(p.peer, "Levou um choque! A ligação direta falhou.")
+				return
+			v.locked = false
+			d.add_xp("mecanica", 15.0)
+			make_noise(v.position, 300.0)
+			Game.tell(p.peer, "O motor pegou: veículo destrancado.")
+		"repair":
+			if v.cond >= 99.0:
+				Game.tell(p.peer, "Não precisa de conserto.")
+				return
+			if d.missing_tools(["martelo", "chave_fenda"]) != "":
+				Game.tell(p.peer, "Falta ferramenta: %s." % d.missing_tools(["martelo", "chave_fenda"]))
+				return
+			if not d.can_afford({"metal": 1, "sucata": 2}):
+				Game.tell(p.peer, "Conserto precisa de 1 metal e 2 sucatas.")
+				return
+			d.pay({"metal": 1, "sucata": 2})
+			v.cond = minf(100.0, v.cond + 20.0 + 4.0 * float(d.level("mecanica")))
+			d.add_xp("mecanica", 8.0)
+			Game.tell(p.peer, "Veículo consertado: %d%%." % int(v.cond))
+
+
 # ======================================================================= vida e morte
 func _process(delta: float) -> void:
 	_chunk_t -= delta
@@ -1637,6 +1787,11 @@ func _process(delta: float) -> void:
 ## Servidor: o sobrevivente de um jogador morreu (legado, corpo ou elite, renascimento).
 func on_player_died(p: Player) -> void:
 	p.cancel_busy("Você morreu.")
+	var veh := vehicle_of(p.peer)
+	if veh != null:
+		if veh.driver == p.peer:
+			veh.driver = 0
+		veh.passengers.erase(p.peer)
 	var data := p.data
 	var pos := p.position if p.is_local() else p.net_pos
 	Game.add_legacy({"nome": data.nome, "jogador": p.nome, "causa": data.death_cause, "tipo": data.death_kind,
@@ -1695,7 +1850,12 @@ func world_deltas() -> Dictionary:
 		if node != null:
 			b["fuel"] = node.fuel
 			b["open"] = node.open
-		st.append({"kind": b["kind"], "cell": [c.x, c.y], "fuel": b["fuel"], "open": b["open"]})
+			if node.kind == "canteiro":
+				b.merge(node.crop_state(), true)
+		var sd := b.duplicate()
+		sd.erase("eternal")
+		sd["cell"] = [c.x, c.y]
+		st.append(sd)
 	var floors: Array = []
 	for c in terrain_deltas:
 		floors.append([c.x, c.y, int(terrain_deltas[c])])
@@ -1738,6 +1898,10 @@ func to_dict() -> Dictionary:
 			survivors[p.nome] = {"data": p.data.to_dict(), "pos": [pos.x, pos.y]}
 	d["corpses"] = corpses
 	d["elites"] = elites
+	var vehs: Array = []
+	for n in get_tree().get_nodes_in_group("vehicles"):
+		vehs.append((n as Vehicle).to_dict())
+	d["vehicles"] = vehs
 	d["survivors"] = survivors
 	return d
 
@@ -1759,8 +1923,13 @@ func apply_deltas(save: Dictionary) -> void:
 		var c3 := Game.v2i(sd["cell"])
 		if built.has(c3) or not DB.BUILDS.has(str(sd["kind"])):
 			continue
-		built[c3] = {"kind": str(sd["kind"]), "fuel": float(sd.get("fuel", 0.0)), "open": bool(sd.get("open", false)),
-			"eternal": false}
+		var bd: Dictionary = sd.duplicate()
+		bd.erase("cell")
+		bd["kind"] = str(sd["kind"])
+		bd["fuel"] = float(sd.get("fuel", 0.0))
+		bd["open"] = bool(sd.get("open", false))
+		bd["eternal"] = false
+		built[c3] = bd
 		occupied[c3] = true
 	var cont: Dictionary = save.get("containers", {})
 	for k in cont:
@@ -1780,6 +1949,19 @@ func apply_deltas(save: Dictionary) -> void:
 
 ## Servidor ao carregar um save: entidades persistentes (cadáveres e elites de legado).
 func restore_entities(save: Dictionary) -> void:
+	# veículos: os do save, ou os abandonados do plano num mundo novo
+	if save.has("vehicles"):
+		for vd in save["vehicles"]:
+			spawn_net({"t": "veh", "kind": str(vd["kind"]), "pos": vd["pos"], "fuel": float(vd.get("fuel", 0.0)),
+				"cond": float(vd.get("cond", 50.0)), "locked": bool(vd.get("locked", true)), "items": vd.get("items", [])})
+	else:
+		var vr := RandomNumberGenerator.new()
+		vr.seed = seed_value + 992
+		for spot in vehicle_spots:
+			var pos := ground.map_to_local(spot["cell"])
+			var loot: Array = DB.roll_loot("comum", vr.randi_range(0, 2), vr) if vr.randf() < 0.6 else []
+			spawn_net({"t": "veh", "kind": spot["kind"], "pos": [pos.x, pos.y], "fuel": vr.randf_range(0.0, 35.0),
+				"cond": vr.randf_range(20.0, 70.0), "locked": true, "items": loot})
 	for cd in save.get("corpses", []):
 		var items := Items.sanitize(cd["items"])
 		spawn_net({"t": "corpse", "pos": cd["pos"], "nome": str(cd["nome"]), "items": items,

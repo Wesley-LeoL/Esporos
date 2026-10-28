@@ -51,6 +51,8 @@ var synaptic: float = 0.0
 ## Analgésico (segundos restantes) e lanterna acesa (id único da lanterna, 0 = apagada).
 var pain_t: float = 0.0
 var light_u: int = 0
+## Comida quente (segundos restantes): a estamina recupera mais rápido.
+var well_fed_t: float = 0.0
 var alive: bool = true
 ## Invulnerável (cheat de testes, por personagem).
 var god := false
@@ -500,6 +502,7 @@ func _hurt_internal(limb_id: String, amount: float, cause: String) -> void:
 ## Analgésico e lanterna.
 func _tick_gear(delta: float) -> void:
 	pain_t = maxf(0.0, pain_t - delta)
+	well_fed_t = maxf(0.0, well_fed_t - delta)
 	if light_u != 0:
 		var f := find(light_u)
 		if f.is_empty():
@@ -597,6 +600,8 @@ func _tick_stamina(delta: float, sprinting: bool) -> void:
 		regen *= 0.5
 	if pathogen > 60.0:
 		regen *= 0.7
+	if well_fed_t > 0.0:
+		regen *= 1.5
 	stamina = minf(max_stamina(), stamina + regen * delta)
 
 
@@ -904,9 +909,13 @@ func use_item(ref: Variant) -> void:
 			var spoiled := Items.spoiled(inst)
 			remove_u(u)
 			var cal := float(def["cal"])
+			water = minf(100.0, water + float(def.get("agua", 0.0)))
+			if def.get("cozido", false) and not spoiled:
+				well_fed_t = 180.0
 			if spoiled:
 				calories = minf(MAX_CAL, calories + cal * 0.4)
-				pathogen = minf(100.0, pathogen + 8.0)
+				# Culinária reduz a intoxicação (GDD 6.2)
+				pathogen = minf(100.0, pathogen + 8.0 * (1.0 - 0.08 * float(level("culinaria"))))
 				tainted_t = maxf(tainted_t, 60.0)
 				message.emit("Comida estragada! Você se sente mal (%s)." % def["nome"])
 			elif inst.has("venc") and fl < 0.35:
@@ -991,6 +1000,14 @@ func use_item(ref: Variant) -> void:
 				message.emit("Cantil cheio (uma garrafa de água limpa).")
 			else:
 				message.emit("O cantil está vazio. Encha com água limpa.")
+		"regador":
+			if float(inst.get("carga", 0.0)) >= 99.0:
+				message.emit("O regador está cheio. Use-o num canteiro [E].")
+			elif take_item("agua_suja") or take_item("agua_limpa"):
+				inst["carga"] = 100.0
+				message.emit("Regador cheio.")
+			else:
+				message.emit("Encha o regador com uma garrafa de água (limpa ou suja).")
 		"analgesico":
 			remove_u(u)
 			pain_t = 120.0
@@ -1276,7 +1293,15 @@ func craft(recipe: String) -> void:
 		message.emit("Falta ferramenta: %s." % miss)
 		return
 	pay(def["custo"])
-	give(recipe, int(def.get("qtd", 1)))
+	var out_id := String(def.get("saida", recipe))
+	if def.has("estacao") and String(Items.def(out_id).get("tipo", "")) == "comida":
+		# cozinhar pode queimar sem prática de Culinária
+		var burn := maxf(0.0, 0.2 - 0.05 * float(level("culinaria")))
+		if rng.randf() < burn:
+			add_xp("culinaria", 3.0)
+			message.emit("Queimou! Os ingredientes foram perdidos (%s)." % def["nome"])
+			return
+	give(out_id, int(def.get("qtd", 1)))
 	add_xp_map(def["xp"])
 	message.emit("Fabricado: %s." % def["nome"])
 
@@ -1289,7 +1314,7 @@ func to_dict() -> Dictionary:
 		"implants": implants.duplicate(true), "suppress_t": suppress_t, "tainted_t": tainted_t,
 		"antibiotic_t": antibiotic_t, "battery": battery, "heat": heat, "time_alive": time_alive,
 		"forca": forca, "resist": resist, "traits": traits.duplicate(), "stamina": stamina, "synaptic": synaptic,
-		"pain_t": pain_t, "light_u": light_u}
+		"pain_t": pain_t, "light_u": light_u, "well_fed_t": well_fed_t}
 
 
 static func from_dict(src: Dictionary) -> SurvivorData:
@@ -1330,6 +1355,7 @@ static func from_dict(src: Dictionary) -> SurvivorData:
 	d.synaptic = float(src.get("synaptic", 0.0))
 	d.pain_t = float(src.get("pain_t", 0.0))
 	d.light_u = int(src.get("light_u", 0))
+	d.well_fed_t = float(src.get("well_fed_t", 0.0))
 	if src.has("bags"):
 		var sb: Dictionary = src["bags"]
 		for c in d.bags:

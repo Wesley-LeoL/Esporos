@@ -278,6 +278,66 @@ def caravan():
     return P
 
 
+# ====================================================================== fase 8
+def pickup():
+    """Picape blindada (frente em +x)."""
+    P = [Part("box", (0.62, 0.30, 0.07), "dark", (0, 0, 0.22)),
+         Part("box", (0.24, 0.29, 0.18), "olive", (0.36, 0, 0.45), pattern=pat_noise(4, 1, 0.2)),
+         Part("box", (0.20, 0.28, 0.16), "olive", (0.08, 0, 0.62)),
+         Part("box", (0.015, 0.24, 0.10), "glow_dim", (0.285, 0, 0.66)),
+         Part("box", (0.30, 0.30, 0.10), "olive", (-0.32, 0, 0.37), pattern=pat_seams(0.1, (1, 0, 0))),
+         Part("box", (0.30, 0.02, 0.09), "steel", (-0.32, 0.29, 0.50)),
+         Part("box", (0.30, 0.02, 0.09), "steel", (-0.32, -0.29, 0.50)),
+         Part("box", (0.03, 0.30, 0.10), "steel", (0.62, 0, 0.36), pattern=pat_hazard(0.05)),
+         Part("box", (0.015, 0.05, 0.03), "glow_amber", (0.64, 0.20, 0.42)),
+         Part("box", (0.015, 0.05, 0.03), "glow_amber", (0.64, -0.20, 0.42))]
+    for x in (0.38, -0.36):
+        for y in (0.30, -0.30):
+            P.append(Part("cyl", (0.15, 0.05), "dark", (x, y, 0.15), rot_x(90)))
+            P.append(Part("cyl", (0.07, 0.052), "grey", (x, y, 0.15), rot_x(90)))
+    return P
+
+
+def moto():
+    """Moto elétrica (frente em +x)."""
+    P = [Part("cyl", (0.14, 0.03), "dark", (0.30, 0, 0.14), rot_x(90)),
+         Part("cyl", (0.14, 0.03), "dark", (-0.30, 0, 0.14), rot_x(90)),
+         Part("cyl", (0.06, 0.032), "glow_cyan", (0.30, 0, 0.14), rot_x(90)),
+         Part("cyl", (0.06, 0.032), "glow_cyan", (-0.30, 0, 0.14), rot_x(90)),
+         Part("box", (0.26, 0.06, 0.08), "slate", (0, 0, 0.30), pattern=pat_seams(0.1, (1, 0, 0))),
+         Part("box", (0.14, 0.07, 0.04), "dark", (-0.08, 0, 0.40)),
+         Part("box", (0.03, 0.03, 0.14), "grey", (0.24, 0, 0.42), rot_y(-20)),
+         Part("box", (0.02, 0.16, 0.02), "grey", (0.28, 0, 0.55)),
+         Part("box", (0.012, 0.04, 0.03), "glow_cyan", (0.33, 0, 0.40))]
+    return P
+
+
+def planter(stage):
+    """Canteiro: 0 vazio, 1 broto, 2 crescendo, 3 maduro, 4 murcho."""
+    P = [Part("box", (0.42, 0.42, 0.10), "wood", (0, 0, 0.10), pattern=pat_planks(0.08, 0)),
+         Part("box", (0.38, 0.38, 0.02), "rust", (0, 0, 0.21), pattern=pat_noise(6, 1, 0.3))]
+    if stage == 0:
+        return P
+    mat = {1: "fungus", 2: "fungus", 3: "olive", 4: "rust"}[stage]
+    h = {1: 0.06, 2: 0.16, 3: 0.24, 4: 0.10}[stage]
+    for x in (-0.20, 0.0, 0.20):
+        for y in (-0.20, 0.0, 0.20):
+            P.append(Part("ell", (0.07, 0.07, h), mat, (x, y, 0.22 + h)))
+            if stage == 3:
+                P.append(Part("ell", (0.04, 0.04, 0.04), "red", (x + 0.03, y, 0.22 + h * 1.5)))
+    return P
+
+
+def stove(on):
+    P = [Part("box", (0.26, 0.26, 0.16), "steel", (0, 0, 0.16), pattern=pat_seams(0.13, (0, 0, 1))),
+         Part("cyl", (0.16, 0.03), "dark", (0, 0, 0.35)),
+         Part("cyl", (0.12, 0.10), "grey", (0, 0, 0.48)),
+         Part("box", (0.015, 0.08, 0.04), "glow_amber" if on else "glow_off", (0.265, 0, 0.12))]
+    if on:
+        P.append(Part("cyl", (0.10, 0.02), "glow_amber", (0, 0, 0.39)))
+    return P
+
+
 # ====================================================================== ícones de itens
 def item_model(item):
     """Modelo pequeno de cada item (para os ícones do inventário). Unidades livres."""
@@ -439,6 +499,32 @@ def item_model(item):
         "cartucho_12": [Part("box", (0.26, 0.18, 0.12), "red", (0, 0, 0.12)),
                         Part("cyl", (0.05, 0.10), "red", (0.06, 0.04, 0.34)),
                         Part("cyl", (0.05, 0.03), "mustard", (0.06, 0.04, 0.24))],
+        # ---- fase 8: agricultura, culinária
+        "semente_batata": [Part("box", (0.20, 0.28, 0.04), "mustard", (0, 0, 0.04)),
+                           Part("ell", (0.07, 0.07, 0.05), "rust", (0.02, 0.02, 0.12))],
+        "semente_milho": [Part("box", (0.20, 0.28, 0.04), "olive", (0, 0, 0.04)),
+                          Part("ell", (0.05, 0.05, 0.04), "mustard", (0.02, 0.02, 0.11))],
+        "semente_tomate": [Part("box", (0.20, 0.28, 0.04), "red", (0, 0, 0.04)),
+                           Part("ell", (0.05, 0.05, 0.04), "bone", (0.02, 0.02, 0.11))],
+        "batata": [Part("ell", (0.30, 0.22, 0.18), "rust", (0, 0, 0.18), pattern=pat_noise(5, 1, 0.2))],
+        "milho": [Part("ell", (0.12, 0.12, 0.40), "mustard", (0, 0, 0.40), rot_y(60), pattern=pat_noise(7, 1, 0.3)),
+                  Part("ell", (0.10, 0.14, 0.30), "fungus", (-0.08, 0, 0.30), rot_y(60))],
+        "tomate": [Part("ell", (0.26, 0.26, 0.22), "red", (0, 0, 0.22)),
+                   Part("ell", (0.10, 0.10, 0.03), "fungus", (0, 0, 0.44))],
+        "enxada": [Part("cyl", (0.03, 0.50), "wood", (0, 0, 0.06), rot_y(90)),
+                   Part("box", (0.04, 0.16, 0.12), "steel", (0.50, 0, 0.12))],
+        "regador": [Part("cyl", (0.20, 0.22), "teal", (0, 0, 0.22)),
+                    Part("cyl", (0.03, 0.22), "teal", (0.26, 0, 0.36), rot_y(55)),
+                    Part("box", (0.03, 0.14, 0.03), "teal", (-0.18, 0, 0.48))],
+        "panela": [Part("cyl", (0.28, 0.16), "steel", (0, 0, 0.16)),
+                   Part("cyl", (0.26, 0.02), "dark", (0, 0, 0.32)),
+                   Part("box", (0.20, 0.03, 0.03), "dark", (0.40, 0, 0.26))],
+        "sopa": [Part("cyl", (0.26, 0.10), "bone", (0, 0, 0.10)),
+                 Part("cyl", (0.22, 0.02), "mustard", (0, 0, 0.20))],
+        "ensopado": [Part("cyl", (0.26, 0.10), "bone", (0, 0, 0.10)),
+                     Part("cyl", (0.22, 0.02), "rust", (0, 0, 0.20)),
+                     Part("ell", (0.06, 0.06, 0.03), "red", (0.05, 0.04, 0.22))],
+        "milho_assado": [Part("ell", (0.12, 0.12, 0.40), "rust", (0, 0, 0.40), rot_y(60), pattern=pat_noise(7, 1, 0.4))],
         "pao": [Part("ell", (0.46, 0.22, 0.18), "mustard", (0, 0, 0.18), pattern=pat_seams(0.25, (1, 0, 0)))],
     }
     return m[item]

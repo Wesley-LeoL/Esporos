@@ -14,9 +14,9 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy"]
+	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy", "vehicle"]
 ## Ações que levam tempo (barra de progresso; mover-se ou levar dano interrompe).
-const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item"]
+const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item", "vehicle"]
 const TREAT_NAMES := {"antibiotico": "Aplicando antibiótico", "desinfetar": "Desinfetando", "enfaixar": "Enfaixando",
 	"suturar": "Suturando"}
 const USE_TIME := {"comida": 1.5, "bebida": 1.5, "cantil": 1.2, "mascara": 2.0, "filtro": 2.5, "manual": 8.0,
@@ -73,6 +73,7 @@ var _spasm_t := 0.0
 var _spasm_dir := Vector2.ZERO
 var _glitch_t := 1.0
 var _step_t := 0.0
+var _drive_k := 0.0
 var _fire_cd := 0.0
 var _light: PointLight2D
 ## Servidor: ação com tempo em andamento {action, args, partner} ou {passive, partner}.
@@ -162,12 +163,25 @@ func _local_control(delta: float) -> void:
 		input = _overload_input(input, delta)
 	else:
 		_input_buf.clear()
+	var veh := world.vehicle_of(peer) if world != null else null
+	if veh != null and veh.driver != peer:
+		# passageiro: vai junto com o veículo
+		position = veh.position
+		net_pos = position
+		moving = false
+		sprinting = false
+		return
 	moving = input != Vector2.ZERO
 	if moving:
 		facing = _vector_to_facing(input)
 	var mult := data.speed_mult() if data != null else 1.0
 	sprinting = moving and not sneaking and Input.is_action_pressed("sprint") and data != null and data.can_sprint()
-	if sprinting:
+	if veh != null:
+		# motorista: o personagem anda na velocidade do veículo (se ele puder andar)
+		sprinting = false
+		_drive_k = move_toward(_drive_k, veh.speed_mult() if veh.can_run() and moving else 0.0, delta * 2.5)
+		mult = _drive_k
+	elif sprinting:
 		mult *= 1.55
 	elif sneaking:
 		mult *= 0.55
@@ -177,7 +191,7 @@ func _local_control(delta: float) -> void:
 	attack_cd = maxf(0.0, attack_cd - delta)
 	_update_nearby()
 	if build_kind == "" and not demolish and attack_cd <= 0.0 and Input.is_action_pressed("attack") \
-			and not console_open and not menu_open:
+			and not console_open and not menu_open and veh == null:
 		attack_cd = 0.55
 		attack_seq += 1
 		var aim := facing
@@ -353,6 +367,8 @@ func _do_act(action: String, args: Array) -> void:
 	if is_busy() and (action in TIMED or action in ["attack", "build", "demolish", "interact"]):
 		Game.tell(peer, "Você está ocupado (%s). Mova-se para cancelar." % busy_label)
 		return
+	if action == "craft" and not _station_ok(str(args[0])):
+		return
 	if action in TIMED:
 		var patient := _patient_of(action, args)
 		if patient == null:
@@ -392,7 +408,8 @@ func _run_act(action: String, args: Array) -> void:
 				pt.data.treat(str(args[0]), str(args[1]), data if pt != self else null)
 				pt._sync_t = 0.0
 		"craft":
-			data.craft(str(args[0]))
+			if _station_ok(str(args[0])):
+				data.craft(str(args[0]))
 		"install":
 			var pi := _patient_of(action, args)
 			if pi != null:
@@ -421,12 +438,24 @@ func _run_act(action: String, args: Array) -> void:
 			world.donate(self, int(args[0]), int(args[1]), int(args[2]))
 		"buy":
 			world.buy(self, int(args[0]), str(args[1]))
+		"vehicle":
+			world.vehicle_action(self, str(args[0]), str(args[1]))
 		"save":
 			Game.save_game()
 			Game.tell(peer, "Jogo salvo pelo anfitrião.")
 	_sync_t = 0.0
 	if is_local():
 		data_changed.emit()
+
+
+func _station_ok(recipe: String) -> bool:
+	if not DB.CRAFTS.has(recipe):
+		return false
+	var st := String(DB.CRAFTS[recipe].get("estacao", ""))
+	if st == "" or world.station_near(position if is_local() else net_pos, st):
+		return true
+	Game.tell(peer, "Precisa estar perto de um %s." % String(DB.BUILDS[st]["nome"]).to_lower())
+	return false
 
 
 # ------------------------------------------------------------------ ações com tempo (servidor)
@@ -476,6 +505,8 @@ func _duration(action: String, args: Array, patient: Player) -> float:
 			if gun.is_empty():
 				return 0.0
 			return (1.6 if int(Items.def(gun["id"])["pente"]) > 2 else 2.4) * (1.0 - 0.06 * float(data.level("pontaria")))
+		"vehicle":
+			return {"hotwire": 6.0 * (1.0 - 0.08 * float(data.level("mecanica"))), "repair": 6.0, "refuel": 2.0}.get(str(args[1]), 0.0)
 		"use_item":
 			var inst := data._resolve(args[0] if (args[0] is int or args[0] is String) else str(args[0]))
 			if inst.is_empty():
@@ -506,6 +537,8 @@ func _busy_text(action: String, args: Array, patient: Player) -> String:
 			return "Recarregando"
 		"repair":
 			return "Consertando"
+		"vehicle":
+			return {"hotwire": "Ligação direta", "repair": "Consertando o veículo", "refuel": "Abastecendo"}.get(str(args[1]), "Veículo")
 		"use_item":
 			var inst := data._resolve(args[0] if (args[0] is int or args[0] is String) else str(args[0]))
 			return "Usando " + DB.item_name(inst["id"]) if not inst.is_empty() else "Usando"
@@ -758,8 +791,13 @@ func show_death_ui(info: Dictionary) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_local() or not alive:
 		return
-	if event.is_action_pressed("interact") and nearby != null and is_instance_valid(nearby):
-		if (nearby is LootContainer or nearby is Corpse) and Game.hud != null:
+	var in_veh := world.vehicle_of(peer)
+	if event.is_action_pressed("interact") and in_veh != null:
+		act("vehicle", [world.key_of(in_veh), "exit"])
+	elif event.is_action_pressed("interact") and nearby != null and is_instance_valid(nearby):
+		if nearby is Vehicle and Game.hud != null:
+			Game.hud.open_vehicle(nearby)
+		elif (nearby is LootContainer or nearby is Corpse) and Game.hud != null:
 			Game.hud.open_loot(nearby)
 		elif nearby is Npc and Game.hud != null:
 			Game.hud.open_village((nearby as Npc).village_id)
@@ -841,7 +879,9 @@ func _draw() -> void:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
 		draw_arc(Vector2.ZERO, r, 0.0, TAU, 48, Color(0.9, 0.9, 1.0, 0.08 if sneaking else 0.12), 1.5)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	GenArt.draw_frame(self, _sheet(), facing, _frame % 100 if _frame >= 0 else 0, Vector2.ZERO, tint)
+	var in_vehicle := world != null and world.vehicle_of(peer) != null
+	if not in_vehicle:
+		GenArt.draw_frame(self, _sheet(), facing, _frame % 100 if _frame >= 0 else 0, Vector2.ZERO, tint)
 	if busy_label != "" and busy_end > Game.play_time and busy_total > 0.0:
 		var k := clampf(1.0 - (busy_end - Game.play_time) / busy_total, 0.0, 1.0)
 		draw_rect(Rect2(-16, -58, 32, 4), Color(0, 0, 0, 0.7))

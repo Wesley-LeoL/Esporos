@@ -127,6 +127,10 @@ def gen_props():
     row.append(R(am.loot_bag(), 30))
     crop_sheet("containers", "props", [row], "caixas (cheia/vazia) e saco")
     crop_sheet("caravan", "props", [[R(am.caravan(), t) for t in (0, 90, 180, 270)]], "caravana (SE, SO, NO, NE)")
+    crop_sheet("picape", "props", [[R(am.pickup(), FACING_THETA[d]) for d in range(8)]], "picape (8 direções)")
+    crop_sheet("moto", "props", [[R(am.moto(), FACING_THETA[d]) for d in range(8)]], "moto (8 direções)")
+    crop_sheet("canteiro", "structures", [[R(am.planter(st)) for st in range(5)]], "canteiro (vazio..murcho)")
+    crop_sheet("fogareiro", "structures", [[R(am.stove(True)), R(am.stove(False))]], "fogareiro")
 
 
 # ---------------------------------------------------------------- ícones
@@ -141,7 +145,8 @@ ITEMS = ["feijao", "carne_seca", "barra_cereal", "agua_limpa", "agua_suja", "mas
          "proc_neural_mk1", "proc_neural_mk2", "implante_pernas", "implante_derme",
          "chave_fenda", "martelo", "serra", "alicate", "lanterna", "pilha", "pregos", "fios",
          "sucata_eletronica", "cantil", "gaze", "analgesico", "alcool", "pistola", "espingarda",
-         "municao_9mm", "cartucho_12"]
+         "municao_9mm", "cartucho_12", "semente_batata", "semente_milho", "semente_tomate", "batata", "milho",
+         "tomate", "enxada", "regador", "panela", "sopa", "ensopado", "milho_assado"]
 
 
 def fit_icon(parts, theta):
