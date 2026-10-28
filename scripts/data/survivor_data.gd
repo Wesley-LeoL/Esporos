@@ -1280,19 +1280,21 @@ func maintain_implant(slot: String) -> void:
 	message.emit("Manutenção feita: %s." % DB.IMPLANT_SLOTS[slot])
 
 
-func craft(recipe: String) -> void:
+## Fabrica. 'paid' = os materiais já foram pagos (com recipientes próximos, pelo World).
+func craft(recipe: String, paid := false) -> void:
 	var def: Dictionary = DB.CRAFTS[recipe]
 	if not meets(def["req"]):
 		message.emit("Habilidade insuficiente: %s." % DB.req_text(def["req"]))
 		return
-	if not can_afford(def["custo"]):
+	if not paid and not can_afford(def["custo"]):
 		message.emit("Faltam materiais: %s." % DB.cost_text(def["custo"]))
 		return
 	var miss := missing_tools(def.get("ferramentas", []))
 	if miss != "":
 		message.emit("Falta ferramenta: %s." % miss)
 		return
-	pay(def["custo"])
+	if not paid:
+		pay(def["custo"])
 	var out_id := String(def.get("saida", recipe))
 	if def.has("estacao") and String(Items.def(out_id).get("tipo", "")) == "comida":
 		# cozinhar pode queimar sem prática de Culinária

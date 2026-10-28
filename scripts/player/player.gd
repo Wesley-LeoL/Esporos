@@ -408,8 +408,16 @@ func _run_act(action: String, args: Array) -> void:
 				pt.data.treat(str(args[0]), str(args[1]), data if pt != self else null)
 				pt._sync_t = 0.0
 		"craft":
-			if _station_ok(str(args[0])):
-				data.craft(str(args[0]))
+			var rid := str(args[0])
+			if _station_ok(rid):
+				var cdef: Dictionary = DB.CRAFTS[rid]
+				if not data.can_afford(cdef["custo"]) and data.meets(cdef["req"]) and data.missing_tools(cdef.get("ferramentas", [])) == "" \
+						and world.afford_near(self, cdef["custo"]):
+					# usa materiais dos baús e sacos por perto
+					world.pay_near(self, cdef["custo"])
+					data.craft(rid, true)
+				else:
+					data.craft(rid)
 		"install":
 			var pi := _patient_of(action, args)
 			if pi != null:

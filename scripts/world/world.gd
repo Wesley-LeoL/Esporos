@@ -1064,6 +1064,47 @@ func store_into(p: Player, key: String, u: int, n: int) -> void:
 	container_changed(node)
 
 
+## Recipientes do mundo perto do jogador cujos materiais valem para construir e fabricar
+## (baús, sacos no chão e caixas a até ~2 tiles).
+func _near_storage(p: Player) -> Array:
+	var out: Array = []
+	for n in get_tree().get_nodes_in_group("containers"):
+		var lc := n as LootContainer
+		if not lc.is_queued_for_deletion() and _near(p, lc, 130.0) and not lc.items.is_empty():
+			out.append(lc)
+	return out
+
+
+func afford_near(p: Player, cost: Dictionary) -> bool:
+	var stores := _near_storage(p)
+	for k in cost:
+		var have := p.data.count(k)
+		for lc in stores:
+			have += Items.count(lc.items, k)
+		if have < int(cost[k]):
+			return false
+	return true
+
+
+## Paga primeiro com o inventário e o que faltar com os recipientes próximos.
+func pay_near(p: Player, cost: Dictionary) -> void:
+	var stores := _near_storage(p)
+	for k in cost:
+		var need := int(cost[k])
+		var mine := mini(need, p.data.count(k))
+		if mine > 0:
+			p.data.take_item(k, mine)
+			need -= mine
+		for lc in stores:
+			if need <= 0:
+				break
+			var here := mini(need, Items.count(lc.items, k))
+			if here > 0:
+				Items.take(lc.items, k, here)
+				need -= here
+				container_changed(lc)
+
+
 ## Servidor: larga itens no chão (junta num saco próximo, se houver).
 func drop_items(pos: Vector2, list: Array) -> void:
 	if list.is_empty():
@@ -1208,14 +1249,14 @@ func try_place(kind: String, c: Vector2i, p: Player) -> bool:
 	if not p.data.meets(def["req"]):
 		Game.tell(p.peer, "Conhecimento insuficiente: exige %s." % DB.req_text(def["req"]))
 		return false
-	if not p.data.can_afford(def["custo"]):
+	if not afford_near(p, def["custo"]):
 		Game.tell(p.peer, "Faltam materiais: %s." % DB.cost_text(def["custo"]))
 		return false
 	var miss := p.data.missing_tools(def.get("ferramentas", []))
 	if miss != "":
 		Game.tell(p.peer, "Falta ferramenta: %s." % miss)
 		return false
-	p.data.pay(def["custo"])
+	pay_near(p, def["custo"])
 	make_noise(ground.map_to_local(c), 240.0)
 	_build_done.rpc(kind, c.x, c.y)
 	p.data.add_xp_map(def["xp"])

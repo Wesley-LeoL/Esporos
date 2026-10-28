@@ -299,6 +299,9 @@ func debug_command(cmd: String) -> void:
 				p.teleport(bs.position + Vector2(0, 14))
 		"craft":
 			p.act("craft", [arg])
+		"built":
+			print("construções salvas: %d · baús: %d · veículos: %d · %s" % [world.built.size(), world.chest_data.size(),
+				get_tree().get_nodes_in_group("vehicles").size(), str(world.built.values().map(func(b): return b["kind"]))])
 		"chunks":
 			print("chunks carregados: %d · estruturas: %d · caixas: %d · infectados: %d" % [world.loaded.size(),
 				world.structures.size(), world.container_nodes.size(), get_tree().get_nodes_in_group("infected").size()])

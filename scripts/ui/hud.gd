@@ -973,11 +973,27 @@ func _tab_inventory(d: SurvivorData) -> void:
 		var tools: Array = cdef.get("ferramentas", [])
 		var station := String(cdef.get("estacao", ""))
 		var near := station == "" or Game.world.station_near(_player().position, station)
-		var ok := d.meets(cdef["req"]) and d.can_afford(cdef["custo"]) and d.missing_tools(tools) == "" and near
+		var ok := d.meets(cdef["req"]) and _afford_local(cdef["custo"]) and d.missing_tools(tools) == "" and near
 		_lbl(crow, "%s: %s · exige %s · ferramentas: %s%s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"]),
 			DB.tools_text(tools), ("" if station == "" else " · perto de: %s" % String(DB.BUILDS[station]["nome"]).to_lower())],
 			UITheme.TEXT if ok else NO_COLOR)
 		_btn(crow, "Fabricar", _act(func() -> void: _player().act("craft", [rid])), d.meets(cdef["req"]))
+
+
+## Materiais no inventário + recipientes por perto (como o anfitrião confere).
+func _afford_local(cost: Dictionary) -> bool:
+	var p := _player()
+	var d := p.data
+	for k in cost:
+		var have := d.count(k)
+		for n in get_tree().get_nodes_in_group("containers"):
+			var lc := n as LootContainer
+			var off := lc.position - p.position
+			if Vector2(off.x, off.y * 2.0).length() <= 130.0:
+				have += Items.count(lc.items, k)
+		if have < int(cost[k]):
+			return false
+	return true
 
 
 ## Cor do texto de estado de um item (estragado/quebrando em vermelho, passado em amarelo).
@@ -1463,7 +1479,7 @@ func _tab_build(p: Player) -> void:
 	var box: VBoxContainer = boxes["build"]
 	_clear(box)
 	var d := p.data
-	_lbl(box, "Escolha uma estrutura e clique no mapa. Esc/botão direito cancela. X liga o modo demolição (devolve 50%).", UITheme.MUTED)
+	_lbl(box, "Escolha uma estrutura e clique no mapa. Materiais em baús e sacos a até 2 tiles também contam. Esc/botão direito cancela. X liga o modo demolição (devolve 50%).", UITheme.MUTED)
 	for k: String in DB.BUILDS:
 		var def: Dictionary = DB.BUILDS[k]
 		var row := _row(box)
