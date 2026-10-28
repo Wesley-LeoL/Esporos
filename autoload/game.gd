@@ -1,6 +1,6 @@
 extends Node
-## Estado global: log de mensagens, legado de personagens mortos, salvamento (deltas)
-## e comandos de depuração usados pelas ferramentas de teste.
+## Estado global: mensagens (locais, para um jogador ou para todos), legado de personagens
+## mortos, salvamento (deltas, só no anfitrião) e comandos de depuração dos testes.
 
 signal log_message(text: String)
 
@@ -9,24 +9,62 @@ const SAVE_PATH := "user://esporos_save.json"
 var world: World
 var hud: HUD
 var console: DevConsole
-var god := false
 var legacy: Array = []
+## Sobreviventes de jogadores que não estão na sessão agora (nome do jogador -> dados).
+var survivor_cache := {}
 var play_time := 0.0
 var rng := RandomNumberGenerator.new()
 
 var _autosave_t := 25.0
+var _log_stdout := false
 
 
 func _ready() -> void:
 	rng.randomize()
+	_log_stdout = "--log-msgs" in OS.get_cmdline_user_args()
 
 
+## Mensagem só nesta máquina.
 func say(text: String) -> void:
 	log_message.emit(text)
+	if _log_stdout:
+		print("[msg %s] %s" % [Net.player_name, text])
+
+
+## Servidor: mensagem para um jogador.
+func tell(peer: int, text: String) -> void:
+	if peer == Net.my_id() or peer == 0:
+		say(text)
+	elif Net.is_server():
+		_say.rpc_id(peer, text)
+
+
+## Servidor: mensagem para todos.
+func say_all(text: String) -> void:
+	if not Net.is_server():
+		return
+	say(text)
+	_say.rpc(text)
+
+
+@rpc("authority", "reliable")
+func _say(text: String) -> void:
+	say(text)
+
+
+## Servidor: registra uma morte no legado e repassa a lista a todos.
+func add_legacy(entry: Dictionary) -> void:
+	legacy.append(entry)
+	_set_legacy.rpc(legacy)
+
+
+@rpc("authority", "reliable")
+func _set_legacy(list: Array) -> void:
+	legacy = list
 
 
 func _process(delta: float) -> void:
-	if world == null:
+	if world == null or not Net.is_server():
 		return
 	play_time += delta
 	_autosave_t -= delta
@@ -36,7 +74,7 @@ func _process(delta: float) -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and Net.is_server():
 		save_game()
 
 
@@ -66,7 +104,7 @@ func read_save() -> Dictionary:
 
 
 func save_game() -> void:
-	if world == null or world.player == null or world.player.data == null:
+	if world == null or not Net.is_server() or Net.mode == "":
 		return
 	var dict := world.to_dict()
 	dict["legacy"] = legacy
@@ -87,7 +125,9 @@ func debug_command(cmd: String) -> void:
 	var command := parts[0]
 	var arg := parts[1] if parts.size() > 1 else ""
 	var a := arg.split(",")
-	var p: Player = world.player if world != null else null
+	var p: Player = world.local_player() if world != null else null
+	if p == null:
+		return
 	match command:
 		"give":
 			p.data.add_item(a[0], int(a[1]) if a.size() > 1 else 1)
@@ -98,8 +138,7 @@ func debug_command(cmd: String) -> void:
 		"hurt":
 			p.data.damage_limb(a[0], float(a[1]))
 		"tp":
-			p.position = world.ground.map_to_local(Vector2i(int(a[0]), int(a[1])))
-			p.camera.reset_smoothing()
+			p.teleport(world.ground.map_to_local(Vector2i(int(a[0]), int(a[1]))))
 		"tab":
 			hud.open_menu(int(arg))
 		"close":
@@ -113,14 +152,15 @@ func debug_command(cmd: String) -> void:
 		"build":
 			p.build_kind = arg
 		"face":
-			p.facing = int(arg) as Player.Facing
+			p.facing = int(arg)
 		"infect":
 			p.data.pathogen = 100.0
 		"bleed":
 			p.data.blood = 0.0
 		"place":
 			var base := world.ground.local_to_map(world.ground.to_local(p.position))
-			world.try_place(a[0], base + Vector2i(int(a[1]), int(a[2])), p)
+			var target := base + Vector2i(int(a[1]), int(a[2]))
+			p.act("build", [a[0], target.x, target.y])
 		"tpb":
 			# teleporta para a frente do maior prédio próximo (teste de ordenação de profundidade)
 			var best: Structure = null
@@ -136,8 +176,7 @@ func debug_command(cmd: String) -> void:
 				var side := float(arg) if arg != "" else 0.5
 				var front := best.position + Vector2(-World.HALF_W * 0.5 * (w + d), World.HALF_H * 0.5 * (d - w)).lerp(
 					Vector2(World.HALF_W * 0.5 * (w - d), World.HALF_H * 0.5 * (w + d)), side)
-				p.position = front + Vector2(0, 14)
-				p.camera.reset_smoothing()
+				p.teleport(front + Vector2(0, 14))
 		"tproad":
 			# teleporta para um trecho de estrada longe das vilas (teste do mobiliário urbano)
 			var blocks: Array = world.road_blocks.keys()
@@ -151,10 +190,28 @@ func debug_command(cmd: String) -> void:
 						far = false
 				if far:
 					if count == n:
-						p.position = world.ground.map_to_local(b) + Vector2(0, World.HALF_H)
-						p.camera.reset_smoothing()
+						p.teleport(world.ground.map_to_local(b) + Vector2(0, World.HALF_H))
 						break
 					count += 1
+		"use":
+			p.act("use_item", [arg])
+		"goto_loot":
+			# vai até a caixa mais próxima com itens (testes)
+			var best: Node2D = null
+			for n in get_tree().get_nodes_in_group("containers"):
+				var lc := n as LootContainer
+				if not lc.items.is_empty() and (best == null or lc.position.distance_to(p.position) < best.position.distance_to(p.position)):
+					best = lc
+			if best != null:
+				p.teleport(best.position + Vector2(0, 12))
+		"goto_corpse":
+			var cs := get_tree().get_nodes_in_group("corpses")
+			if not cs.is_empty():
+				p.teleport((cs[0] as Node2D).position + Vector2(0, 12))
+		"interact_near":
+			p._update_nearby()
+			if p.nearby != null:
+				p.act("interact", [world.key_of(p.nearby)])
 		"con":
 			console.execute(arg)
 		"conopen":

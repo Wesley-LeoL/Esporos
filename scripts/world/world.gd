@@ -25,7 +25,7 @@ const PROPS: Array[String] = ["Advertising5", "Advertising6", "Advertising7", "S
 ## Peso dos prédios do pacote FreeSample contra os do Town Sampler (ExtraCatalog).
 const FS_WEIGHT := 60.0
 ## Versão do save: muda quando a geração do mundo muda (saves antigos não batem com o mapa).
-const SAVE_VERSION := 2
+const SAVE_VERSION := 3
 const VILLAGE_NAMES: Array[String] = ["Abrigo Alfa", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
 	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix"]
 
@@ -35,8 +35,13 @@ var ground: TileMapLayer
 var art_ground: Node2D
 var build_layer: TileMapLayer
 var entities: Node2D
+## Entidades replicadas (jogadores, infectados, cadáveres, sacos, caravanas): filhas deste
+## nó, criadas só pelo servidor através do MultiplayerSpawner.
+var net_root: Node2D
+var spawner: MultiplayerSpawner
 var ghost: BuildGhost
-var player: Player
+## peer -> Player
+var players := {}
 var noise := FastNoiseLite.new()
 var spore_noise := FastNoiseLite.new()
 var villages: Array[VillageData] = []
@@ -52,11 +57,12 @@ var _ground_art: Array[Dictionary] = []
 
 var _spawn_t := 2.0
 var _village_t := 6.0
-var _respawn_t := -1.0
+var _net_counter := 0
 
 
 # ======================================================================= geração
 func generate(new_seed: int) -> void:
+	name = "World"
 	seed_value = new_seed
 	rng.seed = new_seed
 	noise.seed = new_seed
@@ -74,8 +80,18 @@ func generate(new_seed: int) -> void:
 	build_layer.tile_set = ts
 	add_child(build_layer)
 	entities = Node2D.new()
+	entities.name = "Entities"
 	entities.y_sort_enabled = true
 	add_child(entities)
+	net_root = Node2D.new()
+	net_root.name = "Net"
+	net_root.y_sort_enabled = true
+	entities.add_child(net_root)
+	spawner = MultiplayerSpawner.new()
+	spawner.name = "Spawner"
+	add_child(spawner)
+	spawner.spawn_path = spawner.get_path_to(net_root)
+	spawner.spawn_function = _spawn_entity
 	ghost = BuildGhost.new()
 	add_child(ghost)
 	_paint_terrain()
@@ -85,10 +101,6 @@ func generate(new_seed: int) -> void:
 	_scatter_ruins()
 	_flush_ground_art()
 	_decorate_roads()
-	player = Player.new()
-	player.world = self
-	entities.add_child(player)
-	player.died.connect(_on_player_died)
 
 
 func _build_tileset() -> TileSet:
@@ -520,6 +532,231 @@ func purifier_near(world_pos: Vector2) -> bool:
 	return false
 
 
+# ======================================================================= jogadores
+func local_player() -> Player:
+	return players.get(Net.my_id())
+
+
+func alive_players() -> Array[Player]:
+	var out: Array[Player] = []
+	for k in players:
+		var p: Player = players[k]
+		if p.alive:
+			out.append(p)
+	return out
+
+
+## Jogador vivo mais próximo (distância isométrica) ou null.
+func nearest_player(pos: Vector2, max_iso := 1e9) -> Player:
+	var best: Player = null
+	var best_d := max_iso
+	for p in alive_players():
+		var off := p.position - pos
+		var d := Vector2(off.x, off.y * 2.0).length()
+		if d < best_d:
+			best_d = d
+			best = p
+	return best
+
+
+func shelter_pos() -> Vector2:
+	return ground.map_to_local(Vector2i.ZERO) + Vector2(Game.rng.randf_range(-20, 20), Game.rng.randf_range(4, 14))
+
+
+## Servidor: cria o personagem de um jogador (sobrevivente salvo pelo nome ou um novo).
+func spawn_player(peer: int) -> Player:
+	var pname := Net.name_of(peer)
+	var saved: Dictionary = Game.survivor_cache.get(pname, {})
+	var pos := shelter_pos()
+	if not saved.is_empty():
+		pos = Game.v2(saved.get("pos", [pos.x, pos.y]))
+	var p: Player = spawn_net({"t": "player", "peer": peer, "nome": pname, "pos": [pos.x, pos.y]})
+	var data: SurvivorData
+	if saved.is_empty():
+		data = SurvivorData.random_survivor(Game.rng)
+	else:
+		data = SurvivorData.from_dict(saved.get("data", {}))
+	_attach_data(p, data)
+	if saved.is_empty():
+		Game.tell(peer, "Novo sobrevivente: %s. Você acorda no Abrigo Alfa." % data.nome)
+	else:
+		Game.tell(peer, "Bem-vindo de volta, %s." % data.nome)
+	if peer != Net.my_id():
+		Game.say_all("%s entrou na sessão." % pname)
+	return p
+
+
+func _attach_data(p: Player, data: SurvivorData) -> void:
+	p.data = data
+	p.alive = true
+	var peer := p.peer
+	data.message.connect(func(t: String) -> void: Game.tell(peer, t))
+	p._last_sync = ""
+	if p.is_local():
+		p.data_changed.emit()
+
+
+## Servidor: jogador saiu; guarda o sobrevivente para quando ele voltar.
+func remove_player(peer: int, pname: String) -> void:
+	var p: Player = players.get(peer)
+	if p == null:
+		return
+	if p.data != null and p.alive:
+		Game.survivor_cache[pname] = {"data": p.data.to_dict(), "pos": [p.net_pos.x, p.net_pos.y]}
+	players.erase(peer)
+	p.queue_free()
+	Game.say_all("%s saiu da sessão." % pname)
+
+
+# ======================================================================= entidades replicadas
+## Servidor: cria uma entidade replicada (ver _spawn_entity).
+func spawn_net(d: Dictionary) -> Node:
+	if not Net.is_server():
+		return null
+	_net_counter += 1
+	if not d.has("name"):
+		d["name"] = "%s%d" % [d["t"], _net_counter]
+	return spawner.spawn(d)
+
+
+## Roda em todos os peers com os mesmos dados (o servidor manda via MultiplayerSpawner).
+func _spawn_entity(d: Dictionary) -> Node:
+	var node: Node2D
+	match String(d["t"]):
+		"player":
+			var p := Player.new()
+			p.world = self
+			p.nome = str(d["nome"])
+			p.setup_net(int(d["peer"]))
+			p.position = Game.v2(d["pos"])
+			p.net_pos = p.position
+			players[int(d["peer"])] = p
+			p.tree_exiting.connect(func() -> void:
+				if players.get(p.peer) == p:
+					players.erase(p.peer))
+			node = p
+		"inf":
+			var e := Infected.new()
+			e.world = self
+			e.setup(bool(d["elite"]))
+			e.legacy = bool(d.get("legacy", false))
+			e.legacy_name = str(d.get("legacy_name", ""))
+			e.position = Game.v2(d["pos"])
+			e.home = Game.v2(d.get("home", d["pos"]))
+			if d.has("hp"):
+				e.hp = float(d["hp"])
+			e.setup_net()
+			node = e
+		"corpse":
+			var c := Corpse.new()
+			c.world = self
+			c.nome = str(d["nome"])
+			c.items = d.get("items", {})
+			c.decomp = float(d.get("decomp", 0.0))
+			c.position = Game.v2(d["pos"])
+			c.setup_net()
+			node = c
+		"bag":
+			var lc := LootContainer.new()
+			lc.temporary = true
+			lc.items = d.get("items", {})
+			lc.position = Game.v2(d["pos"])
+			lc.setup_net()
+			node = lc
+		"car":
+			var car := Caravan.new()
+			car.world = self
+			car.from_id = int(d["from"])
+			car.to_id = int(d["to"])
+			car.cargo = d.get("cargo", {})
+			car.path = routes.get("%d>%d" % [car.from_id, car.to_id], PackedVector2Array())
+			car.position = car.path[0] if car.path.size() > 0 else Vector2.ZERO
+			car.setup_net()
+			node = car
+	node.name = str(d["name"])
+	return node
+
+
+## Chave estável de um objeto interativo (igual em todos os peers).
+func key_of(node: Node) -> String:
+	if node is LootContainer and not (node as LootContainer).temporary:
+		return "c:%d" % (node as LootContainer).id
+	if node is Structure:
+		var c := (node as Structure).cell
+		return "s:%d,%d" % [c.x, c.y]
+	return "n:" + String(node.name)
+
+
+func node_of(key: String) -> Node:
+	var kind := key.substr(0, 2)
+	var rest := key.substr(2)
+	match kind:
+		"c:":
+			var i := int(rest)
+			return containers[i] if i >= 0 and i < containers.size() else null
+		"s:":
+			var xy := rest.split(",")
+			return structures.get(Vector2i(int(xy[0]), int(xy[1])))
+		"n:":
+			return net_root.get_node_or_null(NodePath(rest))
+	return null
+
+
+## Servidor: o jogador interage com um objeto (validando a distância).
+func interact(p: Player, key: String) -> void:
+	var node := node_of(key) as Node2D
+	if node == null or not node.is_in_group("interactable"):
+		return
+	var off := node.position - p.net_pos if not p.is_local() else node.position - p.position
+	if Vector2(off.x, off.y * 2.0).length() > 90.0:
+		return
+	node.interact(p)
+
+
+# ======================================================================= estado compartilhado
+## Servidor: conteúdo de uma caixa do mapa mudou.
+func container_changed(lc: LootContainer) -> void:
+	if lc.temporary:
+		return
+	lc.dirty = true
+	_container_items.rpc(lc.id, lc.items)
+
+
+@rpc("authority", "reliable")
+func _container_items(id: int, items: Dictionary) -> void:
+	if id >= 0 and id < containers.size():
+		containers[id].items = items
+		containers[id].dirty = true
+		containers[id].queue_redraw()
+
+
+## Servidor: estado de uma estrutura (combustível, porta) mudou.
+func structure_changed(st: Structure) -> void:
+	_structure_state.rpc(st.cell.x, st.cell.y, st.fuel, st.open)
+
+
+@rpc("authority", "reliable")
+func _structure_state(x: int, y: int, fuel: float, open: bool) -> void:
+	var st: Structure = structures.get(Vector2i(x, y))
+	if st != null:
+		st.apply_state(fuel, open)
+
+
+@rpc("authority", "unreliable")
+func turret_fx(x: int, y: int, aim: int, target: Vector2) -> void:
+	var st: Structure = structures.get(Vector2i(x, y))
+	if st != null:
+		st.show_shot(aim, target)
+
+
+@rpc("authority", "reliable")
+func _villages_state(list: Array) -> void:
+	for vd in list:
+		var vid := int(vd["id"])
+		if vid < villages.size():
+			villages[vid].apply_dict(vd)
+
+
 # ======================================================================= construção
 func mouse_cell() -> Vector2i:
 	return ground.local_to_map(ground.to_local(get_global_mouse_position()))
@@ -534,136 +771,174 @@ func can_place_at(kind: String, c: Vector2i, p: Player = null) -> bool:
 	elif occupied.has(c):
 		return false
 	if p != null:
-		var off := ground.map_to_local(c) - p.position
+		var ppos := p.position if p.is_local() else p.net_pos
+		var off := ground.map_to_local(c) - ppos
 		var d := Vector2(off.x, off.y * 2.0).length()
 		if d > 275.0:
 			return false
 		if kind != "piso" and d < 30.0:
 			return false
+		for other in alive_players():
+			var opos := other.position if other.is_local() else other.net_pos
+			var o2 := ground.map_to_local(c) - opos
+			if kind != "piso" and Vector2(o2.x, o2.y * 2.0).length() < 30.0:
+				return false
 	return true
 
 
+## Servidor: valida e constrói; todos os peers recebem a construção.
 func try_place(kind: String, c: Vector2i, p: Player) -> bool:
+	if not DB.BUILDS.has(kind):
+		return false
 	var def: Dictionary = DB.BUILDS[kind]
 	if not can_place_at(kind, c, p):
-		Game.say("Não dá para construir aqui.")
+		Game.tell(p.peer, "Não dá para construir aqui.")
 		return false
 	if not p.data.meets(def["req"]):
-		Game.say("Conhecimento insuficiente: exige %s." % DB.req_text(def["req"]))
+		Game.tell(p.peer, "Conhecimento insuficiente: exige %s." % DB.req_text(def["req"]))
 		return false
 	if not p.data.can_afford(def["custo"]):
-		Game.say("Faltam materiais: %s." % DB.cost_text(def["custo"]))
+		Game.tell(p.peer, "Faltam materiais: %s." % DB.cost_text(def["custo"]))
 		return false
 	p.data.pay(def["custo"])
+	_build_done.rpc(kind, c.x, c.y)
+	p.data.add_xp_map(def["xp"])
+	Game.tell(p.peer, "Construído: %s." % def["nome"])
+	return true
+
+
+@rpc("authority", "call_local", "reliable")
+func _build_done(kind: String, x: int, y: int) -> void:
+	var c := Vector2i(x, y)
 	if kind == "piso":
 		build_layer.set_cell(c, 0, _gtile(T.PISO, c))
 		terrain_deltas[c] = T.PISO
-	else:
+	elif not structures.has(c):
 		var s := _add_structure(kind, c)
 		if kind == "gerador":
 			s.fuel = 0.0
-	p.data.add_xp_map(def["xp"])
-	Game.say("Construído: %s." % def["nome"])
-	return true
 
 
+## Servidor: valida e demole; devolve materiais ao jogador.
 func try_demolish(c: Vector2i, p: Player) -> bool:
-	var off := ground.map_to_local(c) - p.position
+	var ppos := p.position if p.is_local() else p.net_pos
+	var off := ground.map_to_local(c) - ppos
 	if Vector2(off.x, off.y * 2.0).length() > 275.0:
-		Game.say("Longe demais.")
+		Game.tell(p.peer, "Longe demais.")
 		return false
 	if structures.has(c):
 		var s: Structure = structures[c]
 		if s.eternal:
-			Game.say("Você não pode demolir isto.")
+			Game.tell(p.peer, "Você não pode demolir isto.")
 			return false
 		if s.kind == "ruina" or s.kind == "edificio":
 			var big := s.kind == "edificio"
 			p.data.add_item("sucata", rng.randi_range(3, 5) if big else rng.randi_range(1, 2))
 			if rng.randf() < (0.8 if big else 0.25):
 				p.data.add_item("metal", rng.randi_range(1, 2) if big else 1)
-			removed_cells[s.cell] = true
-			Game.say("Você desmontou %s (+materiais)." % ("um prédio" if big else "uma ruína"))
+			Game.tell(p.peer, "Você desmontou %s (+materiais)." % ("um prédio" if big else "uma ruína"))
 		else:
 			var cost: Dictionary = DB.BUILDS[s.kind]["custo"]
 			for k in cost:
 				var back := floori(float(cost[k]) / 2.0)
 				if back > 0:
 					p.data.add_item(k, back)
-			Game.say("Estrutura desmontada (50% dos materiais).")
-		_remove_structure(s)
+			Game.tell(p.peer, "Estrutura desmontada (50% dos materiais).")
+		_demolish_done.rpc(s.cell.x, s.cell.y, false)
 		return true
 	if build_layer.get_cell_source_id(c) != -1:
-		build_layer.erase_cell(c)
-		terrain_deltas.erase(c)
+		_demolish_done.rpc(c.x, c.y, true)
 		p.data.add_item("sucata", 1)
-		Game.say("Piso removido.")
+		Game.tell(p.peer, "Piso removido.")
 		return true
 	return false
 
 
+@rpc("authority", "call_local", "reliable")
+func _demolish_done(x: int, y: int, floor_only: bool) -> void:
+	var c := Vector2i(x, y)
+	if floor_only:
+		build_layer.erase_cell(c)
+		terrain_deltas.erase(c)
+		return
+	var s: Structure = structures.get(c)
+	if s == null:
+		return
+	if s.kind == "ruina" or s.kind == "edificio":
+		removed_cells[s.cell] = true
+	_remove_structure(s)
+
+
 # ======================================================================= inimigos / loot
-func spawn_infected(pos: Vector2, elite: bool) -> Infected:
-	var e := Infected.new()
-	e.setup(elite)
-	e.world = self
-	e.player = player
-	e.position = pos
-	entities.add_child(e)
-	return e
+## Servidor: cria um infectado replicado.
+func spawn_infected(pos: Vector2, elite: bool, extra := {}) -> Infected:
+	var d := {"t": "inf", "pos": [pos.x, pos.y], "elite": elite}
+	d.merge(extra)
+	return spawn_net(d)
 
 
 func drop_loot(pos: Vector2, items: Dictionary) -> void:
 	if items.is_empty():
 		return
-	var lc := LootContainer.new()
-	lc.temporary = true
-	lc.items = items
-	lc.position = pos
-	entities.add_child(lc)
+	spawn_net({"t": "bag", "pos": [pos.x, pos.y], "items": items})
 
 
-func _random_spawn_pos() -> Vector2:
+func _random_spawn_pos(around: Vector2) -> Vector2:
 	var a := rng.randf() * TAU
-	return player.position + Vector2(cos(a) * rng.randf_range(440.0, 540.0), sin(a) * rng.randf_range(260.0, 330.0))
+	return around + Vector2(cos(a) * rng.randf_range(440.0, 540.0), sin(a) * rng.randf_range(260.0, 330.0))
 
 
+## Servidor: população de infectados ao redor de cada jogador vivo.
 func _spawn_step() -> void:
+	var alive := alive_players()
+	if alive.is_empty():
+		return
 	var infected := get_tree().get_nodes_in_group("infected")
-	var normal := 0
-	var elites := 0
 	for n in infected:
 		var e := n as Infected
 		if e.legacy:
 			continue
-		if e.position.distance_to(player.position) > 950.0:
+		var near_any := false
+		for p in alive:
+			if e.position.distance_to(p.net_pos) <= 950.0:
+				near_any = true
+				break
+		if not near_any:
 			e.queue_free()
+	for p in alive:
+		var ppos := p.net_pos
+		var normal := 0
+		var elites := 0
+		for n in infected:
+			var e2 := n as Infected
+			if not is_instance_valid(e2) or e2.legacy or e2.is_queued_for_deletion():
+				continue
+			if e2.position.distance_to(ppos) < 700.0:
+				if e2.elite:
+					elites += 1
+				else:
+					normal += 1
+		var s := spore_at(ppos)
+		if s >= 0.5:
+			if elites < 12:
+				var pos := _random_spawn_pos(ppos)
+				if tile_pos(pos).length() < RADIUS + 3.0:
+					spawn_infected(pos, true)
 			continue
-		if e.elite:
-			elites += 1
-		else:
-			normal += 1
-	var s := spore_at(player.position)
-	if s >= 0.5:
-		if elites < 12:
-			var pos := _random_spawn_pos()
-			if tile_pos(pos).length() < RADIUS + 3.0:
-				spawn_infected(pos, true)
-		return
-	var cap := 3 + int(clampf(tile_pos(player.position).length() / RADIUS, 0.0, 1.0) * 6.0)
-	if normal < cap:
-		var pos2 := _random_spawn_pos()
-		if tile_pos(pos2).length() < RADIUS and not in_safe_zone(pos2):
-			spawn_infected(pos2, false)
+		var cap := 3 + int(clampf(tile_pos(ppos).length() / RADIUS, 0.0, 1.0) * 6.0)
+		if normal < cap:
+			var pos2 := _random_spawn_pos(ppos)
+			if tile_pos(pos2).length() < RADIUS and not in_safe_zone(pos2):
+				spawn_infected(pos2, false)
 	for v in villages:
 		if not v.infested:
 			continue
 		var vpos := ground.map_to_local(v.cell)
-		if vpos.distance_to(player.position) > 900.0:
+		if nearest_player(vpos, 1800.0) == null:
 			continue
 		var near := 0
 		for n in infected:
-			if (n as Node2D).position.distance_to(vpos) < 320.0:
+			if is_instance_valid(n) and (n as Node2D).position.distance_to(vpos) < 320.0:
 				near += 1
 		if near < 6:
 			spawn_infected(vpos + Vector2(rng.randf_range(-150, 150), rng.randf_range(-75, 75)), rng.randf() < 0.2)
@@ -675,7 +950,7 @@ func _village_step() -> void:
 		var was := v.infested
 		v.step(rng, clampf(Vector2(v.cell).length() / RADIUS, 0.0, 1.0))
 		if v.infested and not was:
-			Game.say("A vila %s foi infestada!" % v.nome)
+			Game.say_all("A vila %s foi infestada!" % v.nome)
 		if v.infested:
 			_check_cleared(v)
 			continue
@@ -691,8 +966,12 @@ func _village_step() -> void:
 					var k: String = keys[rng.randi() % 3]
 					v.stock[k] = maxf(0.0, float(v.stock[k]) - 4.0)
 					lc.items = DB.roll_loot(lc.table, 1, rng)
-					lc.dirty = true
+					container_changed(lc)
 					lc.queue_redraw()
+	var list: Array = []
+	for v in villages:
+		list.append(v.to_dict())
+	_villages_state.rpc(list)
 
 
 func _check_cleared(v: VillageData) -> void:
@@ -701,14 +980,14 @@ func _check_cleared(v: VillageData) -> void:
 	for n in get_tree().get_nodes_in_group("infected"):
 		if (n as Node2D).position.distance_to(vpos) < 320.0:
 			near += 1
-	if near == 0 and player != null and vpos.distance_to(player.position) < 500.0:
+	if near == 0 and nearest_player(vpos, 1000.0) != null:
 		v.clear_t += 6.0
 		if v.clear_t >= 30.0:
 			v.infested = false
 			v.infestation = 25.0
 			v.pop = 3
 			v.clear_t = 0.0
-			Game.say("A vila %s foi libertada! Sobreviventes voltam a ela." % v.nome)
+			Game.say_all("A vila %s foi libertada! Sobreviventes voltam a ela." % v.nome)
 	else:
 		v.clear_t = 0.0
 
@@ -728,16 +1007,10 @@ func _try_spawn_caravan(v: VillageData) -> void:
 	var key := "%d>%d" % [v.id, best.id]
 	if not routes.has(key):
 		return
-	var c := Caravan.new()
-	c.world = self
-	c.from_id = v.id
-	c.to_id = best.id
-	c.cargo = {"comida": 10.0, "sucata": 5.0, "medico": 2.0}
-	for k in c.cargo:
-		v.stock[k] = maxf(0.0, float(v.stock[k]) - float(c.cargo[k]))
-	c.path = routes[key]
-	c.position = c.path[0]
-	entities.add_child(c)
+	var cargo := {"comida": 10.0, "sucata": 5.0, "medico": 2.0}
+	for k in cargo:
+		v.stock[k] = maxf(0.0, float(v.stock[k]) - float(cargo[k]))
+	spawn_net({"t": "car", "from": v.id, "to": best.id, "cargo": cargo})
 
 
 func caravan_arrived(c: Caravan) -> void:
@@ -748,20 +1021,14 @@ func caravan_arrived(c: Caravan) -> void:
 	for k in c.cargo:
 		dest.stock[k] = float(dest.stock[k]) + float(c.cargo[k])
 	dest.infestation = maxf(0.0, dest.infestation - 8.0)
-	if player != null and c.position.distance_to(player.position) < 700.0:
-		Game.say("Uma caravana chegou a %s." % dest.nome)
+	var p := nearest_player(c.position, 1400.0)
+	if p != null:
+		Game.tell(p.peer, "Uma caravana chegou a %s." % dest.nome)
 
 
 # ======================================================================= vida e morte
 func _process(delta: float) -> void:
-	if player == null:
-		return
-	if _respawn_t > 0.0:
-		_respawn_t -= delta
-		if _respawn_t <= 0.0:
-			spawn_new_survivor()
-		return
-	if player.is_dead():
+	if not Net.is_server() or players.is_empty():
 		return
 	_spawn_t -= delta
 	if _spawn_t <= 0.0:
@@ -773,46 +1040,46 @@ func _process(delta: float) -> void:
 		_village_step()
 
 
-func spawn_new_survivor() -> void:
-	var data := SurvivorData.random_survivor(Game.rng)
-	data.message.connect(Game.say)
-	var pos := ground.map_to_local(Vector2i.ZERO) + Vector2(Game.rng.randf_range(-20, 20), Game.rng.randf_range(4, 14))
-	player.respawn(data, pos)
-	if Game.hud != null:
-		Game.hud.hide_death()
-	Game.say("Novo sobrevivente: %s. Você acorda no Abrigo Alfa." % data.nome)
-
-
-func _on_player_died(data: SurvivorData, pos: Vector2) -> void:
-	Game.legacy.append({"nome": data.nome, "causa": data.death_cause, "tipo": data.death_kind,
+## Servidor: o sobrevivente de um jogador morreu (legado, corpo ou elite, renascimento).
+func on_player_died(p: Player) -> void:
+	var data := p.data
+	var pos := p.position if p.is_local() else p.net_pos
+	Game.add_legacy({"nome": data.nome, "jogador": p.nome, "causa": data.death_cause, "tipo": data.death_kind,
 		"tempo": data.time_alive, "pos": [pos.x, pos.y]})
 	var inv := data.inventory.duplicate()
 	for slot in data.implants:
 		var id: String = data.implants[slot]["id"]
 		inv[id] = int(inv.get(id, 0)) + 1
 	if data.death_kind == "infeccao":
-		var e := spawn_infected(pos, true)
-		e.legacy = true
-		e.legacy_name = data.nome
+		var e := spawn_infected(pos, true, {"legacy": true, "legacy_name": data.nome, "home": [pos.x, pos.y]})
+		# inventário e implantes ficam só no servidor (caem quando o elite morre)
 		e.loot = data.inventory.duplicate()
 		e.implants = data.implants.duplicate(true)
-		e.home = pos
-		Game.say("%s se reergue como um infectado de elite..." % data.nome)
+		Game.say_all("%s se reergue como um infectado de elite..." % data.nome)
 	else:
-		var c := Corpse.new()
-		c.nome = data.nome
-		c.items = inv
-		c.world = self
-		c.position = pos
-		entities.add_child(c)
-	if Game.hud != null:
-		Game.hud.show_death(data)
-	_respawn_t = 5.0
+		spawn_net({"t": "corpse", "pos": [pos.x, pos.y], "nome": data.nome, "items": inv})
+		Game.say_all("%s morreu (%s)." % [data.nome, data.death_cause])
+	var info := {"nome": data.nome, "causa": data.death_cause, "tipo": data.death_kind, "tempo": data.time_alive}
+	if p.is_local():
+		p.show_death_ui(info)
+	else:
+		p.show_death_ui.rpc_id(p.peer, info)
+	p.respawn_t = 5.0
+	Game.survivor_cache.erase(p.nome)
 	Game.save_game()
 
 
+## Servidor: novo sobrevivente para o jogador, no abrigo.
+func respawn_player(p: Player) -> void:
+	var data := SurvivorData.random_survivor(Game.rng)
+	_attach_data(p, data)
+	p.teleport(shelter_pos())
+	Game.tell(p.peer, "Novo sobrevivente: %s. Você acorda no Abrigo Alfa." % data.nome)
+
+
 # ======================================================================= persistência (deltas)
-func to_dict() -> Dictionary:
+## Alterações do mundo gerado (iguais para save e para quem entra na sessão).
+func world_deltas() -> Dictionary:
 	var st: Array = []
 	for c in structures:
 		var s: Structure = structures[c]
@@ -829,6 +1096,16 @@ func to_dict() -> Dictionary:
 	for lc in containers:
 		if lc.dirty:
 			cont[str(lc.id)] = lc.items.duplicate()
+	var vil: Array = []
+	for v in villages:
+		vil.append(v.to_dict())
+	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
+		"containers": cont, "villages": vil}
+
+
+## Save completo (servidor): alterações + entidades persistentes + sobreviventes por nome.
+func to_dict() -> Dictionary:
+	var d := world_deltas()
 	var corpses: Array = []
 	for n in get_tree().get_nodes_in_group("corpses"):
 		var co := n as Corpse
@@ -840,16 +1117,20 @@ func to_dict() -> Dictionary:
 		if e.legacy:
 			elites.append({"pos": [e.position.x, e.position.y], "home": [e.home.x, e.home.y], "nome": e.legacy_name,
 				"loot": e.loot.duplicate(), "implants": e.implants.duplicate(true), "hp": e.hp})
-	var vil: Array = []
-	for v in villages:
-		vil.append(v.to_dict())
-	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
-		"containers": cont, "corpses": corpses, "elites": elites, "villages": vil,
-		"survivor": player.data.to_dict() if player.data != null else {},
-		"player_pos": [player.position.x, player.position.y]}
+	var survivors := Game.survivor_cache.duplicate(true)
+	for k in players:
+		var p: Player = players[k]
+		if p.data != null and p.alive:
+			var pos := p.position if p.is_local() else p.net_pos
+			survivors[p.nome] = {"data": p.data.to_dict(), "pos": [pos.x, pos.y]}
+	d["corpses"] = corpses
+	d["elites"] = elites
+	d["survivors"] = survivors
+	return d
 
 
-func apply_save(save: Dictionary) -> void:
+## Aplica as alterações do mundo (servidor ao carregar e clientes ao entrar).
+func apply_deltas(save: Dictionary) -> void:
 	for r in save.get("removed", []):
 		var c := Game.v2i(r)
 		removed_cells[c] = true
@@ -875,30 +1156,24 @@ func apply_save(save: Dictionary) -> void:
 			containers[idx].items = items
 			containers[idx].dirty = true
 			containers[idx].queue_redraw()
-	for cd in save.get("corpses", []):
-		var co := Corpse.new()
-		co.nome = str(cd["nome"])
-		for it in cd["items"]:
-			co.items[str(it)] = int(cd["items"][it])
-		co.decomp = float(cd.get("decomp", 0.0))
-		co.world = self
-		co.position = Game.v2(cd["pos"])
-		entities.add_child(co)
-	for ed in save.get("elites", []):
-		var e := spawn_infected(Game.v2(ed["pos"]), true)
-		e.legacy = true
-		e.legacy_name = str(ed["nome"])
-		e.home = Game.v2(ed["home"])
-		e.hp = float(ed.get("hp", e.max_hp))
-		for it in ed["loot"]:
-			e.loot[str(it)] = int(ed["loot"][it])
-		e.implants = ed["implants"]
 	for vd in save.get("villages", []):
 		var vid := int(vd["id"])
 		if vid < villages.size():
 			villages[vid].apply_dict(vd)
-	Game.legacy = save.get("legacy", [])
-	Game.play_time = float(save.get("play_time", 0.0))
-	var data := SurvivorData.from_dict(save.get("survivor", {}))
-	data.message.connect(Game.say)
-	player.respawn(data, Game.v2(save.get("player_pos", [0.0, 10.0])))
+
+
+## Servidor ao carregar um save: entidades persistentes (cadáveres e elites de legado).
+func restore_entities(save: Dictionary) -> void:
+	for cd in save.get("corpses", []):
+		var items := {}
+		for it in cd["items"]:
+			items[str(it)] = int(cd["items"][it])
+		spawn_net({"t": "corpse", "pos": cd["pos"], "nome": str(cd["nome"]), "items": items,
+			"decomp": float(cd.get("decomp", 0.0))})
+	for ed in save.get("elites", []):
+		var e := spawn_infected(Game.v2(ed["pos"]), true, {"legacy": true, "legacy_name": str(ed["nome"]),
+			"home": ed["home"], "hp": float(ed.get("hp", 110.0))})
+		for it in ed["loot"]:
+			e.loot[str(it)] = int(ed["loot"][it])
+		e.implants = ed["implants"]
+

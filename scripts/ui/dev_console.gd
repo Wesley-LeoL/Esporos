@@ -37,6 +37,7 @@ var line: LineEdit
 var history: Array[String] = []
 var _hist_i := -1
 var _open := false
+var _capture = null
 
 
 func _ready() -> void:
@@ -87,11 +88,11 @@ func is_open() -> bool:
 
 
 func open() -> void:
-	if Game.world == null or Game.world.player == null or Game.world.player.data == null:
+	if Game.world == null or Game.world.local_player() == null:
 		return
 	visible = true
 	_open = true
-	get_tree().paused = true
+	get_tree().paused = Net.is_solo()
 	_focus.call_deferred()
 
 
@@ -104,7 +105,7 @@ func close() -> void:
 	_open = false
 	line.release_focus()
 	var menu_open: bool = Game.hud != null and Game.hud.menu_root.visible
-	get_tree().paused = menu_open
+	get_tree().paused = menu_open and Net.is_solo()
 
 
 func _input(event: InputEvent) -> void:
@@ -174,7 +175,10 @@ func _on_submit(text: String) -> void:
 
 # ------------------------------------------------------------------ saída
 func _out(bb: String) -> void:
-	output.append_text(bb + "\n")
+	if _capture != null:
+		_capture.append(bb)
+	else:
+		output.append_text(bb + "\n")
 
 
 func _ok(text: String) -> void:
@@ -213,20 +217,50 @@ func _resolve_item(raw: String) -> String:
 
 
 # ------------------------------------------------------------------ execução
+## Executa um comando. No co-op os comandos rodam no anfitrião (que é dono dos dados)
+## sobre o personagem de quem digitou, e a resposta volta para o console de quem pediu.
 func execute(raw: String) -> void:
 	var text := raw.strip_edges()
 	if text == "":
 		return
 	_out("[color=#7fd]› %s[/color]" % text.replace("[", "[lb]"))
+	if _norm(text.split(" ", false)[0]) in ["cls", "clear"]:
+		output.clear()
+		return
+	if Net.is_server():
+		_run(text, Game.world.local_player() if Game.world != null else null)
+	else:
+		_remote_exec.rpc_id(1, text)
+
+
+@rpc("any_peer", "reliable")
+func _remote_exec(text: String) -> void:
+	if not Net.is_server() or Game.world == null:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	_capture = []
+	_run(text, Game.world.players.get(sender))
+	var lines: Array = _capture
+	_capture = null
+	_remote_out.rpc_id(sender, lines)
+
+
+@rpc("authority", "reliable")
+func _remote_out(lines: Array) -> void:
+	for l in lines:
+		output.append_text(str(l) + "\n")
+
+
+func _run(text: String, p: Player) -> void:
 	var t := text.split(" ", false)
 	var cmd := _norm(t[0])
 	var args: PackedStringArray = t.slice(1)
 	var w := Game.world
-	if w == null or w.player == null or w.player.data == null:
+	if w == null or p == null or p.data == null:
 		_err("Nenhum jogo em andamento.")
 		return
-	var p := w.player
 	var d := p.data
+	var pp := p.position if p.is_local() else p.net_pos
 	match cmd:
 		"ajuda", "help", "?":
 			_out(HELP)
@@ -265,8 +299,8 @@ func execute(raw: String) -> void:
 		"tp", "teleport":
 			_cmd_tp(w, p, args)
 		"pos":
-			var tp := w.tile_pos(p.position)
-			_ok("Tile (%d, %d) · distância do centro %.1f/%d · esporos %.2f" % [roundi(tp.x), roundi(tp.y), tp.length(), int(World.RADIUS), w.spore_at(p.position)])
+			var tp := w.tile_pos(pp)
+			_ok("Tile (%d, %d) · distância do centro %.1f/%d · esporos %.2f" % [roundi(tp.x), roundi(tp.y), tp.length(), int(World.RADIUS), w.spore_at(pp)])
 		"matar", "kill":
 			d.kill("Comando de console", "fisica")
 			_ok("Morte física aplicada.")
@@ -276,8 +310,8 @@ func execute(raw: String) -> void:
 		"implante", "implant":
 			_cmd_implant(d, args)
 		"god", "deus":
-			Game.god = not Game.god
-			_ok("Invulnerabilidade %s." % ("LIGADA" if Game.god else "desligada"))
+			d.god = not d.god
+			_ok("Invulnerabilidade %s." % ("LIGADA" if d.god else "desligada"))
 		"salvar", "save":
 			Game.save_game()
 			_ok("Jogo salvo.")
@@ -329,7 +363,7 @@ func _cmd_damage(d: SurvivorData, args: PackedStringArray) -> void:
 		return
 	for l in targets:
 		d.damage_limb(l, amount)
-	_ok("Dano %d em %s.%s" % [int(amount), which, "  (god ativo: ignorado)" if Game.god else ""])
+	_ok("Dano %d em %s.%s" % [int(amount), which, "  (god ativo: ignorado)" if d.god else ""])
 
 
 func _heal(d: SurvivorData) -> void:
@@ -390,7 +424,7 @@ func _cmd_spawn(w: World, p: Player, args: PackedStringArray) -> void:
 	for i in n:
 		var ang := randf() * TAU
 		var off := Vector2.from_angle(ang) * randf_range(70.0, 120.0)
-		w.spawn_infected(p.position + Vector2(off.x, off.y * 0.5), elite)
+		w.spawn_infected((p.position if p.is_local() else p.net_pos) + Vector2(off.x, off.y * 0.5), elite)
 	_ok("%d infectado(s) %s criado(s)." % [n, "de elite" if elite else "comum(ns)"])
 
 
@@ -409,7 +443,7 @@ func _cmd_tp(w: World, p: Player, args: PackedStringArray) -> void:
 				dest = w.ground.map_to_local(Vector2i.ZERO) + Vector2(0, 10)
 				label = "Abrigo Alfa"
 			"borda":
-				var dir := w.tile_pos(p.position)
+				var dir := w.tile_pos(p.position if p.is_local() else p.net_pos)
 				if dir.length() < 1.0:
 					dir = Vector2(1, 0)
 				var c2 := Vector2i((dir.normalized() * World.RADIUS * 0.8).round())
@@ -446,9 +480,7 @@ func _cmd_tp(w: World, p: Player, args: PackedStringArray) -> void:
 	else:
 		_err("Uso: tp <x> <y> | tp abrigo | tp vila <n|nome> | tp borda | tp cadaver | tp elite")
 		return
-	p.position = dest
-	p.velocity = Vector2.ZERO
-	p.camera.reset_smoothing()
+	p.teleport(dest)
 	_ok("Teleportado para " + label + ".")
 
 

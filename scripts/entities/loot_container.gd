@@ -15,6 +15,12 @@ func _ready() -> void:
 	add_to_group("containers")
 
 
+## Só para sacos largados (replicados). As caixas do mapa são geradas igual em todos os
+## peers e mudam pelo World.container_changed.
+func setup_net() -> void:
+	Net.make_sync(self, [".:items"], 0.2)
+
+
 func prompt() -> String:
 	if items.is_empty():
 		return "Vazio"
@@ -28,6 +34,7 @@ func _total() -> int:
 	return n
 
 
+## Servidor.
 func interact(player: Player) -> void:
 	if items.is_empty():
 		return
@@ -35,12 +42,19 @@ func interact(player: Player) -> void:
 	for k in items:
 		player.data.add_item(k, int(items[k]))
 		parts.append("%dx %s" % [int(items[k]), DB.item_name(k)])
-	Game.say("Você pegou: " + ", ".join(parts) + ".")
-	items.clear()
-	dirty = true
+	Game.tell(player.peer, "Você pegou: " + ", ".join(parts) + ".")
+	items = {}
 	if temporary:
 		queue_free()
 	else:
+		var w: World = Game.world
+		if w != null:
+			w.container_changed(self)
+		queue_redraw()
+
+
+func _process(_delta: float) -> void:
+	if temporary:
 		queue_redraw()
 
 

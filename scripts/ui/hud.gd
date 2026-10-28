@@ -56,6 +56,7 @@ var tabs: TabContainer
 var boxes := {}
 var msgs: Array = []
 var _refresh_t := 0.0
+var _menu_data: SurvivorData
 var _effects_key := ""
 var _log_key := ""
 var _t := 0.0
@@ -457,12 +458,14 @@ func _build_death() -> void:
 	col.add_child(death_fate)
 
 
-func show_death(d: SurvivorData) -> void:
+## info: {nome, causa, tipo ("infeccao" ou "fisica"), tempo}
+func show_death(info: Dictionary) -> void:
 	close_menu()
 	var fate := "Seu corpo se reergue como um infectado de elite, com tudo o que você carregava."
-	if d.death_kind != "infeccao":
+	if str(info.get("tipo", "")) != "infeccao":
 		fate = "Seu corpo ficou no mapa. Um novo sobrevivente pode recuperá-lo antes que se decomponha."
-	death_info.text = "%s\n%s · sobreviveu %s" % [d.nome.to_upper(), d.death_cause, _fmt_time(d.time_alive)]
+	death_info.text = "%s\n%s · sobreviveu %s" % [str(info.get("nome", "")).to_upper(), str(info.get("causa", "")),
+		_fmt_time(float(info.get("tempo", 0.0)))]
 	death_fate.text = fate + "\n\nUm novo sobrevivente chega ao abrigo..."
 	death_panel.visible = true
 
@@ -482,7 +485,7 @@ func _on_log(text: String) -> void:
 
 
 func _player() -> Player:
-	return Game.world.player if Game.world != null else null
+	return Game.world.local_player() if Game.world != null else null
 
 
 # ------------------------------------------------------------------ menu
@@ -495,7 +498,8 @@ func open_menu(tab: int = -1) -> void:
 	if tab >= 0:
 		tabs.current_tab = tab
 	menu_root.visible = true
-	get_tree().paused = true
+	# no co-op o mundo continua rodando com o menu aberto; só o jogo solo pausa
+	get_tree().paused = Net.is_solo()
 	_rebuild()
 
 
@@ -594,6 +598,9 @@ func _process(delta: float) -> void:
 	log_box.position = Vector2(16, vitals_panel.position.y - log_box.size.y - 12)
 	effects_box.position = Vector2(ui.size.x - effects_box.size.x - 16, equip_box.position.y - effects_box.size.y - 10)
 
+	if menu_root.visible and d != _menu_data:
+		_menu_data = d
+		_rebuild()
 	if menu_root.visible:
 		menu_sub.text = "// %s · T+%s" % [d.nome.to_upper(), _fmt_time(d.time_alive)]
 		_refresh_t -= delta
@@ -817,7 +824,7 @@ func _tab_inventory(d: SurvivorData) -> void:
 			"manual": verb = "Ler"
 			"arma": verb = "Equipar" if d.weapon != id else "Guardar"
 		if verb != "":
-			_btn(row, verb, _act(func() -> void: d.use_item(id)))
+			_btn(row, verb, _act(func() -> void: _player().act("use_item", [id])))
 	_head(box, "Fabricação")
 	for rid: String in DB.CRAFTS:
 		var cdef: Dictionary = DB.CRAFTS[rid]
@@ -826,7 +833,7 @@ func _tab_inventory(d: SurvivorData) -> void:
 		var ok := d.meets(cdef["req"]) and d.can_afford(cdef["custo"])
 		_lbl(crow, "%s: %s · exige %s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"])],
 			UITheme.TEXT if ok else NO_COLOR)
-		_btn(crow, "Fabricar", _act(func() -> void: d.craft(rid)), d.meets(cdef["req"]))
+		_btn(crow, "Fabricar", _act(func() -> void: _player().act("craft", [rid])), d.meets(cdef["req"]))
 
 
 func _tab_body(d: SurvivorData) -> void:
@@ -835,7 +842,7 @@ func _tab_body(d: SurvivorData) -> void:
 	_lbl(box, "Carga patogênica %d%% · Sangue %d%% · Água %d%%" % [int(d.pathogen), int(d.blood), int(d.water)], UITheme.MUTED)
 	var top := _row(box)
 	top.add_child(_item_icon("antibiotico", 48))
-	_btn(top, "Antibiótico (x%d)" % d.count("antibiotico"), _act(func() -> void: d.treat("torso", "antibiotico")), d.count("antibiotico") > 0)
+	_btn(top, "Antibiótico (x%d)" % d.count("antibiotico"), _act(func() -> void: _player().act("treat", ["torso", "antibiotico"])), d.count("antibiotico") > 0)
 	_lbl(top, "Ativo por %ds" % int(d.antibiotic_t) if d.antibiotic_t > 0.0 else "Cura sepse e infecção fúngica.", UITheme.MUTED)
 	_head(box, "Membros")
 	for l: String in SurvivorData.LIMBS:
@@ -865,9 +872,9 @@ func _tab_body(d: SurvivorData) -> void:
 			st.append("enfaixado")
 		_lbl(row, "saudável" if st.is_empty() else ", ".join(st), UITheme.MUTED if st.is_empty() else UITheme.WARN)
 		var wounded := int(limb["wound"]) > 0
-		_btn(row, "Desinfetar", _act(func() -> void: d.treat(l, "desinfetar")), wounded and d.count("antisseptico") > 0)
-		_btn(row, "Suturar", _act(func() -> void: d.treat(l, "suturar")), int(limb["wound"]) == 2 and d.count("kit_sutura") > 0)
-		_btn(row, "Enfaixar", _act(func() -> void: d.treat(l, "enfaixar")), wounded and not limb["bandaged"] and d.count("bandagem") > 0)
+		_btn(row, "Desinfetar", _act(func() -> void: _player().act("treat", [l, "desinfetar"])), wounded and d.count("antisseptico") > 0)
+		_btn(row, "Suturar", _act(func() -> void: _player().act("treat", [l, "suturar"])), int(limb["wound"]) == 2 and d.count("kit_sutura") > 0)
+		_btn(row, "Enfaixar", _act(func() -> void: _player().act("treat", [l, "enfaixar"])), wounded and not limb["bandaged"] and d.count("bandagem") > 0)
 	_lbl(box, "Dica: feridas profundas só param de sangrar de vez após sutura + bandagem. Feridas abertas deixam esporos entrarem.", UITheme.MUTED)
 
 
@@ -926,7 +933,7 @@ func _tab_implants(d: SurvivorData) -> void:
 	info.add_child(bars_row)
 	_bar(bars_row, d.battery, 100.0, UITheme.ACCENT, 260, 14)
 	_bar(bars_row, d.heat, 100.0, UITheme.WARN, 260, 14)
-	_btn(top, "Recarregar (+60%)", _act(func() -> void: d.use_item("bateria")), d.count("bateria") > 0)
+	_btn(top, "Recarregar (+60%)", _act(func() -> void: _player().act("use_item", ["bateria"])), d.count("bateria") > 0)
 	_lbl(box, "Implantes mal mantidos, sem bateria ou superaquecidos enfraquecem sua imunidade e aceleram a infecção nas áreas ligadas ao metal.", UITheme.MUTED)
 	for slot: String in DB.IMPLANT_SLOTS:
 		_head(box, DB.IMPLANT_SLOTS[slot])
@@ -940,7 +947,7 @@ func _tab_implants(d: SurvivorData) -> void:
 			row.add_child(_item_icon(imp["id"], 48))
 			_lbl(row, "%s · integridade %d%% · %s\n%s" % [DB.item_name(imp["id"]), int(imp["integ"]), state, def["efeito"]],
 				OK_COLOR if d.implant_active(slot) and not d.implant_damaged(slot) else UITheme.WARN)
-			_btn(row, "Manutenção (1 sucata)", _act(func() -> void: d.maintain_implant(slot)), d.count("sucata") > 0)
+			_btn(row, "Manutenção (1 sucata)", _act(func() -> void: _player().act("maintain", [slot])), d.count("sucata") > 0)
 		else:
 			var found := false
 			for id: String in DB.IMPLANTS:
@@ -954,7 +961,7 @@ func _tab_implants(d: SurvivorData) -> void:
 					if not meets:
 						txt += "\nRISCO: falha crítica ou morte na cirurgia!"
 					_lbl(row2, txt, UITheme.TEXT if meets else UITheme.DANGER)
-					_btn(row2, "Instalar", _act(func() -> void: d.install_implant(id)), d.count("kit_cirurgico") > 0)
+					_btn(row2, "Instalar", _act(func() -> void: _player().act("install", [id])), d.count("kit_cirurgico") > 0)
 			if not found:
 				_lbl(box, "Vazio. Encontre um implante e um kit cirúrgico.", UITheme.MUTED)
 

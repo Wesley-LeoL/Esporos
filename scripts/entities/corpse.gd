@@ -17,36 +17,43 @@ func _ready() -> void:
 	add_to_group("corpses")
 
 
+## Sincronizador (servidor): itens e decomposição mudam depois do spawn.
+func setup_net() -> void:
+	Net.make_sync(self, [".:items", ".:decomp"], 0.5)
+
+
 func prompt() -> String:
 	return "[E] Revistar corpo de %s (decomposição %d%%)" % [nome, int(decomp)]
 
 
+## Servidor.
 func interact(player: Player) -> void:
 	if items.is_empty():
-		Game.say("O corpo já foi saqueado.")
+		Game.tell(player.peer, "O corpo já foi saqueado.")
 		return
 	var parts: Array[String] = []
 	for k in items:
 		player.data.add_item(k, int(items[k]))
 		parts.append("%dx %s" % [int(items[k]), DB.item_name(k)])
-	Game.say("Você recuperou: " + ", ".join(parts) + ".")
-	items.clear()
+	Game.tell(player.peer, "Você recuperou: " + ", ".join(parts) + ".")
+	items = {}
 
 
 func _process(delta: float) -> void:
+	queue_redraw()
+	if not Net.is_server():
+		return
 	decomp += delta * 100.0 / LIFETIME
 	if decomp >= 100.0:
-		Game.say("O corpo de %s se desfez." % nome)
+		Game.say_all("O corpo de %s se desfez." % nome)
 		queue_free()
 		return
 	_attract_t -= delta
 	if _attract_t <= 0.0:
 		_attract_t = 12.0
-		if decomp > 30.0 and world != null and world.player != null:
-			var d := position.distance_to(world.player.position)
-			if d < 900.0 and get_tree().get_nodes_in_group("infected").size() < 18:
-				world.spawn_infected(position + Vector2.from_angle(randf() * TAU) * 110.0, false)
-	queue_redraw()
+		if decomp > 30.0 and world != null and world.nearest_player(position, 1800.0) != null \
+				and get_tree().get_nodes_in_group("infected").size() < 18:
+			world.spawn_infected(position + Vector2.from_angle(randf() * TAU) * 110.0, false)
 
 
 func _draw() -> void:

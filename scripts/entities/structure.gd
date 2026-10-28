@@ -139,7 +139,7 @@ func _update_fade(delta: float) -> void:
 		return
 	_fade_t = 0.15
 	var target := 1.0
-	var pl: Player = world.player if world != null else null
+	var pl: Player = world.local_player() if world != null else null
 	if pl != null and not pl.is_dead():
 		var lp := pl.position - position + Vector2(0, -20)
 		if _fade_rect.grow(-4).has_point(lp):
@@ -181,32 +181,57 @@ func prompt() -> String:
 	return ""
 
 
+## Servidor: interação de um jogador; o novo estado vai para todos os peers.
 func interact(player: Player) -> void:
 	match kind:
 		"porta":
 			open = not open
 			_apply_open()
 			queue_redraw()
+			world.structure_changed(self)
 		"gerador":
 			if eternal:
-				Game.say("O gerador do abrigo funciona sem parar.")
+				Game.tell(player.peer, "O gerador do abrigo funciona sem parar.")
 			elif player.data.take_item("combustivel"):
 				fuel = minf(100.0, fuel + 50.0)
-				Game.say("Gerador abastecido (%d%%)." % int(fuel))
+				Game.tell(player.peer, "Gerador abastecido (%d%%)." % int(fuel))
 				_refresh_power()
+				world.structure_changed(self)
 			else:
-				Game.say("Você precisa de combustível.")
+				Game.tell(player.peer, "Você precisa de combustível.")
 		_:
-			Game.say(prompt() + (". Ligue-o a um gerador abastecido." if not powered else "."))
+			Game.tell(player.peer, prompt() + (". Ligue-o a um gerador abastecido." if not powered else "."))
+
+
+## Estado recebido do servidor.
+func apply_state(new_fuel: float, new_open: bool) -> void:
+	fuel = new_fuel
+	if new_open != open:
+		open = new_open
+		_apply_open()
+	_refresh_power()
+	queue_redraw()
+
+
+## Disparo da torre (efeito visual em todos os peers).
+func show_shot(aim: int, target: Vector2) -> void:
+	_aim = aim
+	_tracer = target - position + Vector2(0, -18)
+	_tracer_t = 0.12
+	queue_redraw()
 
 
 func _physics_process(delta: float) -> void:
 	if kind == "edificio":
 		return
-	if kind == "gerador" and not eternal and fuel > 0.0:
+	var server := Net.is_server()
+	if server and kind == "gerador" and not eternal and fuel > 0.0:
+		var before := int(fuel)
 		fuel = maxf(0.0, fuel - 0.12 * delta)
+		if int(fuel) != before:
+			world.structure_changed(self)
 		if fuel <= 0.0:
-			Game.say("Um gerador ficou sem combustível!")
+			Game.say_all("Um gerador ficou sem combustível!")
 			_refresh_power()
 	_power_t -= delta
 	if _power_t <= 0.0:
@@ -215,7 +240,7 @@ func _physics_process(delta: float) -> void:
 	if kind == "torre":
 		_cd -= delta
 		_tracer_t = maxf(0.0, _tracer_t - delta)
-		if powered and _cd <= 0.0:
+		if server and powered and _cd <= 0.0:
 			var best: Infected = null
 			var best_d := 290.0
 			for n in get_tree().get_nodes_in_group("infected"):
@@ -226,12 +251,11 @@ func _physics_process(delta: float) -> void:
 					best_d = d
 					best = e
 			if best != null:
+				var aim := GenArt.facing_of(best.position - position)
+				world.turret_fx.rpc(cell.x, cell.y, aim, best.position)
+				show_shot(aim, best.position)
 				best.take_damage(20.0, self)
 				_cd = 1.0
-				_aim = GenArt.facing_of(best.position - position)
-				_tracer = best.position - position + Vector2(0, -18)
-				_tracer_t = 0.12
-				queue_redraw()
 		if _tracer_t <= 0.0 and _tracer != Vector2.ZERO:
 			_tracer = Vector2.ZERO
 			queue_redraw()

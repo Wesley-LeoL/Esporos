@@ -14,13 +14,14 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	var w := Game.world
-	if w == null or w.player == null or w.player.data == null or w.player.is_dead():
+	var pl: Player = w.local_player() if w != null else null
+	if pl == null or pl.data == null or pl.is_dead():
 		return
-	var d := w.player.data
+	var d := pl.data
 	if not d.implant_active("olho"):
 		return
 	var xf := get_viewport().get_canvas_transform()
-	var ppos := w.player.position
+	var ppos := pl.position
 	for n in get_tree().get_nodes_in_group("infected"):
 		var e := n as Node2D
 		if e.position.distance_to(ppos) > 560.0:

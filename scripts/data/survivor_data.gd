@@ -30,6 +30,8 @@ var battery: float = 0.0
 var heat: float = 0.0
 var implants := {}
 var alive: bool = true
+## Invulnerável (cheat de testes, por personagem).
+var god := false
 var death_cause: String = ""
 var death_kind: String = ""
 var time_alive: float = 0.0
@@ -149,7 +151,7 @@ func _warn(key: String, text: String, cooldown: float = 40.0) -> void:
 
 
 func _hurt_internal(limb_id: String, amount: float, cause: String) -> void:
-	if Game.god:
+	if god:
 		return
 	var limb: Dictionary = limbs[limb_id]
 	limb["hp"] = maxf(0.0, float(limb["hp"]) - amount)
@@ -331,7 +333,7 @@ func kill(cause: String, kind: String) -> void:
 func _check_death() -> void:
 	if not alive:
 		return
-	if Game.god:
+	if god:
 		pathogen = minf(pathogen, 99.0)
 		blood = maxf(blood, 1.0)
 		return
@@ -352,7 +354,7 @@ func _die(cause: String, kind: String) -> void:
 
 # ---------------------------------------------------------------- combate
 func damage_limb(limb_id: String, amount: float) -> void:
-	if Game.god:
+	if god:
 		return
 	var limb: Dictionary = limbs[limb_id]
 	limb["hp"] = maxf(0.0, float(limb["hp"]) - amount)

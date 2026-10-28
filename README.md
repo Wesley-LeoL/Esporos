@@ -7,6 +7,16 @@ Abra a pasta no Godot 4.7+ (versão padrão, não .NET) e aperte F5. O projeto j
 
 **Controles:** `WASD` mover · `Espaço`/clique atacar · `E` interagir · `Tab` ou `I` menu · `X` demolir · `F5` salvar · `Esc` cancelar · `F1` ou `` ` `` console de testes.
 
+## Co-op (2 a 4 jogadores)
+- **Hospedar:** na tela de título, ligue **CO-OP: ABERTO** e clique em Novo jogo ou Continuar. O jogo abre a porta UDP **7777**, e o anfitrião é a autoridade da sessão: simula o mundo e guarda o save.
+- **Entrar:** digite o IP do anfitrião e clique em **ENTRAR NA SESSÃO**. O mundo é gerado pela mesma seed, e só as alterações vêm pela rede.
+- **Na mesma rede local:** use o IP local do anfitrião (por exemplo 192.168.0.10). O Windows pode pedir para liberar o jogo no firewall.
+- **Pela internet:** o anfitrião precisa redirecionar a porta UDP 7777 no roteador para o próprio PC, ou o grupo pode usar uma rede virtual (Tailscale, ZeroTier, Radmin VPN) e entrar pelo IP dessa rede.
+- **Sobreviventes:** cada um fica salvo pelo nome do jogador. Ao voltar para a sessão com o mesmo nome, o jogador continua com o mesmo personagem, se ele ainda estiver vivo.
+- **Menu e console:** no co-op, o menu (Tab) não pausa o mundo. Os comandos do console (F1) rodam no anfitrião, sobre o personagem de quem digitou.
+
+Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --name=A` em uma janela e `godot --path . -- --autostart=join:127.0.0.1 --name=B` em outra.
+
 ## Sistemas implementados (protótipo jogável)
 - **Carga patogênica (0–100%)**: todos nascem infectados; máscara + filtro, supressor químico e purificador controlam a carga. Água contaminada acelera a infecção.
 - **Mar de Esporos**: concentração sobe perto da borda do mapa; na zona letal o filtro é destruído e hordas de elite surgem sem parar.
@@ -27,7 +37,7 @@ Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no m
 
 ## Estrutura
 ```
-autoload/   input_setup.gd (ações) · game.gd (log, save, legado, debug)
+autoload/   input_setup.gd (ações) · net.gd (sessão co-op, ENet, replicação) · game.gd (mensagens, save, legado, debug)
 scripts/data/      db.gd (itens, implantes, construções) · survivor_data.gd (toda a lógica de sobrevivência)
 scripts/world/     world.gd (mundo, spawn, vilas, construção, morte) · village_data.gd
 scripts/entities/  structure · infected · corpse · loot_container · caravan · build_ghost

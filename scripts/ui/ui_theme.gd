@@ -184,6 +184,16 @@ static func build_theme() -> Theme:
 	t.set_stylebox("grabber_pressed", "VScrollBar", grab_hi)
 	for icon_name in ["increment", "decrement", "increment_highlight", "decrement_highlight"]:
 		t.set_icon(icon_name, "VScrollBar", ImageTexture.new())
+	# campos de texto (nome, IP)
+	t.set_stylebox("normal", "LineEdit", box("card", 8, Vector4(14, 8, 14, 10)))
+	t.set_stylebox("focus", "LineEdit", box("slot", 12, Vector4(14, 8, 14, 10)))
+	t.set_stylebox("read_only", "LineEdit", box("card", 8, Vector4(14, 8, 14, 10)))
+	t.set_color("font_color", "LineEdit", TEXT)
+	t.set_color("font_placeholder_color", "LineEdit", MUTED)
+	t.set_color("caret_color", "LineEdit", ACCENT)
+	t.set_color("selection_color", "LineEdit", Color(0.4, 0.85, 0.82, 0.35))
+	# botão de alternar (co-op): usa o estilo "pressionado" quando ligado
+	t.set_color("font_pressed_color", "Button", ACCENT)
 	# painéis e barras simples
 	t.set_stylebox("panel", "PanelContainer", box("panel", 16, Vector4(20, 16, 20, 16)))
 	t.set_stylebox("background", "ProgressBar", bar_background())

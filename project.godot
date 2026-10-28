@@ -13,6 +13,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 [autoload]
 
 InputSetup="*res://autoload/input_setup.gd"
+Net="*res://autoload/net.gd"
 Game="*res://autoload/game.gd"
 
 [display]
