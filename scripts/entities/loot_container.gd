@@ -4,8 +4,11 @@ extends Node2D
 
 var id := -1
 var table := "comum"
-var items := {}
+var items: Array = []
 var temporary := false
+## Baú construído por um jogador (chave pela célula).
+var chest := false
+var cell := Vector2i.ZERO
 var dirty := false
 var village_id := -1
 
@@ -21,36 +24,26 @@ func setup_net() -> void:
 	Net.make_sync(self, [".:items"], 0.2)
 
 
+func title() -> String:
+	if chest:
+		return "Baú"
+	if temporary:
+		return "Itens no chão"
+	return {"comum": "Caixa", "medico": "Armário médico", "tecnico": "Caixa técnica"}.get(table, "Caixa")
+
+
 func prompt() -> String:
+	var n := Items.total_units(items)
+	if chest:
+		return "[E] Abrir baú (%d itens)" % n
 	if items.is_empty():
 		return "Vazio"
-	return "[E] Saquear (%d itens)" % _total()
+	return "[E] Revistar (%d itens)" % n
 
 
-func _total() -> int:
-	var n := 0
-	for k in items:
-		n += int(items[k])
-	return n
-
-
-## Servidor.
-func interact(player: Player) -> void:
-	if items.is_empty():
-		return
-	var parts: Array[String] = []
-	for k in items:
-		player.data.add_item(k, int(items[k]))
-		parts.append("%dx %s" % [int(items[k]), DB.item_name(k)])
-	Game.tell(player.peer, "Você pegou: " + ", ".join(parts) + ".")
-	items = {}
-	if temporary:
-		queue_free()
-	else:
-		var w: World = Game.world
-		if w != null:
-			w.container_changed(self)
-		queue_redraw()
+## Abrir é local (a janela de saque lê 'items'); a transferência vai pelo Player.act.
+func interact(_player: Player) -> void:
+	pass
 
 
 func _process(_delta: float) -> void:
@@ -64,6 +57,10 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# folha "containers": comum, médico, técnico (cheia/vazia) e o saco (índice 6)
 	var col := 6
+	if chest:
+		col = 1 if items.is_empty() else 0
+		GenArt.draw_frame(self, "containers", 0, col, Vector2.ZERO, Color(0.85, 0.75, 0.6))
+		return
 	if not temporary:
 		col = ["comum", "medico", "tecnico"].find(table) * 2 + (1 if items.is_empty() else 0)
 	GenArt.draw_frame(self, "containers", 0, col)

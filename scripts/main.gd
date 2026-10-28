@@ -206,6 +206,7 @@ func _snapshot() -> Dictionary:
 		return {}
 	var d := world.world_deltas()
 	d["legacy"] = Game.legacy
+	d["clock"] = Game.play_time
 	return d
 
 
@@ -213,6 +214,7 @@ func _snapshot() -> Dictionary:
 func _on_welcome(seed_value: int, snapshot: Dictionary) -> void:
 	_close_title()
 	Game.legacy = snapshot.get("legacy", [])
+	Game.play_time = float(snapshot.get("clock", 0.0))
 	_new_world(seed_value)
 	world.apply_deltas(snapshot)
 	hud.set_active(true)

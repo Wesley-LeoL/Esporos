@@ -20,6 +20,7 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 ## Sistemas implementados (protótipo jogável)
 - **Carga patogênica (0–100%)**: todos nascem infectados; máscara + filtro, supressor químico e purificador controlam a carga. Água contaminada acelera a infecção.
 - **Mar de Esporos**: concentração sobe perto da borda do mapa; na zona letal o filtro é destruído e hordas de elite surgem sem parar.
+- **Inventário por peso e volume**: bolsos, mochilas e coldre com capacidade em litros, sobrecarga que deixa lento, itens com durabilidade (armas e máscara), validade (perecíveis estragam) e carga (bateria, combustível, antisséptico, fita). Janela de saque com o recipiente e o inventário lado a lado; baú para guardar.
 - **Metabolismo**: fome (calorias) e sede (água limpa vs. suja); carboidratos e proteínas foram removidos do protótipo.
 - **Medicina por membros**: 6 membros com ferida leve/profunda, sangramento, desinfecção, sutura, bandagem, antibiótico, sepse e infecção fúngica por ferida aberta.
 - **Cibernética**: implantes (filtro pulmonar, HUD de escaneamento, braço reforçado) com bateria, estresse térmico, integridade e manutenção; implante danificado enfraquece a imunidade.
@@ -27,7 +28,7 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **Perma-death com legado**: morte por infecção vira infectado de elite com inventário e implantes; morte física deixa cadáver que decompõe, atrai moscas/hordas e serve de baú.
 - **Mundo procedural por seed** (FastNoiseLite), estradas, vilas com simulação em segundo plano (estoque, caravanas, risco de infestação).
 - **Base-building**: pisos (TileMapLayer), paredes, portas, gerador, purificador, torre automatizada, selagem de ar.
-- **Persistência de deltas**: só construções, terreno, caixas saqueadas, cadáveres, elites, vilas e legado vão para o save.
+- **Persistência de deltas**: só construções, terreno, caixas saqueadas, baús, cadáveres, elites, vilas e legado vão para o save (saves da versão anterior são convertidos).
 
 ## Console de testes (cheats)
 `F1` ou `` ` `` abre o terminal (pausa o jogo). Digite `ajuda`. Comandos: `dar <item> [qtd]`, `dano <membro|todos> <n>`, `spawn [normal|elite] [n]`, `tp <x> <y>` (ou `abrigo`, `vila <n>`, `borda`, `cadaver`, `elite`), `set` (patogeno, sangue, calorias, agua, bateria, filtro, calor), `skill`, `curar`, `restaurar`, `implante`, `god`, `matar`, `infectar`, `limpar`, `pos`, `salvar`. Códigos prontos: `kit`, `kit_medico`, `kit_build`, `kit_cyber`. Tab completa, ↑↓ navega no histórico.
@@ -38,7 +39,7 @@ Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no m
 ## Estrutura
 ```
 autoload/   input_setup.gd (ações) · net.gd (sessão co-op, ENet, replicação) · game.gd (mensagens, save, legado, debug)
-scripts/data/      db.gd (itens, implantes, construções) · survivor_data.gd (toda a lógica de sobrevivência)
+scripts/data/      db.gd (itens, implantes, construções) · items.gd (instâncias e listas de itens) · survivor_data.gd (toda a lógica de sobrevivência)
 scripts/world/     world.gd (mundo, spawn, vilas, construção, morte) · village_data.gd
 scripts/entities/  structure · infected · corpse · loot_container · caravan · build_ghost
 scripts/player/    player.gd
@@ -51,4 +52,5 @@ scripts/art/       art_db.gd + art_catalog.gd (pacote) · gen_art.gd + gen_catal
 ```bash
 tools/setup.sh
 tools/screenshot.sh saida.png --frames=90 --debug="5:give:metal,10;20:tab:3"
+godot --headless --path . -s res://tools/test_inventory.gd   # teste da lógica do inventário
 ```

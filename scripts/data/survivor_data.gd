@@ -4,6 +4,8 @@ extends RefCounted
 ## membros, cibernética, habilidades e inventário. Não depende de nós da cena.
 
 signal message(text: String)
+## Itens que não couberam (o Player larga no chão num saco).
+signal overflow(items: Array)
 
 const LIMBS: Array[String] = ["cabeca", "torso", "braco_e", "braco_d", "perna_e", "perna_d"]
 const LIMB_NAMES := {"cabeca": "Cabeça", "torso": "Tronco", "braco_e": "Braço esq.", "braco_d": "Braço dir.",
@@ -11,6 +13,13 @@ const LIMB_NAMES := {"cabeca": "Cabeça", "torso": "Tronco", "braco_e": "Braço 
 const NAMES: Array[String] = ["Ayla Moreno", "Kael Ribeiro", "Dara Voss", "Mateo Quintana", "Iris Okafor",
 	"Bruno Takeda", "Nina Falk", "Orion Duarte", "Lena Sato", "Teo Marques", "Zara Lindqvist", "Caio Brandt"]
 const MAX_CAL := 2000.0
+## Volume dos bolsos (litros) e peso confortável (kg; a fase 3 liga isso à Força).
+const POCKETS_CAP := 4.0
+const CARRY_MAX := 16.0
+## Ordem em que os itens recebidos procuram espaço (o coldre só aceita armas).
+const CONTAINERS := ["coldre", "mochila", "bolsos"]
+const CONT_NAMES := {"bolsos": "Bolsos", "mochila": "Mochila", "coldre": "Coldre"}
+const EQUIP_SLOTS := ["mascara", "mochila", "coldre"]
 
 var nome: String = "Sobrevivente"
 var pathogen: float = 10.0
@@ -19,10 +28,13 @@ var water: float = 80.0
 var blood: float = 100.0
 var limbs := {}
 var skills := {}
-var inventory := {}
-var mask_on: bool = false
-var filter: float = 0.0
-var weapon: String = ""
+## Itens por recipiente (listas de instâncias, ver Items).
+var bags := {"bolsos": [], "mochila": [], "coldre": []}
+## Itens vestidos: máscara (com vedação e filtro), mochila e coldre. {} = vazio.
+var equip := {"mascara": {}, "mochila": {}, "coldre": {}}
+## Id único ("u") da arma na mão (ela continua guardada em algum recipiente).
+var hand_u: int = 0
+var _next_u: int = 1
 var suppress_t: float = 0.0
 var tainted_t: float = 0.0
 var antibiotic_t: float = 0.0
@@ -60,29 +72,167 @@ static func random_survivor(r: RandomNumberGenerator) -> SurvivorData:
 	keys.shuffle()
 	d.skills[keys[0]]["lv"] = r.randi_range(1, 3)
 	d.skills[keys[1]]["lv"] = r.randi_range(0, 2)
-	d.inventory = {"feijao": 1, "agua_limpa": 2, "bandagem": 1, "mascara": 1, "filtro": 1, "sucata": 3}
+	d.equip["mochila"] = Items.make("mochila_escolar")[0]
+	var mask: Dictionary = Items.make("mascara")[0]
+	mask["filtro"] = 100.0
+	d.equip["mascara"] = mask
+	var start := {"feijao": 1, "abridor": 1, "agua_limpa": 2, "bandagem": 1, "filtro": 1, "sucata": 3}
 	if r.randf() < 0.5:
-		d.inventory["supressor"] = 1
-	d.mask_on = true
-	d.filter = 100.0
+		start["supressor"] = 1
+	if r.randf() < 0.5:
+		start["maca"] = 2
+	d.receive(Items.from_counts(start))
 	return d
 
 
 # ---------------------------------------------------------------- inventário
+func all_items() -> Array:
+	return bags["coldre"] + bags["mochila"] + bags["bolsos"]
+
+
 func count(id: String) -> int:
-	return int(inventory.get(id, 0))
+	return Items.count(all_items(), id)
 
 
-func add_item(id: String, n: int = 1) -> void:
-	inventory[id] = count(id) + n
+## Capacidade (litros) de um recipiente; mochila e coldre dependem do item vestido.
+func capacity(c: String) -> float:
+	if c == "bolsos":
+		return POCKETS_CAP
+	var worn: Dictionary = equip.get(c, {})
+	return float(Items.def(worn["id"]).get("cap", 0.0)) if not worn.is_empty() else 0.0
+
+
+func used_volume(c: String) -> float:
+	return Items.list_volume(bags[c])
+
+
+## Quantas unidades da instância cabem no recipiente.
+func fits(c: String, inst: Dictionary) -> int:
+	if c == "coldre" and String(Items.def(inst["id"])["tipo"]) != "arma":
+		return 0
+	var unit := float(Items.def(inst["id"]).get("vol", 0.5))
+	var free := capacity(c) - used_volume(c)
+	if unit <= 0.0:
+		return int(inst["n"])
+	return clampi(floori((free + 0.001) / unit), 0, int(inst["n"]))
+
+
+func _put(c: String, inst: Dictionary) -> void:
+	var placed := Items.add(bags[c], inst)
+	if not placed.has("u"):
+		placed["u"] = _next_u
+		_next_u += 1
+
+
+## Guarda uma instância onde couber (ou no recipiente 'prefer'). Devolve o que sobrou ({}).
+## Mantém o id único da instância quando ela já tem um (itens que só mudam de recipiente).
+func store(inst: Dictionary, prefer := "") -> Dictionary:
+	inst = inst.duplicate()
+	var order: Array = CONTAINERS.duplicate()
+	if prefer != "":
+		order.erase(prefer)
+		order.push_front(prefer)
+	for c in order:
+		var k := fits(c, inst)
+		if k <= 0:
+			continue
+		if k >= int(inst["n"]):
+			_put(c, inst)
+			return {}
+		var part := inst.duplicate()
+		part.erase("u")
+		part["n"] = k
+		inst["n"] = int(inst["n"]) - k
+		_put(c, part)
+	inst.erase("u")
+	return inst
+
+
+## Recebe uma lista de itens; devolve o que não coube.
+func receive(list: Array) -> Array:
+	var left: Array = []
+	for inst in list:
+		var rest := store(inst)
+		if not rest.is_empty():
+			Items.add(left, rest)
+	return left
+
+
+## Cria itens novos e guarda; o que não couber cai no chão (sinal overflow).
+func give(id: String, n: int = 1) -> void:
+	var left := receive(Items.make(id, n))
+	if not left.is_empty():
+		message.emit("Sem espaço: %s ficou no chão." % Items.describe_list(left))
+		overflow.emit(left)
+
+
+## [recipiente, instância] do item com esse id único ("equip:<slot>" para itens vestidos).
+func find(u: int) -> Array:
+	for c in bags:
+		for inst in bags[c]:
+			if int(inst.get("u", 0)) == u:
+				return [c, inst]
+	for slot in equip:
+		if not equip[slot].is_empty() and int(equip[slot].get("u", 0)) == u:
+			return ["equip:" + slot, equip[slot]]
+	return []
+
+
+## Primeira instância com esse id (para ações por tipo, como "usar bateria").
+func first_of(id: String) -> Dictionary:
+	for inst in all_items():
+		if inst["id"] == id:
+			return inst
+	return {}
+
+
+func _resolve(ref: Variant) -> Dictionary:
+	if ref is int or ref is float:
+		var f := find(int(ref))
+		return f[1] if not f.is_empty() else {}
+	return first_of(str(ref))
+
+
+## Tira 'n' unidades de uma instância do inventário. Devolve a parte (sem id único).
+func remove_u(u: int, n: int = 1) -> Dictionary:
+	var f := find(u)
+	if f.is_empty() or String(f[0]).begins_with("equip:"):
+		return {}
+	var part := Items.split(bags[f[0]], f[1], n)
+	if u == hand_u and find(u).is_empty():
+		hand_u = 0
+	return Items.strip(part)
 
 
 func take_item(id: String, n: int = 1) -> bool:
 	if count(id) < n:
 		return false
-	inventory[id] = count(id) - n
-	if int(inventory[id]) <= 0:
-		inventory.erase(id)
+	for c in ["bolsos", "mochila", "coldre"]:
+		var here := Items.count(bags[c], id)
+		if here <= 0 or n <= 0:
+			continue
+		var k := mini(here, n)
+		Items.take(bags[c], id, k)
+		n -= k
+	if hand_u != 0 and find(hand_u).is_empty():
+		hand_u = 0
+	return true
+
+
+## Gasta um uso de um item (unidade inteira, ou parte da carga em itens com usos).
+func spend(id: String) -> bool:
+	var d := Items.def(id)
+	if not d.has("carga"):
+		return take_item(id)
+	var best: Dictionary = {}
+	for inst in all_items():
+		if inst["id"] == id and (best.is_empty() or float(inst["carga"]) < float(best["carga"])):
+			best = inst
+	if best.is_empty():
+		return false
+	best["carga"] = float(best["carga"]) - float(d.get("uso_carga", 100.0))
+	if float(best["carga"]) <= 0.5:
+		remove_u(int(best["u"]))
 	return true
 
 
@@ -96,6 +246,150 @@ func can_afford(cost: Dictionary) -> bool:
 func pay(cost: Dictionary) -> void:
 	for k in cost:
 		take_item(k, int(cost[k]))
+
+
+## Move um item entre os próprios recipientes (inteiro, se couber).
+func move_item(u: int, dest: String) -> void:
+	var f := find(u)
+	if f.is_empty() or not bags.has(dest) or f[0] == dest or String(f[0]).begins_with("equip:"):
+		return
+	var inst: Dictionary = f[1]
+	if fits(dest, inst) < int(inst["n"]):
+		message.emit("Não cabe em %s." % CONT_NAMES[dest].to_lower())
+		return
+	var keep_hand := hand_u == u
+	bags[f[0]].erase(inst)
+	var placed := Items.add(bags[dest], inst)
+	if keep_hand:
+		hand_u = int(placed["u"])
+
+
+# ---------------------------------------------------------------- equipamento
+func has_mask() -> bool:
+	return not equip["mascara"].is_empty()
+
+
+func filter_pct() -> float:
+	return float(equip["mascara"].get("filtro", 0.0)) if has_mask() else 0.0
+
+
+func mask_seal() -> float:
+	return float(equip["mascara"].get("dur", 100.0)) if has_mask() else 0.0
+
+
+func weapon_inst() -> Dictionary:
+	if hand_u == 0:
+		return {}
+	var f := find(hand_u)
+	return f[1] if not f.is_empty() else {}
+
+
+func weapon_id() -> String:
+	var w := weapon_inst()
+	return str(w["id"]) if not w.is_empty() else ""
+
+
+## Veste um item (mochila, coldre ou máscara) vindo de fora do inventário ou de um recipiente.
+## O que estava vestido antes volta para o inventário junto com o conteúdo dele; o que não
+## couber cai no chão.
+func wear(inst: Dictionary) -> void:
+	var tipo := String(Items.def(inst["id"]).get("tipo", ""))
+	if not tipo in EQUIP_SLOTS:
+		return
+	inst = Items.strip(inst)
+	inst["n"] = 1
+	inst["u"] = _next_u
+	_next_u += 1
+	var old: Dictionary = equip[tipo]
+	var old_content: Array = bags[tipo] if bags.has(tipo) else []
+	equip[tipo] = inst
+	if bags.has(tipo):
+		bags[tipo] = []
+	var back: Array = []
+	for it in old_content:
+		back.append(it)
+	if not old.is_empty():
+		back.append(old)
+	var left := receive(back)
+	if hand_u != 0 and find(hand_u).is_empty():
+		hand_u = 0
+	message.emit("Você vestiu: %s." % DB.item_name(inst["id"]))
+	if not left.is_empty():
+		message.emit("Sem espaço: %s ficou no chão." % Items.describe_list(left))
+		overflow.emit(left)
+
+
+## Tira um item vestido e guarda no inventário (ou larga, se não couber).
+func unwear(slot: String) -> void:
+	if not equip.has(slot) or equip[slot].is_empty():
+		return
+	var old: Dictionary = equip[slot]
+	equip[slot] = {}
+	var back: Array = []
+	if bags.has(slot):
+		back = bags[slot]
+		bags[slot] = []
+	back.append(old)
+	var left := receive(back)
+	if hand_u != 0 and find(hand_u).is_empty():
+		hand_u = 0
+	message.emit("Você tirou: %s." % DB.item_name(old["id"]))
+	if not left.is_empty():
+		message.emit("Sem espaço: %s ficou no chão." % Items.describe_list(left))
+		overflow.emit(left)
+
+
+## Peso carregado (kg): conteúdo dos recipientes (a mochila alivia parte) + itens vestidos.
+func carried_weight() -> float:
+	var w := Items.list_weight(bags["bolsos"]) + Items.list_weight(bags["coldre"])
+	var red := 0.0
+	if not equip["mochila"].is_empty():
+		red = float(Items.def(equip["mochila"]["id"]).get("reducao", 0.0))
+	w += Items.list_weight(bags["mochila"]) * (1.0 - red)
+	for slot in equip:
+		if not equip[slot].is_empty():
+			w += Items.weight(equip[slot])
+	return w
+
+
+func carry_max() -> float:
+	return CARRY_MAX
+
+
+func load_ratio() -> float:
+	return carried_weight() / carry_max()
+
+
+## Desgasta a arma da mão após um golpe que acertou. Ela pode quebrar.
+func wear_weapon() -> void:
+	var w := weapon_inst()
+	if w.is_empty() or not w.has("dur"):
+		return
+	var gasto := float(Items.def(w["id"]).get("gasto", 1.0)) * (1.0 - 0.04 * float(level("mecanica")))
+	w["dur"] = maxf(0.0, float(w["dur"]) - gasto)
+	if float(w["dur"]) <= 0.0:
+		message.emit("Sua arma quebrou: %s!" % DB.item_name(w["id"]))
+		remove_u(hand_u)
+		hand_u = 0
+	elif float(w["dur"]) < 15.0:
+		_warn("arma_" + str(hand_u), "Sua arma está quase quebrando.", 30.0)
+
+
+## Conserta a durabilidade de um item com fita adesiva.
+func repair(u: int) -> void:
+	var f := find(u)
+	if f.is_empty() or not f[1].has("dur"):
+		return
+	var inst: Dictionary = f[1]
+	if float(inst["dur"]) >= 100.0:
+		message.emit("Não precisa de conserto.")
+		return
+	if not spend("fita"):
+		message.emit("Você precisa de fita adesiva.")
+		return
+	inst["dur"] = minf(100.0, float(inst["dur"]) + 30.0 + 3.0 * float(level("mecanica")))
+	add_xp("mecanica", 3.0)
+	message.emit("Consertado: %s (%d%%)." % [DB.item_name(inst["id"]), int(float(inst["dur"]))])
 
 
 # ---------------------------------------------------------------- habilidades
@@ -232,8 +526,9 @@ func limb_immune_mult(limb_id: String) -> float:
 
 func exposure_factor() -> float:
 	var f := 1.0
-	if mask_on and filter > 0.0:
-		f *= 0.08
+	if has_mask() and filter_pct() > 0.0:
+		# máscara com vedação ruim vaza: 8% com vedação perfeita, até 60% sem vedação
+		f *= lerpf(0.6, 0.08, mask_seal() / 100.0)
 	if implant_active("pulmao"):
 		f *= 0.35
 	return f
@@ -257,16 +552,19 @@ func _tick_pathogen(delta: float, spore: float, purifier: bool) -> void:
 		rate *= 0.2
 		pathogen -= 4.0 * delta
 	pathogen = clampf(pathogen + rate * delta, 0.0, 100.0)
-	if mask_on and filter > 0.0:
+	if has_mask() and filter_pct() > 0.0:
+		var mask: Dictionary = equip["mascara"]
 		if spore >= 1.0:
-			filter = 0.0
+			mask["filtro"] = 0.0
 			message.emit("O filtro foi destruído pelos esporos!")
 		else:
-			filter = maxf(0.0, filter - (spore * spore * 1.2 + spore * 0.2) * delta)
-			if filter <= 0.0:
+			mask["filtro"] = maxf(0.0, filter_pct() - (spore * spore * 1.2 + spore * 0.2) * delta)
+			if filter_pct() <= 0.0:
 				message.emit("O filtro da máscara acabou!")
-			elif filter < 15.0:
+			elif filter_pct() < 15.0:
 				_warn("filtro", "O filtro está quase no fim.")
+		if mask_seal() < 30.0:
+			_warn("vedacao", "A vedação da máscara está ruim: conserte com fita adesiva.", 60.0)
 	if pathogen > 75.0:
 		_warn("patogeno", "A carga patogênica está crítica!", 25.0)
 
@@ -371,13 +669,17 @@ func damage_limb(limb_id: String, amount: float) -> void:
 		var def: Dictionary = DB.IMPLANTS[implants[slot]["id"]]
 		if def["membro"] == limb_id:
 			implants[slot]["integ"] = maxf(0.0, float(implants[slot]["integ"]) - amount * 0.4)
+	if limb_id == "cabeca" and has_mask():
+		equip["mascara"]["dur"] = maxf(0.0, mask_seal() - amount * 0.8)
 	message.emit("Ferimento: %s (-%d)." % [LIMB_NAMES[limb_id], int(amount)])
 
 
 func melee_damage() -> float:
 	var dmg := 14.0
-	if weapon != "" and DB.ITEMS.has(weapon):
-		dmg += float(DB.ITEMS[weapon]["dano"])
+	var w := weapon_inst()
+	if not w.is_empty():
+		var bonus := float(Items.def(w["id"])["dano"])
+		dmg += bonus * (0.6 if float(w.get("dur", 100.0)) < 25.0 else 1.0)
 	if implant_active("braco_d"):
 		dmg += 14.0
 	if float(limbs["braco_d"]["hp"]) < 30.0:
@@ -395,21 +697,43 @@ func speed_mult() -> float:
 			m -= 0.15
 	if pathogen > 60.0:
 		m -= 0.15 * (pathogen - 60.0) / 40.0
-	return maxf(0.35, m)
+	var r := load_ratio()
+	if r > 1.0:
+		m -= minf(0.45, (r - 1.0) * 0.6)
+	return maxf(0.3, m)
 
 
 # ---------------------------------------------------------------- uso de itens
-func use_item(id: String) -> void:
-	if count(id) <= 0 or not DB.ITEMS.has(id):
+## Usa um item. ref: id único (int) ou id do item (String, usa a primeira unidade).
+func use_item(ref: Variant) -> void:
+	var inst := _resolve(ref)
+	if inst.is_empty():
 		return
+	var id: String = inst["id"]
+	var u := int(inst.get("u", 0))
 	var def: Dictionary = DB.ITEMS[id]
 	match String(def["tipo"]):
 		"comida":
-			take_item(id)
-			calories = minf(MAX_CAL, calories + float(def["cal"]))
-			message.emit("Você comeu: %s." % def["nome"])
+			if def.get("lata", false) and count("abridor") + count("faca") + count("machete") <= 0:
+				message.emit("Você precisa de um abridor de latas, faca ou machete para abrir.")
+				return
+			var fl := Items.freshness(inst)
+			var spoiled := Items.spoiled(inst)
+			remove_u(u)
+			var cal := float(def["cal"])
+			if spoiled:
+				calories = minf(MAX_CAL, calories + cal * 0.4)
+				pathogen = minf(100.0, pathogen + 8.0)
+				tainted_t = maxf(tainted_t, 60.0)
+				message.emit("Comida estragada! Você se sente mal (%s)." % def["nome"])
+			elif inst.has("venc") and fl < 0.35:
+				calories = minf(MAX_CAL, calories + cal * 0.75)
+				message.emit("Você comeu: %s (passado)." % def["nome"])
+			else:
+				calories = minf(MAX_CAL, calories + cal)
+				message.emit("Você comeu: %s." % def["nome"])
 		"bebida":
-			take_item(id)
+			remove_u(u)
 			water = minf(100.0, water + float(def["agua"]))
 			if not def["limpa"]:
 				pathogen = minf(100.0, pathogen + 6.0)
@@ -417,34 +741,60 @@ func use_item(id: String) -> void:
 				message.emit("Água contaminada! A infecção acelera.")
 			else:
 				message.emit("Você bebeu água limpa.")
-		"mascara":
-			mask_on = not mask_on
-			message.emit("Máscara %s." % ("colocada" if mask_on else "removida"))
+		"mascara", "mochila", "coldre":
+			if equip.has(def["tipo"]) and int(equip[def["tipo"]].get("u", -1)) == u:
+				unwear(String(def["tipo"]))
+			else:
+				var part := remove_u(u)
+				if not part.is_empty():
+					wear(part)
 		"filtro":
-			if count("mascara") <= 0:
-				message.emit("Você precisa de uma máscara de gás.")
+			if not has_mask():
+				message.emit("Vista uma máscara de gás primeiro.")
 				return
-			take_item(id)
-			filter = 100.0
+			remove_u(u)
+			equip["mascara"]["filtro"] = 100.0
 			message.emit("Filtro novo instalado (100%).")
 		"supressor":
-			take_item(id)
+			remove_u(u)
 			suppress_t = 60.0
 			pathogen = maxf(0.0, pathogen - 15.0)
 			message.emit("Supressor aplicado: carga -15%.")
 		"bateria":
-			take_item(id)
-			battery = minf(100.0, battery + 60.0)
-			message.emit("Bateria dos implantes recarregada.")
+			if battery >= 99.5:
+				message.emit("A bateria dos implantes já está cheia.")
+				return
+			# uma bateria cheia (carga 100) vale 60% da bateria dos implantes
+			var amount := minf(100.0 - battery, float(inst["carga"]) * 0.6)
+			battery += amount
+			inst["carga"] = float(inst["carga"]) - amount / 0.6
+			if float(inst["carga"]) <= 0.5:
+				remove_u(u)
+			message.emit("Implantes recarregados (%d%%)." % int(battery))
 		"manual":
-			take_item(id)
+			remove_u(u)
 			message.emit("Você estudou: %s." % def["nome"])
 			add_xp(String(def["skill"]), float(def["xp"]))
 		"arma":
-			weapon = "" if weapon == id else id
-			message.emit("Arma %s: %s." % [("equipada" if weapon == id else "guardada"), def["nome"]])
+			hand_u = 0 if hand_u == u else u
+			message.emit("Arma %s: %s." % [("na mão" if hand_u == u else "guardada"), def["nome"]])
 		_:
 			message.emit("Use este item em outra aba.")
+
+
+## Gasta combustível dos galões para abastecer um gerador. Devolve o quanto abasteceu
+## (pontos de 0-100 do gerador; um galão cheio vale 50).
+func pour_fuel(need: float) -> float:
+	var got := 0.0
+	for inst in all_items().duplicate():
+		if got >= need or inst["id"] != "combustivel":
+			continue
+		var amount := minf(need - got, float(inst["carga"]) * 0.5)
+		got += amount
+		inst["carga"] = float(inst["carga"]) - amount / 0.5
+		if float(inst["carga"]) <= 0.5:
+			remove_u(int(inst["u"]))
+	return got
 
 
 # ---------------------------------------------------------------- medicina
@@ -463,7 +813,7 @@ func treat(limb_id: String, action: String) -> void:
 		return
 	match action:
 		"desinfetar":
-			if not take_item("antisseptico"):
+			if not spend("antisseptico"):
 				message.emit("Sem antisséptico.")
 				return
 			limb["disinfected"] = true
@@ -566,7 +916,7 @@ func craft(recipe: String) -> void:
 		message.emit("Faltam materiais: %s." % DB.cost_text(def["custo"]))
 		return
 	pay(def["custo"])
-	add_item(recipe)
+	give(recipe)
 	add_xp_map(def["xp"])
 	message.emit("Fabricado: %s." % def["nome"])
 
@@ -575,8 +925,8 @@ func craft(recipe: String) -> void:
 func to_dict() -> Dictionary:
 	return {"nome": nome, "pathogen": pathogen, "calories": calories,
 		"water": water, "blood": blood, "limbs": limbs.duplicate(true), "skills": skills.duplicate(true),
-		"inventory": inventory.duplicate(), "implants": implants.duplicate(true), "mask_on": mask_on,
-		"filter": filter, "weapon": weapon, "suppress_t": suppress_t, "tainted_t": tainted_t,
+		"bags": bags.duplicate(true), "equip": equip.duplicate(true), "hand_u": hand_u, "next_u": _next_u,
+		"implants": implants.duplicate(true), "suppress_t": suppress_t, "tainted_t": tainted_t,
 		"antibiotic_t": antibiotic_t, "battery": battery, "heat": heat, "time_alive": time_alive}
 
 
@@ -587,9 +937,6 @@ static func from_dict(src: Dictionary) -> SurvivorData:
 	d.calories = float(src.get("calories", 1600.0))
 	d.water = float(src.get("water", 80.0))
 	d.blood = float(src.get("blood", 100.0))
-	d.mask_on = bool(src.get("mask_on", false))
-	d.filter = float(src.get("filter", 0.0))
-	d.weapon = str(src.get("weapon", ""))
 	d.suppress_t = float(src.get("suppress_t", 0.0))
 	d.tainted_t = float(src.get("tainted_t", 0.0))
 	d.antibiotic_t = float(src.get("antibiotic_t", 0.0))
@@ -608,10 +955,46 @@ static func from_dict(src: Dictionary) -> SurvivorData:
 	for s in DB.SKILLS:
 		if src_skills.has(s):
 			d.skills[s] = {"lv": int(src_skills[s].get("lv", 0)), "xp": float(src_skills[s].get("xp", 0.0))}
-	var src_inv: Dictionary = src.get("inventory", {})
-	for k in src_inv:
-		d.inventory[str(k)] = int(src_inv[k])
+	if src.has("bags"):
+		var sb: Dictionary = src["bags"]
+		for c in d.bags:
+			d.bags[c] = Items.sanitize(sb.get(c, []))
+		var se: Dictionary = src.get("equip", {})
+		for slot in d.equip:
+			var lst := Items.sanitize([se[slot]]) if se.get(slot) is Dictionary and not se[slot].is_empty() else []
+			d.equip[slot] = lst[0] if not lst.is_empty() else {}
+		d.hand_u = int(src.get("hand_u", 0))
+		d._next_u = int(src.get("next_u", 1))
+	else:
+		d._migrate_v3(src)
 	var src_imp: Dictionary = src.get("implants", {})
 	for k in src_imp:
 		d.implants[str(k)] = {"id": str(src_imp[k]["id"]), "integ": float(src_imp[k]["integ"])}
 	return d
+
+
+## Sobrevivente salvo na versão 3 (inventário {id: n}, máscara ligada/desligada e filtro):
+## converte para recipientes. Ganha uma mochila escolar para não perder os itens.
+func _migrate_v3(src: Dictionary) -> void:
+	var inv: Dictionary = src.get("inventory", {})
+	var counts := {}
+	for k in inv:
+		if DB.ITEMS.has(str(k)):
+			counts[str(k)] = int(inv[k])
+	equip["mochila"] = Items.make("mochila_escolar")[0]
+	equip["mochila"]["u"] = _next_u
+	_next_u += 1
+	if bool(src.get("mask_on", false)) and int(counts.get("mascara", 0)) > 0:
+		counts["mascara"] = int(counts["mascara"]) - 1
+		var mask: Dictionary = Items.make("mascara")[0]
+		mask["filtro"] = float(src.get("filter", 0.0))
+		mask["u"] = _next_u
+		_next_u += 1
+		equip["mascara"] = mask
+	var left := receive(Items.from_counts(counts))
+	for inst in left:
+		_put("bolsos", inst)
+	var wid := str(src.get("weapon", ""))
+	if wid != "":
+		var w := first_of(wid)
+		hand_u = int(w.get("u", 0))

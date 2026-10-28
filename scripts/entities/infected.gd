@@ -11,7 +11,7 @@ var elite := false
 var legacy := false
 var legacy_name := ""
 var home := Vector2.ZERO
-var loot := {}
+var loot: Array = []
 var implants := {}
 var world: World
 
@@ -152,10 +152,9 @@ func take_damage(amount: float, from: Node2D) -> void:
 
 
 func _die() -> void:
-	var drops := loot.duplicate()
+	var drops: Array = loot.duplicate(true)
 	for slot in implants:
-		var id: String = implants[slot]["id"]
-		drops[id] = int(drops.get(id, 0)) + 1
+		Items.add(drops, {"id": String(implants[slot]["id"]), "n": 1})
 	if not elite and randf() < 0.18:
 		drops = DB.roll_loot("comum", 1, world.rng)
 	world.drop_loot(position, drops)

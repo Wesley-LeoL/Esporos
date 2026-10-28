@@ -60,6 +60,9 @@ var _menu_data: SurvivorData
 var _effects_key := ""
 var _log_key := ""
 var _t := 0.0
+## Recipiente aberto na janela de saque (caixa, baú, saco ou cadáver); null = fechado.
+var loot_node: Node2D
+var _loot_key := ""
 
 
 func _ready() -> void:
@@ -304,7 +307,7 @@ func _build_log() -> void:
 func _build_equipment() -> void:
 	equip_box = _hbox(10)
 	ui.add_child(equip_box)
-	for def in [["arma", "ARMA"], ["filtro", "MÁSCARA"], ["bateria", "BATERIA"]]:
+	for def in [["carga", "CARGA"], ["arma", "ARMA"], ["filtro", "MÁSCARA"], ["bateria", "BATERIA"]]:
 		var slot := _panel("slot", 12, Vector4(8, 8, 8, 6))
 		slot.custom_minimum_size = Vector2(96, 96)
 		equip_box.add_child(slot)
@@ -489,6 +492,15 @@ func _player() -> Player:
 
 
 # ------------------------------------------------------------------ menu
+## Abre a janela de saque de um recipiente (aba Inventário em duas colunas).
+func open_loot(node: Node2D) -> void:
+	open_menu(0)
+	if menu_root.visible:
+		loot_node = node
+		_loot_key = ""
+		_rebuild()
+
+
 func open_menu(tab: int = -1) -> void:
 	var p := _player()
 	if p == null or p.data == null or p.is_dead():
@@ -504,6 +516,7 @@ func open_menu(tab: int = -1) -> void:
 
 
 func close_menu() -> void:
+	loot_node = null
 	menu_root.visible = false
 	get_tree().paused = false
 
@@ -541,9 +554,10 @@ func _process(delta: float) -> void:
 
 	# ar e filtro
 	var spore := Game.world.spore_at(p.position)
-	filter_bar.value = d.filter if d.mask_on else 0.0
-	filter_val.text = ("%d%%" % int(d.filter)) if d.mask_on else "SEM MÁSCARA"
-	filter_val.add_theme_color_override("font_color", UITheme.TEXT if d.mask_on and d.filter > 15.0 else UITheme.DANGER)
+	var mask_on := d.has_mask()
+	filter_bar.value = d.filter_pct() if mask_on else 0.0
+	filter_val.text = ("%d%%" % int(d.filter_pct())) if mask_on else "SEM MÁSCARA"
+	filter_val.add_theme_color_override("font_color", UITheme.TEXT if mask_on and d.filter_pct() > 15.0 else UITheme.DANGER)
 	var q := ["LIMPO", OK_COLOR]
 	if spore >= 1.0:
 		q = ["LETAL", UITheme.DANGER]
@@ -598,6 +612,15 @@ func _process(delta: float) -> void:
 	log_box.position = Vector2(16, vitals_panel.position.y - log_box.size.y - 12)
 	effects_box.position = Vector2(ui.size.x - effects_box.size.x - 16, equip_box.position.y - effects_box.size.y - 10)
 
+	if loot_node != null and (not is_instance_valid(loot_node) or loot_node.is_queued_for_deletion()
+			or Vector2(loot_node.position.x - p.position.x, (loot_node.position.y - p.position.y) * 2.0).length() > 130.0):
+		loot_node = null
+		_rebuild()
+	if menu_root.visible and loot_node != null:
+		var lk := str(loot_node.items.hash())
+		if lk != _loot_key:
+			_loot_key = lk
+			_rebuild()
 	if menu_root.visible and d != _menu_data:
 		_menu_data = d
 		_rebuild()
@@ -645,14 +668,25 @@ func _update_log() -> void:
 
 
 func _update_equipment(d: SurvivorData) -> void:
+	var carga: Array = slots["carga"]
+	var pack: Dictionary = d.equip["mochila"]
+	(carga[0] as TextureRect).texture = GenArt.icon(pack["id"] if not pack.is_empty() else "mochila_escolar")
+	(carga[0] as TextureRect).self_modulate = Color.WHITE if not pack.is_empty() else Color(1, 1, 1, 0.3)
+	(carga[1] as Label).text = "%.1f KG" % d.carried_weight()
+	(carga[1] as Label).add_theme_color_override("font_color", UITheme.DANGER if d.load_ratio() > 1.0 else UITheme.MUTED)
 	var arma: Array = slots["arma"]
-	(arma[0] as TextureRect).texture = GenArt.icon(d.weapon) if d.weapon != "" else UITheme.icon("arma")
-	(arma[0] as TextureRect).self_modulate = Color.WHITE if d.weapon != "" else Color(1, 1, 1, 0.18)
-	(arma[1] as Label).text = "ARMA" if d.weapon == "" else "+%d" % int(DB.ITEMS[d.weapon]["dano"])
+	var w := d.weapon_inst()
+	(arma[0] as TextureRect).texture = GenArt.icon(w["id"]) if not w.is_empty() else UITheme.icon("arma")
+	(arma[0] as TextureRect).self_modulate = Color.WHITE if not w.is_empty() else Color(1, 1, 1, 0.18)
+	(arma[1] as Label).text = "ARMA" if w.is_empty() else "%d%%" % int(float(w.get("dur", 100.0)))
+	(arma[1] as Label).add_theme_color_override("font_color",
+		UITheme.DANGER if not w.is_empty() and float(w.get("dur", 100.0)) < 25.0 else UITheme.MUTED)
 	var mask: Array = slots["filtro"]
 	(mask[0] as TextureRect).texture = GenArt.icon("mascara")
-	(mask[0] as TextureRect).self_modulate = Color.WHITE if d.mask_on else Color(1, 1, 1, 0.18)
-	(mask[1] as Label).text = ("FILTRO x%d" % d.count("filtro")) if d.mask_on else "SEM MÁSCARA"
+	(mask[0] as TextureRect).self_modulate = Color.WHITE if d.has_mask() else Color(1, 1, 1, 0.18)
+	(mask[1] as Label).text = ("VED. %d%%" % int(d.mask_seal())) if d.has_mask() else "SEM MÁSCARA"
+	(mask[1] as Label).add_theme_color_override("font_color",
+		UITheme.DANGER if d.has_mask() and d.mask_seal() < 30.0 else UITheme.MUTED)
 	var bat: Array = slots["bateria"]
 	(bat[0] as TextureRect).texture = GenArt.icon("bateria")
 	var has_impl := not d.implants.is_empty()
@@ -665,8 +699,10 @@ func _update_effects(d: SurvivorData, spore: float) -> void:
 	var list: Array = []
 	if spore >= 1.0:
 		list.append(["alerta", "ESPOROS LETAIS", UITheme.DANGER])
-	if d.mask_on and d.filter <= 0.0:
+	if d.has_mask() and d.filter_pct() <= 0.0:
 		list.append(["filtro", "FILTRO ESGOTADO", UITheme.DANGER])
+	if d.load_ratio() > 1.0:
+		list.append(["mochila", "SOBRECARGA", UITheme.WARN])
 	if d.pathogen > 75.0:
 		list.append(["contaminacao", "CARGA CRÍTICA", UITheme.DANGER])
 	var bleeding := false
@@ -797,34 +833,32 @@ func _act(cb: Callable) -> Callable:
 func _tab_inventory(d: SurvivorData) -> void:
 	var box: VBoxContainer = boxes["inv"]
 	_clear(box)
-	_lbl(box, "Máscara: %s · Filtro: %d%% · Arma: %s" % [("ON" if d.mask_on else "OFF"), int(d.filter),
-		(DB.item_name(d.weapon) if d.weapon != "" else "nenhuma")], UITheme.MUTED)
-	_head(box, "Itens")
-	if d.inventory.is_empty():
-		_lbl(box, "Inventário vazio.", UITheme.MUTED)
-	var ids: Array = d.inventory.keys()
-	ids.sort()
-	for id: String in ids:
-		var def: Dictionary = DB.ITEMS[id]
-		var row := _row(box)
-		row.add_child(_item_icon(id))
-		var l := _label("%s  x%d" % [def["nome"], d.count(id)], S, UITheme.TEXT)
-		l.custom_minimum_size.x = 300
-		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(l)
-		_lbl(row, str(def["desc"]), UITheme.MUTED)
-		var verb := ""
-		match String(def["tipo"]):
-			"comida": verb = "Comer"
-			"bebida": verb = "Beber"
-			"mascara": verb = "Equipar" if not d.mask_on else "Tirar"
-			"filtro": verb = "Trocar"
-			"supressor": verb = "Aplicar"
-			"bateria": verb = "Recarregar"
-			"manual": verb = "Ler"
-			"arma": verb = "Equipar" if d.weapon != id else "Guardar"
-		if verb != "":
-			_btn(row, verb, _act(func() -> void: _player().act("use_item", [id])))
+	# carga total
+	var top := _row(box)
+	top.add_child(UITheme.icon_rect("mochila", UITheme.ACCENT, 36))
+	var ratio := d.load_ratio()
+	var wl := _label("CARGA %.1f / %.0f KG" % [d.carried_weight(), d.carry_max()], S, UITheme.DANGER if ratio > 1.0 else UITheme.TEXT)
+	wl.custom_minimum_size.x = 300
+	wl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	top.add_child(wl)
+	_bar(top, minf(ratio, 1.5), 1.5, UITheme.DANGER if ratio > 1.0 else UITheme.ACCENT, 260, 15)
+	_lbl(top, ("SOBRECARGA: você anda mais devagar." if ratio > 1.0 else "Acima de %.0f kg você fica lento." % d.carry_max()),
+		UITheme.WARN if ratio > 1.0 else UITheme.MUTED)
+	if loot_node != null and is_instance_valid(loot_node):
+		var cols := _hbox(16)
+		cols.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.add_child(cols)
+		var left := _vbox(6)
+		left.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		left.size_flags_stretch_ratio = 1.0
+		cols.add_child(left)
+		var right := _vbox(6)
+		right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		cols.add_child(right)
+		_loot_column(left, d)
+		_inventory_lists(right, d, true)
+		return
+	_inventory_lists(box, d, false)
 	_head(box, "Fabricação")
 	for rid: String in DB.CRAFTS:
 		var cdef: Dictionary = DB.CRAFTS[rid]
@@ -834,6 +868,114 @@ func _tab_inventory(d: SurvivorData) -> void:
 		_lbl(crow, "%s: %s · exige %s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"])],
 			UITheme.TEXT if ok else NO_COLOR)
 		_btn(crow, "Fabricar", _act(func() -> void: _player().act("craft", [rid])), d.meets(cdef["req"]))
+
+
+## Cor do texto de estado de um item (estragado/quebrando em vermelho, passado em amarelo).
+func _state_color(inst: Dictionary) -> Color:
+	if Items.spoiled(inst) or float(inst.get("dur", 100.0)) < 20.0:
+		return UITheme.DANGER
+	if Items.fresh_label(inst) == "Passado" or float(inst.get("dur", 100.0)) < 50.0:
+		return UITheme.WARN
+	return UITheme.MUTED
+
+
+## Ícone + nome + estado + peso, numa linha compacta.
+func _item_line(row: HBoxContainer, inst: Dictionary, extra := "") -> void:
+	row.add_child(_item_icon(inst["id"], 40))
+	var col := _vbox(0)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(col)
+	col.add_child(_label(Items.label(inst) + extra, S, UITheme.TEXT))
+	var st := Items.state_text(inst)
+	var info := "%.1f kg · %.1f L" % [Items.weight(inst), Items.volume(inst)]
+	col.add_child(_label(info + ("  ·  " + st if st != "" else ""), S, _state_color(inst)))
+
+
+func _verb_for(d: SurvivorData, inst: Dictionary) -> String:
+	var u := int(inst.get("u", 0))
+	match String(Items.def(inst["id"])["tipo"]):
+		"comida": return "Comer"
+		"bebida": return "Beber"
+		"mascara", "mochila", "coldre": return "Vestir"
+		"filtro": return "Trocar filtro" if d.has_mask() else ""
+		"supressor": return "Aplicar"
+		"bateria": return "Recarregar"
+		"manual": return "Ler"
+		"arma": return "Guardar" if d.hand_u == u else "Empunhar"
+	return ""
+
+
+func _inventory_lists(box: VBoxContainer, d: SurvivorData, looting: bool) -> void:
+	_head(box, "Vestindo")
+	var worn := false
+	for slot in SurvivorData.EQUIP_SLOTS:
+		var inst: Dictionary = d.equip[slot]
+		if inst.is_empty():
+			continue
+		worn = true
+		var row := _row(box)
+		var extra := ""
+		if slot != "mascara":
+			extra = "  (%.0f L)" % d.capacity(slot)
+		_item_line(row, inst, extra)
+		if inst.has("dur") and float(inst["dur"]) < 100.0 and not looting:
+			var u0 := int(inst["u"])
+			_btn(row, "Consertar", _act(func() -> void: _player().act("repair", [u0])), d.count("fita") > 0)
+		var sl: String = slot
+		_btn(row, "Tirar", _act(func() -> void: _player().act("unwear", [sl])))
+	if not worn:
+		_lbl(box, "Nada vestido.", UITheme.MUTED)
+	for c in ["coldre", "mochila", "bolsos"]:
+		var cap := d.capacity(c)
+		if cap <= 0.0 and d.bags[c].is_empty():
+			continue
+		var used := d.used_volume(c)
+		_head(box, "%s  %.1f / %.0f L" % [SurvivorData.CONT_NAMES[c], used, cap])
+		if d.bags[c].is_empty():
+			_lbl(box, "Vazio.", UITheme.MUTED)
+		for inst: Dictionary in d.bags[c]:
+			var u := int(inst["u"])
+			var n := int(inst["n"])
+			var row := _row(box)
+			_item_line(row, inst, "  · NA MÃO" if d.hand_u == u else "")
+			if looting:
+				var key := Game.world.key_of(loot_node)
+				_btn(row, "Guardar", _act(func() -> void: _player().act("store", [key, u, n])))
+				continue
+			var verb := _verb_for(d, inst)
+			if verb != "":
+				_btn(row, verb, _act(func() -> void: _player().act("use_item", [u])))
+			if inst.has("dur") and float(inst["dur"]) < 100.0:
+				_btn(row, "Consertar", _act(func() -> void: _player().act("repair", [u])), d.count("fita") > 0)
+			for dest in ["mochila", "bolsos", "coldre"]:
+				if dest != c and d.fits(dest, inst) >= n:
+					var dn: String = dest
+					_btn(row, "→ " + SurvivorData.CONT_NAMES[dest], _act(func() -> void: _player().act("move", [u, dn])))
+					break
+			_btn(row, "Largar", _act(func() -> void: _player().act("drop", [u, n])))
+
+
+func _loot_column(box: VBoxContainer, _d: SurvivorData) -> void:
+	var node := loot_node
+	var key := Game.world.key_of(node)
+	var items: Array = node.items
+	_head(box, String(node.title()))
+	var bar := _row(box)
+	_lbl(bar, "%d itens · %.1f kg" % [Items.total_units(items), Items.list_weight(items)], UITheme.MUTED)
+	_btn(bar, "Pegar tudo", _act(func() -> void: _player().act("take_all", [key])), not items.is_empty())
+	if items.is_empty():
+		_lbl(box, "Vazio.", UITheme.MUTED)
+	for i in items.size():
+		var inst: Dictionary = items[i]
+		var row := _row(box)
+		_item_line(row, inst)
+		var idx := i
+		var n := int(inst["n"])
+		var id: String = inst["id"]
+		if String(Items.def(id)["tipo"]) in SurvivorData.EQUIP_SLOTS:
+			_btn(row, "Vestir", _act(func() -> void: _player().act("take", [key, idx, 1, "vestir", id])))
+		_btn(row, "Pegar", _act(func() -> void: _player().act("take", [key, idx, n, "", id])))
 
 
 func _tab_body(d: SurvivorData) -> void:

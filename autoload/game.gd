@@ -12,10 +12,16 @@ var console: DevConsole
 var legacy: Array = []
 ## Sobreviventes de jogadores que não estão na sessão agora (nome do jogador -> dados).
 var survivor_cache := {}
+## Relógio do mundo em segundos de jogo (todos os peers avançam; o anfitrião corrige a cada
+## 5 s). Itens perecíveis guardam o instante em que estragam (Items).
 var play_time := 0.0
+var clock: float:
+	get:
+		return play_time
 var rng := RandomNumberGenerator.new()
 
 var _autosave_t := 25.0
+var _clock_t := 5.0
 var _log_stdout := false
 
 
@@ -58,15 +64,26 @@ func add_legacy(entry: Dictionary) -> void:
 	_set_legacy.rpc(legacy)
 
 
+@rpc("authority", "unreliable_ordered")
+func _set_clock(t: float) -> void:
+	play_time = t
+
+
 @rpc("authority", "reliable")
 func _set_legacy(list: Array) -> void:
 	legacy = list
 
 
 func _process(delta: float) -> void:
-	if world == null or not Net.is_server():
+	if world == null:
 		return
 	play_time += delta
+	if not Net.is_server():
+		return
+	_clock_t -= delta
+	if _clock_t <= 0.0:
+		_clock_t = 5.0
+		_set_clock.rpc(play_time)
 	_autosave_t -= delta
 	if _autosave_t <= 0.0:
 		_autosave_t = 25.0
@@ -90,7 +107,7 @@ func has_save() -> bool:
 	if not FileAccess.file_exists(SAVE_PATH):
 		return false
 	# saves de versões anteriores da geração do mundo não batem com o mapa atual
-	return int(read_save().get("version", 0)) == World.SAVE_VERSION
+	return int(read_save().get("version", 0)) in World.SAVE_COMPAT
 
 
 func read_save() -> Dictionary:
@@ -130,7 +147,7 @@ func debug_command(cmd: String) -> void:
 		return
 	match command:
 		"give":
-			p.data.add_item(a[0], int(a[1]) if a.size() > 1 else 1)
+			p.data.give(a[0], int(a[1]) if a.size() > 1 else 1)
 		"skill":
 			p.data.skills[a[0]]["lv"] = int(a[1])
 		"pathogen":
@@ -146,7 +163,8 @@ func debug_command(cmd: String) -> void:
 		"battery":
 			p.data.battery = float(arg)
 		"filter":
-			p.data.filter = float(arg)
+			if p.data.has_mask():
+				p.data.equip["mascara"]["filtro"] = float(arg)
 		"spawn":
 			world.spawn_infected(p.position + Vector2(70, 35), arg == "elite")
 		"build":
@@ -204,6 +222,21 @@ func debug_command(cmd: String) -> void:
 					best = lc
 			if best != null:
 				p.teleport(best.position + Vector2(0, 12))
+		"loot":
+			# abre a janela de saque do recipiente mais próximo (testes)
+			p._update_nearby()
+			if p.nearby != null and (p.nearby is LootContainer or p.nearby is Corpse):
+				hud.open_loot(p.nearby)
+		"drop_first":
+			var all := p.data.all_items()
+			if not all.is_empty():
+				p.act("drop", [int(all[0]["u"]), int(all[0]["n"])])
+		"clock":
+			play_time += float(arg)
+		"take_all_near":
+			p._update_nearby()
+			if p.nearby != null:
+				p.act("take_all", [world.key_of(p.nearby)])
 		"goto_corpse":
 			var cs := get_tree().get_nodes_in_group("corpses")
 			if not cs.is_empty():

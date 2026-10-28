@@ -280,7 +280,9 @@ func _run(text: String, p: Player) -> void:
 			d.pathogen = 0.0
 			d.calories = SurvivorData.MAX_CAL
 			d.water = 100.0
-			d.filter = 100.0
+			if d.has_mask():
+				d.equip["mascara"]["filtro"] = 100.0
+				d.equip["mascara"]["dur"] = 100.0
 			d.battery = 100.0
 			d.heat = 0.0
 			_ok("Tudo restaurado.")
@@ -337,13 +339,13 @@ func _cmd_give(d: SurvivorData, args: PackedStringArray) -> void:
 	var n := clampi(int(args[1]) if args.size() > 1 and args[1].is_valid_int() else 1, 1, 999)
 	if _norm(args[0]) == "tudo":
 		for id: String in DB.ITEMS:
-			d.add_item(id, n)
-		_ok("Todos os itens adicionados (x%d)." % n)
+			d.give(id, n)
+		_ok("Todos os itens adicionados (x%d); o que não coube ficou no chão." % n)
 		return
 	var id2 := _resolve_item(args[0])
 	if id2 == "":
 		return
-	d.add_item(id2, n)
+	d.give(id2, n)
 	_ok("+%d %s" % [n, DB.item_name(id2)])
 
 
@@ -387,7 +389,13 @@ func _cmd_set(d: SurvivorData, args: PackedStringArray) -> void:
 		return
 	var def: Array = STATS[_norm(args[0])]
 	var v := clampf(float(args[1]), 0.0, float(def[1]))
-	d.set(def[0], v)
+	if def[0] == "filter":
+		if not d.has_mask():
+			_err("Vista uma máscara primeiro.")
+			return
+		d.equip["mascara"]["filtro"] = v
+	else:
+		d.set(def[0], v)
 	_ok("%s = %d" % [_norm(args[0]), int(v)])
 
 
@@ -521,12 +529,16 @@ func _cmd_kit(d: SurvivorData, which: String) -> void:
 	var items := {}
 	match which:
 		"kit":
-			items = {"feijao": 5, "carne_seca": 3, "barra_cereal": 3, "agua_limpa": 6, "filtro": 3, "supressor": 3,
-				"bandagem": 6, "bateria": 2, "mascara": 1, "cano": 1, "machete": 1}
+			d.wear(Items.make("mochila_militar")[0])
+			d.wear(Items.make("coldre")[0])
+			items = {"feijao": 4, "carne_seca": 3, "barra_cereal": 3, "agua_limpa": 5, "filtro": 3, "supressor": 3,
+				"bandagem": 6, "bateria": 2, "machete": 1, "fita": 2}
 		"kit_medico":
 			items = {"bandagem": 10, "antisseptico": 10, "kit_sutura": 6, "antibiotico": 6, "supressor": 4, "kit_cirurgico": 2}
 		"kit_build":
-			items = {"metal": 60, "sucata": 60, "madeira": 60, "combustivel": 6, "filtro": 2, "bateria": 3}
+			# muito material: o que não couber fica num saco no chão
+			d.wear(Items.make("mochila_militar")[0])
+			items = {"metal": 30, "sucata": 30, "madeira": 30, "combustivel": 4, "filtro": 2, "bateria": 3}
 			for s in ["mecanica", "logica", "engenharia"]:
 				d.skills[s]["lv"] = maxi(d.level(s), 5)
 		"kit_cyber":
@@ -535,5 +547,5 @@ func _cmd_kit(d: SurvivorData, which: String) -> void:
 			for s in ["medicina", "engenharia"]:
 				d.skills[s]["lv"] = maxi(d.level(s), 6)
 	for k in items:
-		d.add_item(k, int(items[k]))
-	_ok("Código '%s' ativado." % which)
+		d.give(k, int(items[k]))
+	_ok("Código '%s' ativado (o que não coube ficou no chão)." % which)

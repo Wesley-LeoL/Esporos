@@ -192,13 +192,15 @@ func interact(player: Player) -> void:
 		"gerador":
 			if eternal:
 				Game.tell(player.peer, "O gerador do abrigo funciona sem parar.")
-			elif player.data.take_item("combustivel"):
-				fuel = minf(100.0, fuel + 50.0)
+			elif fuel >= 99.5:
+				Game.tell(player.peer, "O gerador já está cheio.")
+			elif player.data.count("combustivel") > 0:
+				fuel = minf(100.0, fuel + player.data.pour_fuel(100.0 - fuel))
 				Game.tell(player.peer, "Gerador abastecido (%d%%)." % int(fuel))
 				_refresh_power()
 				world.structure_changed(self)
 			else:
-				Game.tell(player.peer, "Você precisa de combustível.")
+				Game.tell(player.peer, "Você precisa de um galão de combustível.")
 		_:
 			Game.tell(player.peer, prompt() + (". Ligue-o a um gerador abastecido." if not powered else "."))
 

@@ -6,7 +6,7 @@ extends Node2D
 const LIFETIME := 300.0
 
 var nome := ""
-var items := {}
+var items: Array = []
 var decomp := 0.0
 var world: World
 var _attract_t := 12.0
@@ -26,17 +26,13 @@ func prompt() -> String:
 	return "[E] Revistar corpo de %s (decomposição %d%%)" % [nome, int(decomp)]
 
 
-## Servidor.
-func interact(player: Player) -> void:
-	if items.is_empty():
-		Game.tell(player.peer, "O corpo já foi saqueado.")
-		return
-	var parts: Array[String] = []
-	for k in items:
-		player.data.add_item(k, int(items[k]))
-		parts.append("%dx %s" % [int(items[k]), DB.item_name(k)])
-	Game.tell(player.peer, "Você recuperou: " + ", ".join(parts) + ".")
-	items = {}
+func title() -> String:
+	return "Corpo de " + nome
+
+
+## Abrir é local (janela de saque); a transferência vai pelo Player.act.
+func interact(_player: Player) -> void:
+	pass
 
 
 func _process(delta: float) -> void:

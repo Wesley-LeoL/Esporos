@@ -112,12 +112,20 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Veículos:** entram no escopo (habilidade Mecânica: reparo e ligação direta). Os modelos ainda serão escolhidos e depois registrados aqui.
 - **Matemática/Lógica:** sai da árvore de habilidades. Os requisitos de construção que a usavam passam para Eletrônica, Carpintaria e Metalurgia (fase 3).
 
+### Inventário (fase 2)
+
+- **Recipientes:** bolsos (4 L, sempre), mochila vestida (escolar 14 L; trilha 24 L, conteúdo pesa 25% menos; militar 34 L, 40% menos) e coldre de cinto (só armas, 2 L). Itens recebidos procuram espaço nessa ordem: coldre, mochila, bolsos. O que não cabe cai no chão num saco.
+- **Peso:** acima de 16 kg o personagem fica lento (até -45%). A fase 3 liga esse limite à Força/Atletismo.
+- **Estado por item:** armas e máscara têm durabilidade (a máscara vaza mais com a vedação baixa e perde vedação com golpes na cabeça; armas gastam a cada golpe que acerta e quebram). Perecíveis guardam o instante em que estragam no relógio do mundo: fresco, passado (75% das calorias) e estragado (40% e infecção). Bateria, galão de combustível, antisséptico (4 usos) e fita adesiva (5 usos) têm carga.
+- **Ferramentas:** fita adesiva conserta armas e máscara (+30%). Enlatados exigem abridor, faca ou machete.
+- **Saque:** [E] abre uma janela com o recipiente e o seu inventário lado a lado (pegar, pegar tudo, vestir direto, guardar). O baú construído guarda itens sem limite.
+
 ## Estado da implementação
 
 | Fase | Conteúdo | Situação |
 |---|---|---|
 | 1 | Base de rede: sessão (hospedar, entrar, solo), personagens sincronizados, infectados, construção, saque, vilas, morte e legado com autoridade no anfitrião, save por jogador | **feito** |
-| 2 | Inventário por peso e volume, itens com estado próprio (durabilidade, validade, cargas) | a fazer |
+| 2 | Inventário por peso e volume (bolsos, mochilas, coldre, sobrecarga), itens com estado próprio (durabilidade, validade, cargas), janela de saque, baú, abridor de latas | **feito** |
 | 3 | Criação por pontos, 12 habilidades, estamina | a fazer |
 | 4 | Cibernética neural (processador, limite de implantes, sobrecarga sináptica) | a fazer |
 | 5 | Itens novos, armas que quebram, armas de fogo, som e furtividade | a fazer |

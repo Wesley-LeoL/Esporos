@@ -14,7 +14,7 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save"]
+	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store"]
 
 ## Dono deste personagem (id do peer) e nome do jogador.
 var peer := 1
@@ -157,7 +157,7 @@ func _server_tick(delta: float) -> void:
 		var pos := position if is_local() else net_pos
 		data.tick(delta, {"spore": world.spore_at(pos), "moving": moving, "combat": attack_flash > 0.0,
 			"purifier": world.purifier_near(pos)})
-		look = int(data.mask_on) | (2 if data.implant_active("braco_d") else 0) | (4 if data.implant_active("olho") else 0)
+		look = int(data.has_mask()) | (2 if data.implant_active("braco_d") else 0) | (4 if data.implant_active("olho") else 0)
 		if not data.alive:
 			alive = false
 			world.on_player_died(self)
@@ -239,7 +239,23 @@ func _do_act(action: String, args: Array) -> void:
 		return
 	match action:
 		"use_item":
-			data.use_item(str(args[0]))
+			data.use_item(args[0] if (args[0] is int or args[0] is String) else str(args[0]))
+		"move":
+			data.move_item(int(args[0]), str(args[1]))
+		"drop":
+			var part := data.remove_u(int(args[0]), int(args[1]))
+			if not part.is_empty():
+				world.drop_items(position if is_local() else net_pos, [part])
+		"repair":
+			data.repair(int(args[0]))
+		"unwear":
+			data.unwear(str(args[0]))
+		"take":
+			world.take_from(self, str(args[0]), int(args[1]), int(args[2]), str(args[3]), str(args[4]))
+		"take_all":
+			world.take_all(self, str(args[0]))
+		"store":
+			world.store_into(self, str(args[0]), int(args[1]), int(args[2]))
 		"treat":
 			data.treat(str(args[0]), str(args[1]))
 		"craft":
@@ -269,12 +285,16 @@ func _server_attack(dir_index: int) -> void:
 	var pos := position if is_local() else net_pos
 	var dir := Vector2.from_angle(float(posmod(dir_index, 8)) * PI / 4.0)
 	var dmg := data.melee_damage()
+	var hit := false
 	for n in get_tree().get_nodes_in_group("infected"):
 		var e := n as Infected
 		var off := e.position - pos
 		var iso := Vector2(off.x, off.y * 2.0)
 		if iso.length() < 65.0 and iso.normalized().dot(dir) > 0.3:
 			e.take_damage(dmg, self)
+			hit = true
+	if hit:
+		data.wear_weapon()
 
 
 ## Dano vindo dos infectados (servidor).
@@ -330,7 +350,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not is_local() or not alive:
 		return
 	if event.is_action_pressed("interact") and nearby != null and is_instance_valid(nearby):
-		act("interact", [world.key_of(nearby)])
+		if (nearby is LootContainer or nearby is Corpse) and Game.hud != null:
+			Game.hud.open_loot(nearby)
+		else:
+			act("interact", [world.key_of(nearby)])
 	elif event.is_action_pressed("cancel"):
 		build_kind = ""
 		demolish = false
@@ -364,7 +387,7 @@ func _process(_delta: float) -> void:
 		world.ghost.show_at(build_kind, world.ground.map_to_local(cell), world.can_place_at(build_kind, cell, self))
 	elif demolish:
 		var cell2 := world.mouse_cell()
-		world.ghost.show_at("demolir", world.ground.map_to_local(cell2), world.structures.has(cell2) or world.build_layer.get_cell_source_id(cell2) != -1)
+		world.ghost.show_at("demolir", world.ground.map_to_local(cell2), world.structures.has(cell2) or world.chests.has(cell2) or world.build_layer.get_cell_source_id(cell2) != -1)
 	else:
 		world.ghost.hide_ghost()
 

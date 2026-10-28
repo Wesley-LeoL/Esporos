@@ -25,7 +25,9 @@ const PROPS: Array[String] = ["Advertising5", "Advertising6", "Advertising7", "S
 ## Peso dos prédios do pacote FreeSample contra os do Town Sampler (ExtraCatalog).
 const FS_WEIGHT := 60.0
 ## Versão do save: muda quando a geração do mundo muda (saves antigos não batem com o mapa).
-const SAVE_VERSION := 3
+const SAVE_VERSION := 4
+## Versões de save que ainda carregam (a 3 tem inventário antigo e é convertida).
+const SAVE_COMPAT := [3, 4]
 const VILLAGE_NAMES: Array[String] = ["Abrigo Alfa", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
 	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix"]
 
@@ -46,6 +48,8 @@ var noise := FastNoiseLite.new()
 var spore_noise := FastNoiseLite.new()
 var villages: Array[VillageData] = []
 var containers: Array[LootContainer] = []
+## Baús construídos pelos jogadores (célula -> LootContainer).
+var chests := {}
 var structures := {}
 var occupied := {}
 var terrain_deltas := {}
@@ -432,7 +436,8 @@ func _build_shelter(v: VillageData) -> void:
 	_add_structure("purificador", v.cell + Vector2i(-1, -1)).eternal = true
 	_add_structure("vedacao", v.cell + Vector2i(1, 1)).eternal = true
 	var starter := _add_container(v.cell + Vector2i(-2, 1), "comum", v.id)
-	starter.items = {"feijao": 3, "agua_limpa": 3, "bandagem": 2, "sucata": 4, "madeira": 4, "metal": 2}
+	starter.items = Items.from_counts({"feijao": 3, "agua_limpa": 3, "bandagem": 2, "sucata": 4, "madeira": 4,
+		"metal": 2, "fita": 1, "faca": 1}, null, 0.0)
 
 
 func _scatter_ruins() -> void:
@@ -473,12 +478,30 @@ func _add_structure(kind: String, c: Vector2i) -> Structure:
 	return s
 
 
+func _add_chest(c: Vector2i) -> LootContainer:
+	if chests.has(c):
+		return chests[c]
+	var lc := LootContainer.new()
+	lc.chest = true
+	lc.cell = c
+	lc.table = "bau"
+	lc.position = ground.map_to_local(c)
+	entities.add_child(lc)
+	chests[c] = lc
+	occupied[c] = true
+	return lc
+
+
 func _add_container(c: Vector2i, table: String, village_id: int) -> LootContainer:
 	var lc := LootContainer.new()
 	lc.id = containers.size()
 	lc.table = table
 	lc.village_id = village_id
-	lc.items = DB.roll_loot(table, rng.randi_range(2, 4), rng)
+	# o estado de cada item (durabilidade, carga, validade) usa um gerador próprio por caixa,
+	# para não mudar a sequência do gerador do mapa
+	var srng := RandomNumberGenerator.new()
+	srng.seed = hash([seed_value, lc.id])
+	lc.items = DB.roll_loot(table, rng.randi_range(2, 4), rng, srng, 0.0)
 	lc.position = ground.map_to_local(c)
 	entities.add_child(lc)
 	containers.append(lc)
@@ -591,6 +614,7 @@ func _attach_data(p: Player, data: SurvivorData) -> void:
 	p.alive = true
 	var peer := p.peer
 	data.message.connect(func(t: String) -> void: Game.tell(peer, t))
+	data.overflow.connect(func(list: Array) -> void: drop_items(p.position if p.is_local() else p.net_pos, list))
 	p._last_sync = ""
 	if p.is_local():
 		p.data_changed.emit()
@@ -651,7 +675,7 @@ func _spawn_entity(d: Dictionary) -> Node:
 			var c := Corpse.new()
 			c.world = self
 			c.nome = str(d["nome"])
-			c.items = d.get("items", {})
+			c.items = Items.sanitize(d.get("items", []))
 			c.decomp = float(d.get("decomp", 0.0))
 			c.position = Game.v2(d["pos"])
 			c.setup_net()
@@ -659,7 +683,7 @@ func _spawn_entity(d: Dictionary) -> Node:
 		"bag":
 			var lc := LootContainer.new()
 			lc.temporary = true
-			lc.items = d.get("items", {})
+			lc.items = Items.sanitize(d.get("items", []))
 			lc.position = Game.v2(d["pos"])
 			lc.setup_net()
 			node = lc
@@ -679,6 +703,9 @@ func _spawn_entity(d: Dictionary) -> Node:
 
 ## Chave estável de um objeto interativo (igual em todos os peers).
 func key_of(node: Node) -> String:
+	if node is LootContainer and (node as LootContainer).chest:
+		var cc := (node as LootContainer).cell
+		return "b:%d,%d" % [cc.x, cc.y]
 	if node is LootContainer and not (node as LootContainer).temporary:
 		return "c:%d" % (node as LootContainer).id
 	if node is Structure:
@@ -694,40 +721,125 @@ func node_of(key: String) -> Node:
 		"c:":
 			var i := int(rest)
 			return containers[i] if i >= 0 and i < containers.size() else null
-		"s:":
+		"s:", "b:":
 			var xy := rest.split(",")
-			return structures.get(Vector2i(int(xy[0]), int(xy[1])))
+			if xy.size() < 2:
+				return null
+			var cell := Vector2i(int(xy[0]), int(xy[1]))
+			return structures.get(cell) if kind == "s:" else chests.get(cell)
 		"n:":
 			return net_root.get_node_or_null(NodePath(rest))
 	return null
 
 
+func _near(p: Player, node: Node2D, reach := 90.0) -> bool:
+	var off := node.position - p.net_pos if not p.is_local() else node.position - p.position
+	return Vector2(off.x, off.y * 2.0).length() <= reach
+
+
 ## Servidor: o jogador interage com um objeto (validando a distância).
 func interact(p: Player, key: String) -> void:
 	var node := node_of(key) as Node2D
-	if node == null or not node.is_in_group("interactable"):
-		return
-	var off := node.position - p.net_pos if not p.is_local() else node.position - p.position
-	if Vector2(off.x, off.y * 2.0).length() > 90.0:
+	if node == null or not node.is_in_group("interactable") or not _near(p, node):
 		return
 	node.interact(p)
 
 
-# ======================================================================= estado compartilhado
-## Servidor: conteúdo de uma caixa do mapa mudou.
-func container_changed(lc: LootContainer) -> void:
-	if lc.temporary:
+# ======================================================================= transferência de itens
+## Recipiente do mundo (caixa, baú, saco no chão ou cadáver) ao alcance do jogador.
+func _loot_node(p: Player, key: String) -> Node2D:
+	var node := node_of(key) as Node2D
+	if node == null or not (node is LootContainer or node is Corpse) or not _near(p, node, 110.0):
+		return null
+	return node
+
+
+## Servidor: pega 'n' unidades do item 'idx' de um recipiente. mode "vestir" veste mochilas,
+## coldres e máscaras direto (uma mochila não cabe nos bolsos).
+func take_from(p: Player, key: String, idx: int, n: int, mode: String, id: String) -> void:
+	var node := _loot_node(p, key)
+	if node == null:
 		return
-	lc.dirty = true
-	_container_items.rpc(lc.id, lc.items)
+	var items: Array = node.items
+	if idx < 0 or idx >= items.size() or items[idx]["id"] != id:
+		return
+	var part := Items.split(items, items[idx], maxi(1, n))
+	if mode == "vestir" and String(Items.def(part["id"])["tipo"]) in SurvivorData.EQUIP_SLOTS:
+		if int(part["n"]) > 1:
+			var extra := part.duplicate()
+			extra["n"] = int(part["n"]) - 1
+			part["n"] = 1
+			Items.add(items, extra)
+		p.data.wear(part)
+	else:
+		var left := p.data.store(part)
+		if not left.is_empty():
+			Items.add(items, left)
+			Game.tell(p.peer, "Sem espaço para %s." % Items.label(left))
+	container_changed(node)
+
+
+## Servidor: pega tudo o que couber.
+func take_all(p: Player, key: String) -> void:
+	var node := _loot_node(p, key)
+	if node == null or node.items.is_empty():
+		return
+	var left := p.data.receive(node.items)
+	node.items = left
+	if not left.is_empty():
+		Game.tell(p.peer, "Sem espaço: %s ficou." % Items.describe_list(left))
+	container_changed(node)
+
+
+## Servidor: guarda um item do inventário num recipiente do mundo.
+func store_into(p: Player, key: String, u: int, n: int) -> void:
+	var node := _loot_node(p, key)
+	if node == null:
+		return
+	var part := p.data.remove_u(u, maxi(1, n))
+	if part.is_empty():
+		return
+	Items.add(node.items, part)
+	container_changed(node)
+
+
+## Servidor: larga itens no chão (junta num saco próximo, se houver).
+func drop_items(pos: Vector2, list: Array) -> void:
+	if list.is_empty():
+		return
+	for n in get_tree().get_nodes_in_group("containers"):
+		var lc := n as LootContainer
+		if lc.temporary and not lc.is_queued_for_deletion() and lc.position.distance_to(pos) < 40.0:
+			for inst in list:
+				Items.add(lc.items, Items.strip(inst))
+			container_changed(lc)
+			return
+	spawn_net({"t": "bag", "pos": [pos.x, pos.y], "items": Items.strip_all(list)})
+
+
+# ======================================================================= estado compartilhado
+## Servidor: o conteúdo de um recipiente mudou. Caixas e baús vão por RPC; sacos e cadáveres
+## são replicados pelo sincronizador (a lista é trocada para ele perceber a mudança).
+func container_changed(node: Node2D) -> void:
+	node.items = node.items.duplicate(true)
+	node.queue_redraw()
+	if node is LootContainer:
+		var lc := node as LootContainer
+		if lc.temporary:
+			if lc.items.is_empty():
+				lc.queue_free()
+			return
+		lc.dirty = true
+		_container_items.rpc(key_of(lc), lc.items)
 
 
 @rpc("authority", "reliable")
-func _container_items(id: int, items: Dictionary) -> void:
-	if id >= 0 and id < containers.size():
-		containers[id].items = items
-		containers[id].dirty = true
-		containers[id].queue_redraw()
+func _container_items(key: String, items: Array) -> void:
+	var lc := node_of(key) as LootContainer
+	if lc != null:
+		lc.items = Items.sanitize(items)
+		lc.dirty = true
+		lc.queue_redraw()
 
 
 ## Servidor: estado de uma estrutura (combustível, porta) mudou.
@@ -810,7 +922,9 @@ func try_place(kind: String, c: Vector2i, p: Player) -> bool:
 @rpc("authority", "call_local", "reliable")
 func _build_done(kind: String, x: int, y: int) -> void:
 	var c := Vector2i(x, y)
-	if kind == "piso":
+	if kind == "bau":
+		_add_chest(c)
+	elif kind == "piso":
 		build_layer.set_cell(c, 0, _gtile(T.PISO, c))
 		terrain_deltas[c] = T.PISO
 	elif not structures.has(c):
@@ -826,6 +940,13 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 	if Vector2(off.x, off.y * 2.0).length() > 275.0:
 		Game.tell(p.peer, "Longe demais.")
 		return false
+	if chests.has(c):
+		var ch: LootContainer = chests[c]
+		drop_items(ch.position, ch.items)
+		_demolish_done.rpc(c.x, c.y, false)
+		p.data.give("madeira", 1)
+		Game.tell(p.peer, "Baú desmontado (o conteúdo ficou no chão).")
+		return true
 	if structures.has(c):
 		var s: Structure = structures[c]
 		if s.eternal:
@@ -833,22 +954,22 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 			return false
 		if s.kind == "ruina" or s.kind == "edificio":
 			var big := s.kind == "edificio"
-			p.data.add_item("sucata", rng.randi_range(3, 5) if big else rng.randi_range(1, 2))
+			p.data.give("sucata", rng.randi_range(3, 5) if big else rng.randi_range(1, 2))
 			if rng.randf() < (0.8 if big else 0.25):
-				p.data.add_item("metal", rng.randi_range(1, 2) if big else 1)
+				p.data.give("metal", rng.randi_range(1, 2) if big else 1)
 			Game.tell(p.peer, "Você desmontou %s (+materiais)." % ("um prédio" if big else "uma ruína"))
 		else:
 			var cost: Dictionary = DB.BUILDS[s.kind]["custo"]
 			for k in cost:
 				var back := floori(float(cost[k]) / 2.0)
 				if back > 0:
-					p.data.add_item(k, back)
+					p.data.give(k, back)
 			Game.tell(p.peer, "Estrutura desmontada (50% dos materiais).")
 		_demolish_done.rpc(s.cell.x, s.cell.y, false)
 		return true
 	if build_layer.get_cell_source_id(c) != -1:
 		_demolish_done.rpc(c.x, c.y, true)
-		p.data.add_item("sucata", 1)
+		p.data.give("sucata", 1)
 		Game.tell(p.peer, "Piso removido.")
 		return true
 	return false
@@ -857,6 +978,11 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 @rpc("authority", "call_local", "reliable")
 func _demolish_done(x: int, y: int, floor_only: bool) -> void:
 	var c := Vector2i(x, y)
+	if chests.has(c):
+		(chests[c] as LootContainer).queue_free()
+		chests.erase(c)
+		occupied.erase(c)
+		return
 	if floor_only:
 		build_layer.erase_cell(c)
 		terrain_deltas.erase(c)
@@ -877,10 +1003,8 @@ func spawn_infected(pos: Vector2, elite: bool, extra := {}) -> Infected:
 	return spawn_net(d)
 
 
-func drop_loot(pos: Vector2, items: Dictionary) -> void:
-	if items.is_empty():
-		return
-	spawn_net({"t": "bag", "pos": [pos.x, pos.y], "items": items})
+func drop_loot(pos: Vector2, items: Array) -> void:
+	drop_items(pos, items)
 
 
 func _random_spawn_pos(around: Vector2) -> Vector2:
@@ -1046,14 +1170,17 @@ func on_player_died(p: Player) -> void:
 	var pos := p.position if p.is_local() else p.net_pos
 	Game.add_legacy({"nome": data.nome, "jogador": p.nome, "causa": data.death_cause, "tipo": data.death_kind,
 		"tempo": data.time_alive, "pos": [pos.x, pos.y]})
-	var inv := data.inventory.duplicate()
+	var carried := Items.strip_all(data.all_items())
+	for slot in data.equip:
+		if not data.equip[slot].is_empty():
+			Items.add(carried, Items.strip(data.equip[slot]))
+	var inv := carried.duplicate(true)
 	for slot in data.implants:
-		var id: String = data.implants[slot]["id"]
-		inv[id] = int(inv.get(id, 0)) + 1
+		Items.add(inv, {"id": String(data.implants[slot]["id"]), "n": 1})
 	if data.death_kind == "infeccao":
 		var e := spawn_infected(pos, true, {"legacy": true, "legacy_name": data.nome, "home": [pos.x, pos.y]})
 		# inventário e implantes ficam só no servidor (caem quando o elite morre)
-		e.loot = data.inventory.duplicate()
+		e.loot = carried
 		e.implants = data.implants.duplicate(true)
 		Game.say_all("%s se reergue como um infectado de elite..." % data.nome)
 	else:
@@ -1095,12 +1222,15 @@ func world_deltas() -> Dictionary:
 	var cont := {}
 	for lc in containers:
 		if lc.dirty:
-			cont[str(lc.id)] = lc.items.duplicate()
+			cont[str(lc.id)] = lc.items.duplicate(true)
 	var vil: Array = []
 	for v in villages:
 		vil.append(v.to_dict())
+	var ch: Array = []
+	for c in chests:
+		ch.append([c.x, c.y, chests[c].items.duplicate(true)])
 	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
-		"containers": cont, "villages": vil}
+		"containers": cont, "chests": ch, "villages": vil}
 
 
 ## Save completo (servidor): alterações + entidades persistentes + sobreviventes por nome.
@@ -1109,14 +1239,14 @@ func to_dict() -> Dictionary:
 	var corpses: Array = []
 	for n in get_tree().get_nodes_in_group("corpses"):
 		var co := n as Corpse
-		corpses.append({"pos": [co.position.x, co.position.y], "nome": co.nome, "items": co.items.duplicate(),
+		corpses.append({"pos": [co.position.x, co.position.y], "nome": co.nome, "items": co.items.duplicate(true),
 			"decomp": co.decomp})
 	var elites: Array = []
 	for n in get_tree().get_nodes_in_group("infected"):
 		var e := n as Infected
 		if e.legacy:
 			elites.append({"pos": [e.position.x, e.position.y], "home": [e.home.x, e.home.y], "nome": e.legacy_name,
-				"loot": e.loot.duplicate(), "implants": e.implants.duplicate(true), "hp": e.hp})
+				"loot": e.loot.duplicate(true), "implants": e.implants.duplicate(true), "hp": e.hp})
 	var survivors := Game.survivor_cache.duplicate(true)
 	for k in players:
 		var p: Player = players[k]
@@ -1150,12 +1280,12 @@ func apply_deltas(save: Dictionary) -> void:
 	for k in cont:
 		var idx := int(k)
 		if idx >= 0 and idx < containers.size():
-			var items := {}
-			for it in cont[k]:
-				items[str(it)] = int(cont[k][it])
-			containers[idx].items = items
+			containers[idx].items = Items.sanitize(cont[k])
 			containers[idx].dirty = true
 			containers[idx].queue_redraw()
+	for cd in save.get("chests", []):
+		var chest := _add_chest(Vector2i(int(cd[0]), int(cd[1])))
+		chest.items = Items.sanitize(cd[2])
 	for vd in save.get("villages", []):
 		var vid := int(vd["id"])
 		if vid < villages.size():
@@ -1165,15 +1295,12 @@ func apply_deltas(save: Dictionary) -> void:
 ## Servidor ao carregar um save: entidades persistentes (cadáveres e elites de legado).
 func restore_entities(save: Dictionary) -> void:
 	for cd in save.get("corpses", []):
-		var items := {}
-		for it in cd["items"]:
-			items[str(it)] = int(cd["items"][it])
+		var items := Items.sanitize(cd["items"])
 		spawn_net({"t": "corpse", "pos": cd["pos"], "nome": str(cd["nome"]), "items": items,
 			"decomp": float(cd.get("decomp", 0.0))})
 	for ed in save.get("elites", []):
 		var e := spawn_infected(Game.v2(ed["pos"]), true, {"legacy": true, "legacy_name": str(ed["nome"]),
 			"home": ed["home"], "hp": float(ed.get("hp", 110.0))})
-		for it in ed["loot"]:
-			e.loot[str(it)] = int(ed["loot"][it])
+		e.loot = Items.sanitize(ed["loot"])
 		e.implants = ed["implants"]
 

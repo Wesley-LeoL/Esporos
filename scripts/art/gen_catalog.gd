@@ -61,6 +61,16 @@ const ICONS := {
 	"implante_pulmao": 24,
 	"implante_hud": 25,
 	"implante_braco": 26,
+	"mochila_escolar": 27,
+	"mochila_trilha": 28,
+	"mochila_militar": 29,
+	"coldre": 30,
+	"fita": 31,
+	"faca": 32,
+	"taco": 33,
+	"maca": 34,
+	"pao": 35,
+	"abridor": 36,
 }
 
 const GROUND_PATH := "res://assets/art/generated/world/ground.png"
