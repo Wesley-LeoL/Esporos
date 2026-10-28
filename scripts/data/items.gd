@@ -13,6 +13,8 @@ extends RefCounted
 ## na mão). Uma lista de itens é um Array dessas instâncias.
 
 const STATE_KEYS := ["dur", "carga", "venc", "filtro"]
+## Itens renomeados entre versões (id antigo -> novo).
+const RENAMED := {"manual_logica": "manual_metalurgia"}
 
 
 ## Relógio do mundo (Game.play_time). Sem o autoload (testes), 0.
@@ -64,7 +66,9 @@ static func from_counts(counts: Dictionary, r: RandomNumberGenerator = null, clo
 	var keys := counts.keys()
 	keys.sort()
 	for k in keys:
-		for inst in make(str(k), int(counts[k]), clock, r):
+		var id := str(k)
+		id = RENAMED.get(id, id)
+		for inst in make(id, int(counts[k]), clock, r):
 			add(out, inst)
 	return out
 
@@ -78,9 +82,13 @@ static func sanitize(v: Variant) -> Array:
 	if not v is Array:
 		return out
 	for raw in v:
-		if not raw is Dictionary or not DB.ITEMS.has(str(raw.get("id", ""))):
+		if not raw is Dictionary:
 			continue
-		var inst := {"id": str(raw["id"]), "n": maxi(1, int(raw.get("n", 1)))}
+		var rid := str(raw.get("id", ""))
+		rid = RENAMED.get(rid, rid)
+		if not DB.ITEMS.has(rid):
+			continue
+		var inst := {"id": rid, "n": maxi(1, int(raw.get("n", 1)))}
 		for k in STATE_KEYS:
 			if raw.has(k):
 				inst[k] = float(raw[k])

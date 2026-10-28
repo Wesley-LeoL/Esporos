@@ -115,10 +115,17 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 ### Inventário (fase 2)
 
 - **Recipientes:** bolsos (4 L, sempre), mochila vestida (escolar 14 L; trilha 24 L, conteúdo pesa 25% menos; militar 34 L, 40% menos) e coldre de cinto (só armas, 2 L). Itens recebidos procuram espaço nessa ordem: coldre, mochila, bolsos. O que não cabe cai no chão num saco.
-- **Peso:** acima de 16 kg o personagem fica lento (até -45%). A fase 3 liga esse limite à Força/Atletismo.
+- **Peso:** acima da carga confortável o personagem fica lento (até -45%); o limite depende de Força e Atletismo (fase 3).
 - **Estado por item:** armas e máscara têm durabilidade (a máscara vaza mais com a vedação baixa e perde vedação com golpes na cabeça; armas gastam a cada golpe que acerta e quebram). Perecíveis guardam o instante em que estragam no relógio do mundo: fresco, passado (75% das calorias) e estragado (40% e infecção). Bateria, galão de combustível, antisséptico (4 usos) e fita adesiva (5 usos) têm carga.
 - **Ferramentas:** fita adesiva conserta armas e máscara (+30%). Enlatados exigem abridor, faca ou machete.
 - **Saque:** [E] abre uma janela com o recipiente e o seu inventário lado a lado (pegar, pegar tudo, vestir direto, guardar). O baú construído guarda itens sem limite.
+
+### Personagem (fase 3)
+
+- **Criação por pontos (20):** Força e Resistência (2 a 9, base 5, 2 pontos por passo), habilidades iniciais até o nível 3 (2/5/9 pontos) e traços. Qualidades: Pulmões de aço, Imunidade forte, Metabolismo lento, Atleta, Organizado, Mãos firmes. Defeitos (devolvem até 10): Pulmão fraco, Glutão, Asmático, Sangue fino, Desajeitado, Lento, Barulhento. Há cinco modelos prontos (Equilibrado, Médica de campo, Engenheiro, Batedora, Brutamontes). A ficha é feita ao entrar na sessão e a cada morte; o anfitrião valida.
+- **12 habilidades:** Luta corpo a corpo, Pontaria, Atletismo, Furtividade, Mecânica, Eletrônica, Carpintaria, Metalurgia, Medicina, Cibernética, Agricultura, Culinária. Construções: madeira com Carpintaria; gerador, purificador e torre com Eletrônica + Metalurgia; selagem com as três. Implantes pedem Medicina + Cibernética. Saves antigos: Engenharia vira Eletrônica e Lógica vira Metalurgia.
+- **Estamina:** Shift corre (+55% de velocidade) gastando estamina; cada golpe também gasta (armas pesadas mais; Luta reduz). Sem estamina não corre e o golpe enfraquece. Fome, sede, sobrecarga e infecção alta atrasam a recuperação.
+- **Peso:** carga confortável = 16 kg + 1,2 por ponto de Força acima de 5 + 0,6 por nível de Atletismo.
 
 ## Estado da implementação
 
@@ -126,7 +133,7 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 |---|---|---|
 | 1 | Base de rede: sessão (hospedar, entrar, solo), personagens sincronizados, infectados, construção, saque, vilas, morte e legado com autoridade no anfitrião, save por jogador | **feito** |
 | 2 | Inventário por peso e volume (bolsos, mochilas, coldre, sobrecarga), itens com estado próprio (durabilidade, validade, cargas), janela de saque, baú, abridor de latas | **feito** |
-| 3 | Criação por pontos, 12 habilidades, estamina | a fazer |
+| 3 | Criação por pontos (atributos, habilidades, traços), 12 habilidades, estamina e corrida | **feito** |
 | 4 | Cibernética neural (processador, limite de implantes, sobrecarga sináptica) | a fazer |
 | 5 | Itens novos, armas que quebram, armas de fogo, som e furtividade | a fazer |
 | 6 | Ações com tempo e medicina cooperativa | a fazer |

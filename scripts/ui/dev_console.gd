@@ -13,15 +13,15 @@ const LIMB_ALIASES := {"cabeca": "cabeca", "cabeça": "cabeca", "tronco": "torso
 
 const STATS := {"patogeno": ["pathogen", 100.0], "sangue": ["blood", 100.0], "calorias": ["calories", 2000.0],
 	"agua": ["water", 100.0],
-	"bateria": ["battery", 100.0], "filtro": ["filter", 100.0], "calor": ["heat", 100.0]}
+	"bateria": ["battery", 100.0], "filtro": ["filter", 100.0], "calor": ["heat", 100.0], "estamina": ["stamina", 200.0]}
 
 const HELP := """[color=#9be04a]COMANDOS[/color] (Tab completa · setas ↑↓ histórico · F1 ou ` fecha)
 [color=#ffe066]dar[/color] <item> [qtd]        adiciona item (ex: dar metal 20 · dar tudo 5). "itens [filtro]" lista os ids
 [color=#ffe066]dano[/color] <membro|todos> <n>  causa dano (cabeca, tronco, braco_e, braco_d, perna_e, perna_d)
 [color=#ffe066]curar[/color]                  cura ferimentos, sangue e infecções
 [color=#ffe066]restaurar[/color]              cura tudo e zera patógeno; enche fome, sede, filtro e bateria
-[color=#ffe066]set[/color] <stat> <valor>       patogeno, sangue, calorias (fome), agua (sede), bateria, filtro, calor
-[color=#ffe066]skill[/color] <nome|todas> <0-10>  mecanica, logica, medicina, engenharia
+[color=#ffe066]set[/color] <stat> <valor>       patogeno, sangue, calorias (fome), agua (sede), bateria, filtro, calor, estamina
+[color=#ffe066]skill[/color] <nome|todas> <0-10>  combate pontaria atletismo furtividade mecanica eletronica carpintaria metalurgia medicina cibernetica agricultura culinaria
 [color=#ffe066]spawn[/color] [normal|elite] [n]  cria inimigos perto de você
 [color=#ffe066]limpar[/color]                 remove todos os infectados
 [color=#ffe066]tp[/color] <x> <y>               teleporta para o tile (x,y) · também: tp abrigo | tp vila <n|nome> | tp borda | tp cadaver | tp elite
@@ -401,12 +401,12 @@ func _cmd_set(d: SurvivorData, args: PackedStringArray) -> void:
 
 func _cmd_skill(d: SurvivorData, args: PackedStringArray) -> void:
 	if args.size() < 2 or not args[1].is_valid_int():
-		_err("Uso: skill <mecanica|logica|medicina|engenharia|todas> <0-10>")
+		_err("Uso: skill <habilidade|todas> <0-10>   (" + " ".join(DB.SKILLS.keys()) + ")")
 		return
 	var lv := clampi(int(args[1]), 0, 10)
 	var key := _norm(args[0])
-	if key == "eletronica":
-		key = "engenharia"
+	if key == "engenharia":
+		key = "eletronica"
 	var keys: Array[String] = []
 	if key in ["todas", "todos"]:
 		keys.assign(DB.SKILLS.keys())
@@ -539,12 +539,12 @@ func _cmd_kit(d: SurvivorData, which: String) -> void:
 			# muito material: o que não couber fica num saco no chão
 			d.wear(Items.make("mochila_militar")[0])
 			items = {"metal": 30, "sucata": 30, "madeira": 30, "combustivel": 4, "filtro": 2, "bateria": 3}
-			for s in ["mecanica", "logica", "engenharia"]:
+			for s in ["carpintaria", "metalurgia", "eletronica"]:
 				d.skills[s]["lv"] = maxi(d.level(s), 5)
 		"kit_cyber":
 			items = {"implante_pulmao": 1, "implante_hud": 1, "implante_braco": 1, "kit_cirurgico": 3, "bateria": 4}
 			d.battery = 100.0
-			for s in ["medicina", "engenharia"]:
+			for s in ["medicina", "cibernetica"]:
 				d.skills[s]["lv"] = maxi(d.level(s), 6)
 	for k in items:
 		d.give(k, int(items[k]))

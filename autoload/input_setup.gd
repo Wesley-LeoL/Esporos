@@ -13,6 +13,7 @@ const ACTIONS := {
 	"cancel": [KEY_ESCAPE],
 	"demolish": [KEY_X],
 	"save": [KEY_F5],
+	"sprint": [KEY_SHIFT],
 }
 
 

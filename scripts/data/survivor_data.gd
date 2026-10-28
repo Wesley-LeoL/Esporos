@@ -28,6 +28,11 @@ var water: float = 80.0
 var blood: float = 100.0
 var limbs := {}
 var skills := {}
+## Atributos da criação (2 a 9, base 5) e traços escolhidos (ver DB.TRAITS).
+var forca: int = 5
+var resist: int = 5
+var traits: Array = []
+var stamina: float = 100.0
 ## Itens por recipiente (listas de instâncias, ver Items).
 var bags := {"bolsos": [], "mochila": [], "coldre": []}
 ## Itens vestidos: máscara (com vedação e filtro), mochila e coldre. {} = vazio.
@@ -62,16 +67,45 @@ func _init() -> void:
 		skills[s] = {"lv": 0, "xp": 0.0}
 
 
+## Ficha de criação aleatória (um dos modelos prontos, com nome sorteado).
+static func random_spec(r: RandomNumberGenerator) -> Dictionary:
+	var keys: Array = DB.PRESETS.keys()
+	var spec: Dictionary = DB.PRESETS[keys[r.randi() % keys.size()]].duplicate(true)
+	spec["nome"] = NAMES[r.randi() % NAMES.size()]
+	return spec
+
+
+## Sobrevivente novo a partir de uma ficha já validada (DB.creation_error).
+static func from_spec(spec: Dictionary, r: RandomNumberGenerator) -> SurvivorData:
+	var d := random_survivor(r)
+	var n := str(spec.get("nome", "")).strip_edges().substr(0, 20)
+	if n != "":
+		d.nome = n
+	d.forca = int(spec.get("forca", 5))
+	d.resist = int(spec.get("resist", 5))
+	for s in d.skills:
+		d.skills[s]["lv"] = 0
+	var sk: Dictionary = spec.get("skills", {})
+	for k in sk:
+		d.skills[str(k)]["lv"] = int(sk[k])
+	d.traits.assign(spec.get("traits", []))
+	d.stamina = d.max_stamina()
+	return d
+
+
 static func random_survivor(r: RandomNumberGenerator) -> SurvivorData:
 	var d := SurvivorData.new()
 	d.nome = NAMES[r.randi() % NAMES.size()]
 	d.pathogen = r.randf_range(5.0, 25.0)
 	d.calories = r.randf_range(1200.0, 1800.0)
 	d.water = r.randf_range(60.0, 90.0)
-	var keys: Array = DB.SKILLS.keys()
-	keys.shuffle()
-	d.skills[keys[0]]["lv"] = r.randi_range(1, 3)
-	d.skills[keys[1]]["lv"] = r.randi_range(0, 2)
+	var preset: Dictionary = DB.PRESETS.values()[r.randi() % DB.PRESETS.size()]
+	for k in preset["skills"]:
+		d.skills[k]["lv"] = int(preset["skills"][k])
+	d.forca = int(preset["forca"])
+	d.resist = int(preset["resist"])
+	d.traits.assign(preset["traits"])
+	d.stamina = d.max_stamina()
 	d.equip["mochila"] = Items.make("mochila_escolar")[0]
 	var mask: Dictionary = Items.make("mascara")[0]
 	mask["filtro"] = 100.0
@@ -97,7 +131,7 @@ func count(id: String) -> int:
 ## Capacidade (litros) de um recipiente; mochila e coldre dependem do item vestido.
 func capacity(c: String) -> float:
 	if c == "bolsos":
-		return POCKETS_CAP
+		return POCKETS_CAP + (2.0 if has_trait("organizado") else 0.0)
 	var worn: Dictionary = equip.get(c, {})
 	return float(Items.def(worn["id"]).get("cap", 0.0)) if not worn.is_empty() else 0.0
 
@@ -352,8 +386,9 @@ func carried_weight() -> float:
 	return w
 
 
+## Peso confortável: 16 kg com Força 5 e Atletismo 0.
 func carry_max() -> float:
-	return CARRY_MAX
+	return CARRY_MAX + 1.2 * float(forca - 5) + 0.6 * float(level("atletismo"))
 
 
 func load_ratio() -> float:
@@ -365,7 +400,9 @@ func wear_weapon() -> void:
 	var w := weapon_inst()
 	if w.is_empty() or not w.has("dur"):
 		return
-	var gasto := float(Items.def(w["id"]).get("gasto", 1.0)) * (1.0 - 0.04 * float(level("mecanica")))
+	var gasto := float(Items.def(w["id"]).get("gasto", 1.0)) * (1.0 - 0.04 * float(level("combate")))
+	if has_trait("desajeitado"):
+		gasto *= 1.25
 	w["dur"] = maxf(0.0, float(w["dur"]) - gasto)
 	if float(w["dur"]) <= 0.0:
 		message.emit("Sua arma quebrou: %s!" % DB.item_name(w["id"]))
@@ -431,6 +468,7 @@ func tick(delta: float, env: Dictionary) -> void:
 	time_alive += delta
 	var moving: bool = env.get("moving", false)
 	var spore: float = env.get("spore", 0.0)
+	_tick_stamina(delta, moving and env.get("sprinting", false))
 	_tick_metabolism(delta, moving)
 	_tick_implants(delta, moving or env.get("combat", false))
 	_tick_pathogen(delta, spore, env.get("purifier", false))
@@ -452,8 +490,56 @@ func _hurt_internal(limb_id: String, amount: float, cause: String) -> void:
 	_last_hurt_cause = cause
 
 
+func has_trait(t: String) -> bool:
+	return t in traits
+
+
+# ---------------------------------------------------------------- estamina
+func max_stamina() -> float:
+	var m := 100.0 + 6.0 * float(resist - 5) + 3.0 * float(level("atletismo"))
+	if has_trait("atleta"):
+		m *= 1.2
+	return m
+
+
+## Dá para correr? (o dono do personagem consulta para decidir a velocidade)
+func can_sprint() -> bool:
+	return stamina > 8.0 and load_ratio() < 1.35
+
+
+## Gasta estamina (golpes, corrida). Devolve false se não tinha o bastante.
+func spend_stamina(amount: float) -> bool:
+	if has_trait("asmatico"):
+		amount *= 1.3
+	var ok := stamina >= amount * 0.5
+	stamina = maxf(0.0, stamina - amount)
+	return ok
+
+
+func _tick_stamina(delta: float, sprinting: bool) -> void:
+	if sprinting and can_sprint():
+		var drain := 14.0 * (1.0 - 0.04 * float(level("atletismo")))
+		if load_ratio() > 1.0:
+			drain *= 1.5
+		spend_stamina(drain * delta)
+		add_xp("atletismo", 0.35 * delta)
+		return
+	var regen := 9.0 + 0.8 * float(resist - 5)
+	if calories < 400.0 or water < 15.0:
+		regen *= 0.4
+	if load_ratio() > 1.0:
+		regen *= 0.5
+	if pathogen > 60.0:
+		regen *= 0.7
+	stamina = minf(max_stamina(), stamina + regen * delta)
+
+
 func _tick_metabolism(delta: float, moving: bool) -> void:
 	var k := 1.5 if moving else 1.0
+	if has_trait("glutao"):
+		k *= 1.3
+	if has_trait("metabolismo_lento"):
+		k *= 0.75
 	calories = maxf(0.0, calories - 0.55 * k * delta)
 	water = maxf(0.0, water - 0.11 * k * delta)
 	if calories <= 0.0:
@@ -531,6 +617,10 @@ func exposure_factor() -> float:
 		f *= lerpf(0.6, 0.08, mask_seal() / 100.0)
 	if implant_active("pulmao"):
 		f *= 0.35
+	if has_trait("pulmao_aco"):
+		f *= 0.75
+	elif has_trait("pulmao_fraco"):
+		f *= 1.25
 	return f
 
 
@@ -544,6 +634,8 @@ func _tick_pathogen(delta: float, spore: float, purifier: bool) -> void:
 		rate += 0.35
 		tainted_t -= delta
 	rate *= immune_mult()
+	if has_trait("imune_forte"):
+		rate *= 0.85
 	if suppress_t > 0.0:
 		rate *= 0.5
 		pathogen -= 0.4 * delta
@@ -660,7 +752,7 @@ func damage_limb(limb_id: String, amount: float) -> void:
 	if amount >= 6.0:
 		var deep := amount >= 16.0
 		limb["wound"] = 2 if (deep or int(limb["wound"]) == 2) else 1
-		limb["bleed"] = float(limb["bleed"]) + amount * (0.035 if deep else 0.012)
+		limb["bleed"] = float(limb["bleed"]) + amount * (0.035 if deep else 0.012) * (1.3 if has_trait("sangue_fino") else 1.0)
 		limb["disinfected"] = false
 		limb["sutured"] = false
 		limb["bandaged"] = false
@@ -675,16 +767,32 @@ func damage_limb(limb_id: String, amount: float) -> void:
 
 
 func melee_damage() -> float:
-	var dmg := 14.0
+	var dmg := 14.0 + 1.5 * float(forca - 5)
 	var w := weapon_inst()
 	if not w.is_empty():
-		var bonus := float(Items.def(w["id"])["dano"])
+		var bonus := float(Items.def(w["id"]).get("dano", 0.0))
 		dmg += bonus * (0.6 if float(w.get("dur", 100.0)) < 25.0 else 1.0)
 	if implant_active("braco_d"):
 		dmg += 14.0
+	dmg *= 1.0 + 0.04 * float(level("combate"))
 	if float(limbs["braco_d"]["hp"]) < 30.0:
 		dmg *= 0.6
+	if stamina < 8.0:
+		dmg *= 0.6
 	return dmg
+
+
+## Estamina de um golpe (armas pesadas cansam mais; Luta reduz).
+func attack_stamina() -> float:
+	var w := weapon_inst()
+	var weight := Items.unit_weight(w) if not w.is_empty() else 0.3
+	return (6.0 + 3.0 * weight) * (1.0 - 0.05 * float(level("combate")))
+
+
+## Servidor: um golpe acertou alguém.
+func on_melee_hit() -> void:
+	add_xp("combate", 2.5)
+	wear_weapon()
 
 
 func speed_mult() -> float:
@@ -695,6 +803,9 @@ func speed_mult() -> float:
 			m -= 0.25
 		elif hp < 40.0:
 			m -= 0.15
+	m += 0.015 * float(level("atletismo"))
+	if has_trait("lento"):
+		m -= 0.08
 	if pathogen > 60.0:
 		m -= 0.15 * (pathogen - 60.0) / 40.0
 	var r := load_ratio()
@@ -838,6 +949,8 @@ func treat(limb_id: String, action: String) -> void:
 				message.emit("Sem kit de sutura.")
 				return
 			var chance_fail := maxf(0.0, 0.5 - 0.15 * float(level("medicina")))
+			if has_trait("maos_firmes"):
+				chance_fail *= 0.5
 			if rng.randf() < chance_fail:
 				limb["infection"] = minf(100.0, float(limb["infection"]) + 15.0)
 				limb["hp"] = maxf(0.0, float(limb["hp"]) - 5.0)
@@ -872,12 +985,14 @@ func install_implant(item_id: String) -> void:
 	if deficit == 0:
 		implants[slot] = {"id": item_id, "integ": 100.0}
 		add_xp("medicina", 30.0)
-		add_xp("engenharia", 30.0)
+		add_xp("cibernetica", 30.0)
 		message.emit("Implante instalado com sucesso: %s." % DB.item_name(item_id))
 		return
 	var r := rng.randf()
 	var death_p := 0.0 if deficit < 2 else 0.30
 	var crit_p := 0.35 if deficit < 2 else 0.45
+	if has_trait("maos_firmes"):
+		crit_p *= 0.6
 	if r < death_p:
 		_hurt_internal("torso", 999.0, "Cirurgia fracassada")
 		message.emit("A cirurgia deu errado de forma fatal...")
@@ -889,7 +1004,7 @@ func install_implant(item_id: String) -> void:
 		implants[slot] = {"id": item_id, "integ": 55.0}
 		message.emit("Instalado com muita sorte, mas mal encaixado (integridade 55%).")
 		add_xp("medicina", 12.0)
-		add_xp("engenharia", 12.0)
+		add_xp("cibernetica", 12.0)
 
 
 func maintain_implant(slot: String) -> void:
@@ -898,12 +1013,12 @@ func maintain_implant(slot: String) -> void:
 	if not take_item("sucata"):
 		message.emit("Manutenção precisa de 1 sucata.")
 		return
-	var chance_fail := 0.3 if level("mecanica") < 1 else 0.0
+	var chance_fail := 0.3 if level("cibernetica") < 1 else 0.0
 	if rng.randf() < chance_fail:
 		message.emit("A manutenção falhou (sucata perdida).")
 		return
 	implants[slot]["integ"] = minf(100.0, float(implants[slot]["integ"]) + 35.0)
-	add_xp("mecanica", 10.0)
+	add_xp("cibernetica", 10.0)
 	message.emit("Manutenção feita: %s." % DB.IMPLANT_SLOTS[slot])
 
 
@@ -927,7 +1042,8 @@ func to_dict() -> Dictionary:
 		"water": water, "blood": blood, "limbs": limbs.duplicate(true), "skills": skills.duplicate(true),
 		"bags": bags.duplicate(true), "equip": equip.duplicate(true), "hand_u": hand_u, "next_u": _next_u,
 		"implants": implants.duplicate(true), "suppress_t": suppress_t, "tainted_t": tainted_t,
-		"antibiotic_t": antibiotic_t, "battery": battery, "heat": heat, "time_alive": time_alive}
+		"antibiotic_t": antibiotic_t, "battery": battery, "heat": heat, "time_alive": time_alive,
+		"forca": forca, "resist": resist, "traits": traits.duplicate(), "stamina": stamina}
 
 
 static func from_dict(src: Dictionary) -> SurvivorData:
@@ -951,10 +1067,20 @@ static func from_dict(src: Dictionary) -> SurvivorData:
 				"bleed": float(sl.get("bleed", 0.0)), "infection": float(sl.get("infection", 0.0)),
 				"disinfected": bool(sl.get("disinfected", false)), "sutured": bool(sl.get("sutured", false)),
 				"bandaged": bool(sl.get("bandaged", false)), "heal": float(sl.get("heal", 0.0))}
-	var src_skills: Dictionary = src.get("skills", {})
+	var src_skills: Dictionary = src.get("skills", {}).duplicate()
+	# habilidades das versões antigas: Engenharia vira Eletrônica, Lógica vira Metalurgia
+	for old in [["engenharia", "eletronica"], ["logica", "metalurgia"]]:
+		if src_skills.has(old[0]) and not src_skills.has(old[1]):
+			src_skills[old[1]] = src_skills[old[0]]
 	for s in DB.SKILLS:
 		if src_skills.has(s):
 			d.skills[s] = {"lv": int(src_skills[s].get("lv", 0)), "xp": float(src_skills[s].get("xp", 0.0))}
+	d.forca = clampi(int(src.get("forca", 5)), DB.ATTR_MIN, DB.ATTR_MAX)
+	d.resist = clampi(int(src.get("resist", 5)), DB.ATTR_MIN, DB.ATTR_MAX)
+	for t in src.get("traits", []):
+		if DB.TRAITS.has(str(t)):
+			d.traits.append(str(t))
+	d.stamina = float(src.get("stamina", d.max_stamina()))
 	if src.has("bags"):
 		var sb: Dictionary = src["bags"]
 		for c in d.bags:

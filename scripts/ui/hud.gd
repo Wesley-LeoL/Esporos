@@ -12,11 +12,12 @@ const VITALS := [
 	["blood", "vida", "VIDA", UITheme.LIFE, false],
 	["hunger", "fome", "FOME", UITheme.HUNGER, true],
 	["thirst", "sede", "SEDE", UITheme.THIRST, false],
+	["stamina", "estamina", "ESTAMINA", Color("#e6d26a"), false],
 ]
 const TAB_DEFS := [["inv", "Inventário", "mochila"], ["corpo", "Corpo", "corpo"], ["skills", "Habilidades", "chip"],
 	["build", "Construção", "martelo"], ["impl", "Implantes", "bateria"], ["mundo", "Mundo", "mundo"],
 	["legado", "Legado", "legado"]]
-const HINTS := [["WASD", "MOVER"], ["ESPAÇO", "ATACAR"], ["E", "INTERAGIR"], ["TAB", "MENU"],
+const HINTS := [["WASD", "MOVER"], ["SHIFT", "CORRER"], ["ESPAÇO", "ATACAR"], ["E", "INTERAGIR"], ["TAB", "MENU"],
 	["X", "DEMOLIR"], ["F5", "SALVAR"], ["F1", "CONSOLE"]]
 const OK_COLOR := Color("#7fe0a0")
 const NO_COLOR := Color("#c07a84")
@@ -63,6 +64,11 @@ var _t := 0.0
 ## Recipiente aberto na janela de saque (caixa, baú, saco ou cadáver); null = fechado.
 var loot_node: Node2D
 var _loot_key := ""
+## Tela de criação de personagem (fase 3).
+var creation_root: Control
+var creation_box: VBoxContainer
+var spec := {}
+var _creation_sent := false
 
 
 func _ready() -> void:
@@ -96,6 +102,7 @@ func _ready() -> void:
 	_build_banner()
 	_build_menu()
 	_build_death()
+	_build_creation()
 
 
 func _fit() -> void:
@@ -540,6 +547,12 @@ func _input(event: InputEvent) -> void:
 # ------------------------------------------------------------------ atualização por frame
 func _process(delta: float) -> void:
 	var p := _player()
+	if root.visible and p != null and p.pending:
+		if not creation_root.visible:
+			open_creation()
+		return
+	if creation_root.visible:
+		creation_root.visible = false
 	if not root.visible or p == null or p.data == null:
 		return
 	_t += delta
@@ -551,6 +564,7 @@ func _process(delta: float) -> void:
 	_set_bar("blood", d.blood)
 	_set_bar("hunger", 100.0 - d.calories / SurvivorData.MAX_CAL * 100.0)
 	_set_bar("thirst", d.water)
+	_set_bar("stamina", d.stamina / d.max_stamina() * 100.0)
 
 	# ar e filtro
 	var spore := Game.world.spore_at(p.position)
@@ -1023,25 +1037,239 @@ func _tab_body(d: SurvivorData) -> void:
 func _tab_skills(d: SurvivorData) -> void:
 	var box: VBoxContainer = boxes["skills"]
 	_clear(box)
-	_lbl(box, "As habilidades evoluem praticando (construir, tratar feridos, consertar) ou lendo manuais.", UITheme.MUTED)
-	for key: String in DB.SKILLS:
-		var row := _row(box)
-		var l := _label(DB.SKILLS[key], S, UITheme.TEXT)
-		l.custom_minimum_size.x = 300
-		l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(l)
-		var lv := _label("NV %d" % d.level(key), L, UITheme.ACCENT)
-		lv.custom_minimum_size.x = 110
-		row.add_child(lv)
-		_bar(row, float(d.skills[key]["xp"]), d.xp_needed(d.level(key)), UITheme.MAGENTA, 360, 20)
+	var top := _row(box)
+	_lbl(top, "FORÇA %d · RESISTÊNCIA %d · CARGA MÁX. %.0f KG · ESTAMINA MÁX. %.0f" % [d.forca, d.resist, d.carry_max(), d.max_stamina()], UITheme.ACCENT)
+	if not d.traits.is_empty():
+		var names: Array[String] = []
+		for t in d.traits:
+			names.append(String(DB.TRAITS[t]["nome"]))
+		_lbl(box, "Traços: " + ", ".join(names), UITheme.MUTED)
+	for g in DB.SKILL_GROUPS:
+		_head(box, g[0])
+		for key: String in g[1]:
+			var row := _row(box)
+			var l := _label(DB.SKILLS[key], S, UITheme.TEXT)
+			l.custom_minimum_size.x = 300
+			l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(l)
+			var lv := _label("NV %d" % d.level(key), L, UITheme.ACCENT)
+			lv.custom_minimum_size.x = 110
+			row.add_child(lv)
+			_bar(row, float(d.skills[key]["xp"]), d.xp_needed(d.level(key)), UITheme.MAGENTA, 300, 16)
+			_lbl(row, DB.SKILL_DESC[key], UITheme.MUTED)
 	_head(box, "Parede de conhecimento: construções")
 	for k: String in DB.BUILDS:
 		var req: Dictionary = DB.BUILDS[k]["req"]
 		_lbl(box, "%s: %s" % [DB.BUILDS[k]["nome"], DB.req_text(req)], OK_COLOR if d.meets(req) else NO_COLOR)
-	_head(box, "Parede de conhecimento: implantes (Medicina + Eletrônica/Cibernética)")
+	_head(box, "Parede de conhecimento: implantes (Medicina + Cibernética)")
 	for k: String in DB.IMPLANTS:
 		var req2: Dictionary = DB.IMPLANTS[k]["req"]
 		_lbl(box, "%s: %s" % [DB.item_name(k), DB.req_text(req2)], OK_COLOR if d.meets(req2) else NO_COLOR)
+
+
+# ------------------------------------------------------------------ criação de personagem
+func _build_creation() -> void:
+	creation_root = Control.new()
+	creation_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	creation_root.visible = false
+	ui.add_child(creation_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.01, 0.02, 0.03, 0.9)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	creation_root.add_child(dim)
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	creation_root.add_child(center)
+	var panel := _panel("panel_solid", 16, Vector4(22, 16, 22, 18))
+	panel.custom_minimum_size = Vector2(1540, 840)
+	center.add_child(panel)
+	creation_box = _vbox(10)
+	panel.add_child(creation_box)
+
+
+func open_creation() -> void:
+	close_menu()
+	hide_death()
+	creation_root.visible = true
+	_creation_sent = false
+	var r := RandomNumberGenerator.new()
+	r.randomize()
+	spec = SurvivorData.random_spec(r)
+	_rebuild_creation()
+	var args := " ".join(OS.get_cmdline_user_args())
+	if "--autostart" in args and not "--no-autocreate" in args:
+		_submit_creation()
+
+
+func creation_refused() -> void:
+	_creation_sent = false
+	_rebuild_creation()
+
+
+func _submit_creation() -> void:
+	var p := _player()
+	if p == null or _creation_sent or DB.creation_error(spec) != "":
+		return
+	_creation_sent = true
+	p.send_creation(spec.duplicate(true))
+	_rebuild_creation()
+
+
+func _spec_skill(k: String) -> int:
+	return int(spec["skills"].get(k, 0))
+
+
+func _spec_change(cb: Callable) -> Callable:
+	return func() -> void:
+		cb.call()
+		_rebuild_creation()
+
+
+func _stepper(parent: Control, value: String, minus: Callable, plus: Callable, can_minus: bool, can_plus: bool) -> void:
+	var b1 := _btn(parent, "-", _spec_change(minus), can_minus)
+	b1.custom_minimum_size.x = 44
+	var v := _label(value, L, UITheme.ACCENT)
+	v.custom_minimum_size.x = 44
+	v.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	parent.add_child(v)
+	var b2 := _btn(parent, "+", _spec_change(plus), can_plus)
+	b2.custom_minimum_size.x = 44
+
+
+func _rebuild_creation() -> void:
+	var box := creation_box
+	_clear(box)
+	var cost := DB.creation_cost(spec)
+	var left := DB.CREATION_POINTS - cost
+	# cabeçalho
+	var head := _hbox(14)
+	box.add_child(head)
+	head.add_child(UITheme.icon_rect("pessoa", UITheme.ACCENT, 40))
+	var t := _label("NOVO SOBREVIVENTE", L, UITheme.ACCENT)
+	t.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(t)
+	head.add_child(_label("PONTOS", S, UITheme.MUTED))
+	head.add_child(_label("%d" % left, L, UITheme.DANGER if left < 0 else OK_COLOR))
+	# nome e modelos
+	var row := _hbox(10)
+	box.add_child(row)
+	row.add_child(_label("NOME", S, UITheme.MUTED))
+	var name_edit := LineEdit.new()
+	name_edit.text = str(spec.get("nome", ""))
+	name_edit.max_length = 20
+	name_edit.custom_minimum_size = Vector2(320, 0)
+	name_edit.text_changed.connect(func(tx: String) -> void: spec["nome"] = tx)
+	row.add_child(name_edit)
+	row.add_child(_label("MODELOS", S, UITheme.MUTED))
+	for pname: String in DB.PRESETS:
+		var pn := pname
+		_btn(row, pn, _spec_change(func() -> void:
+			var keep := str(spec.get("nome", ""))
+			spec = DB.PRESETS[pn].duplicate(true)
+			spec["nome"] = keep))
+	var cols := _hbox(18)
+	cols.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(cols)
+	var c1 := _vbox(4)
+	c1.custom_minimum_size.x = 600
+	cols.add_child(c1)
+	var c2 := _vbox(2)
+	c2.custom_minimum_size.x = 420
+	cols.add_child(c2)
+	var c3 := _vbox(4)
+	c3.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cols.add_child(c3)
+	# atributos
+	_head(c1, "Atributos (2 pontos cada)")
+	for a: String in DB.ATTRS:
+		var ar := _row(c1)
+		var al := _label(DB.ATTRS[a], S, UITheme.TEXT)
+		al.custom_minimum_size.x = 170
+		al.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		ar.add_child(al)
+		var v := int(spec.get(a, 5))
+		var key := a
+		_stepper(ar, str(v), func() -> void: spec[key] = int(spec.get(key, 5)) - 1,
+			func() -> void: spec[key] = int(spec.get(key, 5)) + 1, v > DB.ATTR_MIN, v < DB.ATTR_MAX)
+		_lbl(ar, DB.ATTR_DESC[a], UITheme.MUTED)
+	# traços
+	_head(c1, "Qualidades")
+	_trait_rows(c1, true)
+	_head(c3, "Defeitos (devolvem até %d)" % DB.TRAIT_REFUND_MAX)
+	_trait_rows(c3, false)
+	# habilidades
+	_head(c2, "Habilidades iniciais (nível 1/2/3 = 2/5/9 pontos)")
+	for g in DB.SKILL_GROUPS:
+		for k: String in g[1]:
+			var sr := _hbox(8)
+			c2.add_child(sr)
+			var sl := _label(DB.SKILLS[k], S, UITheme.TEXT)
+			sl.custom_minimum_size.x = 220
+			sl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			sr.add_child(sl)
+			var lv := _spec_skill(k)
+			var sk := k
+			_stepper(sr, str(lv), func() -> void:
+				var n := _spec_skill(sk) - 1
+				if n <= 0:
+					spec["skills"].erase(sk)
+				else:
+					spec["skills"][sk] = n,
+				func() -> void: spec["skills"][sk] = _spec_skill(sk) + 1, lv > 0, lv < DB.SKILL_START_MAX)
+	# resumo
+	var preview := SurvivorData.new()
+	preview.forca = int(spec.get("forca", 5))
+	preview.resist = int(spec.get("resist", 5))
+	preview.traits.assign(spec.get("traits", []))
+	for k in spec["skills"]:
+		preview.skills[k]["lv"] = int(spec["skills"][k])
+	_head(c3, "Resumo")
+	_lbl(c3, "Carga confortável: %.1f kg\nEstamina máxima: %.0f\nDano corpo a corpo: %.0f" % [preview.carry_max(),
+		preview.max_stamina(), preview.melee_damage()], UITheme.TEXT)
+	var err := DB.creation_error(spec)
+	var foot := _hbox(14)
+	box.add_child(foot)
+	var el := _label(err if err != "" else ("Enviando ficha..." if _creation_sent else "Morte é definitiva: escolha com cuidado."),
+		S, UITheme.DANGER if err != "" else UITheme.MUTED)
+	el.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	el.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	foot.add_child(el)
+	_btn(foot, "Sortear", _spec_change(func() -> void:
+		var r := RandomNumberGenerator.new()
+		r.randomize()
+		spec = SurvivorData.random_spec(r)), not _creation_sent)
+	var go := _btn(foot, "Começar", _submit_creation, err == "" and not _creation_sent)
+	go.add_theme_font_size_override("font_size", L)
+
+
+func _trait_rows(parent: VBoxContainer, positive: bool) -> void:
+	var chosen: Array = spec["traits"]
+	for t: String in DB.TRAITS:
+		var def: Dictionary = DB.TRAITS[t]
+		var c := int(def["custo"])
+		if (c > 0) != positive:
+			continue
+		var on := t in chosen
+		var tr := _hbox(10)
+		parent.add_child(tr)
+		var b := Button.new()
+		b.toggle_mode = true
+		b.button_pressed = on
+		b.text = ("%s %+d" % [def["nome"], -c]).to_upper()
+		b.custom_minimum_size.x = 250
+		b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		b.tooltip_text = def["desc"]
+		var tid := t
+		b.toggled.connect(func(_v: bool) -> void:
+			if tid in spec["traits"]:
+				spec["traits"].erase(tid)
+			else:
+				spec["traits"].append(tid)
+			_rebuild_creation.call_deferred())
+		tr.add_child(b)
+		var dl := _label(def["desc"], S, UITheme.MUTED)
+		dl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		tr.add_child(dl)
 
 
 func _tab_build(p: Player) -> void:

@@ -175,6 +175,7 @@ func debug_command(cmd: String) -> void:
 			p.data.pathogen = 100.0
 		"bleed":
 			p.data.blood = 0.0
+			p.data.kill("Sangramento", "fisica")
 		"place":
 			var base := world.ground.local_to_map(world.ground.to_local(p.position))
 			var target := base + Vector2i(int(a[1]), int(a[2]))

@@ -2,12 +2,132 @@ class_name DB
 extends RefCounted
 ## Dados estáticos do jogo: habilidades, itens, implantes, construções, receitas e loot.
 
+## As 12 habilidades do GDD (evoluem pelo uso, de 0 a 10), por grupo.
 const SKILLS := {
+	"combate": "Luta corpo a corpo",
+	"pontaria": "Pontaria",
+	"atletismo": "Atletismo",
+	"furtividade": "Furtividade",
 	"mecanica": "Mecânica",
-	"logica": "Matemática/Lógica",
+	"eletronica": "Eletrônica",
+	"carpintaria": "Carpintaria",
+	"metalurgia": "Metalurgia",
 	"medicina": "Medicina",
-	"engenharia": "Engenharia/Eletrônica",
+	"cibernetica": "Cibernética",
+	"agricultura": "Agricultura",
+	"culinaria": "Culinária",
 }
+const SKILL_GROUPS := [
+	["Combate e físico", ["combate", "pontaria", "atletismo", "furtividade"]],
+	["Técnica e ofício", ["mecanica", "eletronica", "carpintaria", "metalurgia"]],
+	["Suporte e ciência", ["medicina", "cibernetica", "agricultura", "culinaria"]],
+]
+const SKILL_DESC := {
+	"combate": "Dano, estamina e desgaste das armas brancas.",
+	"pontaria": "Dispersão, recarga e ruído das armas de fogo.",
+	"atletismo": "Fôlego, velocidade e peso que você aguenta.",
+	"furtividade": "Barulho dos passos e quanto os infectados demoram a te notar.",
+	"mecanica": "Consertos, veículos e ligação direta.",
+	"eletronica": "Geradores, torres, purificadores e baterias.",
+	"carpintaria": "Paredes, portas, pisos e baús.",
+	"metalurgia": "Estruturas de metal, filtros e blindagens.",
+	"medicina": "Bandagens, suturas e cirurgias.",
+	"cibernetica": "Instalar e manter implantes; menos estresse neural.",
+	"agricultura": "Plantar e colher.",
+	"culinaria": "Cozinhar com menos risco e mais nutrientes.",
+}
+
+# ---------------------------------------------------------------- criação de personagem
+## Pontos para gastar. Atributos vão de 2 a 9 (base 5, 2 pontos cada passo); habilidades
+## iniciais até o nível 3 (custam 2, 3 e 4 pontos); traços custam ou devolvem pontos.
+const CREATION_POINTS := 20
+const ATTRS := {"forca": "Força", "resist": "Resistência"}
+const ATTR_DESC := {"forca": "Peso que você carrega e dano corpo a corpo.",
+	"resist": "Estamina máxima e recuperação."}
+const ATTR_MIN := 2
+const ATTR_MAX := 9
+const SKILL_START_MAX := 3
+const TRAITS := {
+	"pulmao_aco": {"nome": "Pulmões de aço", "custo": 4, "desc": "-25% de esporos inalados."},
+	"imune_forte": {"nome": "Imunidade forte", "custo": 5, "desc": "A carga patogênica sobe 15% mais devagar."},
+	"metabolismo_lento": {"nome": "Metabolismo lento", "custo": 3, "desc": "Fome e sede 25% mais lentas."},
+	"atleta": {"nome": "Atleta", "custo": 3, "desc": "+20% de estamina máxima."},
+	"organizado": {"nome": "Organizado", "custo": 2, "desc": "+2 L nos bolsos."},
+	"maos_firmes": {"nome": "Mãos firmes", "custo": 3, "desc": "Suturas e cirurgias falham menos."},
+	"pulmao_fraco": {"nome": "Pulmão fraco", "custo": -4, "desc": "+25% de esporos inalados."},
+	"glutao": {"nome": "Glutão", "custo": -3, "desc": "Fome 30% mais rápida."},
+	"asmatico": {"nome": "Asmático", "custo": -3, "desc": "Gasta estamina 30% mais rápido."},
+	"sangue_fino": {"nome": "Sangue fino", "custo": -3, "desc": "Sangramentos 30% mais fortes."},
+	"desajeitado": {"nome": "Desajeitado", "custo": -2, "desc": "Armas gastam 25% mais rápido."},
+	"lento": {"nome": "Lento", "custo": -4, "desc": "-8% de velocidade."},
+	"barulhento": {"nome": "Barulhento", "custo": -2, "desc": "Seus passos fazem mais barulho."},
+}
+## Pares que não combinam.
+const TRAIT_CONFLICTS := [["pulmao_aco", "pulmao_fraco"], ["metabolismo_lento", "glutao"], ["atleta", "asmatico"]]
+## Traços negativos devolvem no máximo isto.
+const TRAIT_REFUND_MAX := 10
+const PRESETS := {
+	"Equilibrado": {"forca": 6, "resist": 6, "skills": {"combate": 1, "carpintaria": 2, "medicina": 2}, "traits": ["organizado"]},
+	"Médica de campo": {"forca": 4, "resist": 5, "skills": {"medicina": 3, "cibernetica": 2}, "traits": ["maos_firmes", "glutao"]},
+	"Engenheiro": {"forca": 5, "resist": 4, "skills": {"eletronica": 3, "metalurgia": 2, "carpintaria": 1}, "traits": ["desajeitado"]},
+	"Batedora": {"forca": 6, "resist": 6, "skills": {"atletismo": 2, "furtividade": 2, "combate": 1}, "traits": ["atleta", "barulhento"]},
+	"Brutamontes": {"forca": 8, "resist": 6, "skills": {"combate": 3}, "traits": ["lento"]},
+}
+
+
+static func skill_cost(lv: int) -> int:
+	var c := 0
+	for i in lv:
+		c += 2 + i
+	return c
+
+
+static func attr_cost(v: int) -> int:
+	return (v - 5) * 2
+
+
+## Pontos gastos por uma ficha de criação (negativo = sobra).
+static func creation_cost(spec: Dictionary) -> int:
+	var c := 0
+	for a in ATTRS:
+		c += attr_cost(int(spec.get(a, 5)))
+	var sk: Dictionary = spec.get("skills", {})
+	for k in sk:
+		c += skill_cost(int(sk[k]))
+	var refund := 0
+	for t in spec.get("traits", []):
+		var tc := int(TRAITS[t]["custo"])
+		if tc < 0:
+			refund += -tc
+		else:
+			c += tc
+	return c - mini(refund, TRAIT_REFUND_MAX)
+
+
+## Valida a ficha recebida de um jogador. Vazio = ok; senão, o motivo.
+static func creation_error(spec: Dictionary) -> String:
+	for a in ATTRS:
+		var v := int(spec.get(a, 5))
+		if v < ATTR_MIN or v > ATTR_MAX:
+			return "Atributo fora do limite."
+	var sk: Variant = spec.get("skills", {})
+	if not sk is Dictionary:
+		return "Ficha inválida."
+	for k in sk:
+		if not SKILLS.has(k) or int(sk[k]) < 0 or int(sk[k]) > SKILL_START_MAX:
+			return "Habilidade inválida."
+	var tr: Variant = spec.get("traits", [])
+	if not tr is Array:
+		return "Ficha inválida."
+	for t in tr:
+		if not TRAITS.has(t):
+			return "Traço inválido."
+	for pair in TRAIT_CONFLICTS:
+		if pair[0] in tr and pair[1] in tr:
+			return "%s e %s não combinam." % [TRAITS[pair[0]]["nome"], TRAITS[pair[1]]["nome"]]
+	if creation_cost(spec) > CREATION_POINTS:
+		return "Pontos insuficientes."
+	return ""
 
 ## Itens. peso em kg, vol em litros. Campos de estado por unidade (ver Items):
 ##   dur: tem durabilidade (gasto = perda por golpe/uso); validade: segundos até estragar;
@@ -45,9 +165,11 @@ const ITEMS := {
 	"mochila_militar": {"nome": "Mochila militar", "tipo": "mochila", "cap": 34.0, "reducao": 0.4, "peso": 1.6, "vol": 6.0, "desc": "+34 L; o conteúdo pesa 40% menos."},
 	"coldre": {"nome": "Coldre de cinto", "tipo": "coldre", "cap": 2.0, "reducao": 0.0, "peso": 0.3, "vol": 0.6, "desc": "Leva uma arma de até 2 L à mão."},
 	"manual_mecanica": {"nome": "Manual de Mecânica", "tipo": "manual", "skill": "mecanica", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Mecânica."},
-	"manual_logica": {"nome": "Manual de Lógica", "tipo": "manual", "skill": "logica", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Matemática/Lógica."},
+	"manual_metalurgia": {"nome": "Manual de Metalurgia", "tipo": "manual", "skill": "metalurgia", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Metalurgia."},
 	"manual_medicina": {"nome": "Manual de Medicina", "tipo": "manual", "skill": "medicina", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Medicina."},
-	"manual_engenharia": {"nome": "Manual de Eletrônica", "tipo": "manual", "skill": "engenharia", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Engenharia/Eletrônica."},
+	"manual_engenharia": {"nome": "Manual de Eletrônica", "tipo": "manual", "skill": "eletronica", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Eletrônica."},
+	"manual_carpintaria": {"nome": "Manual de Carpintaria", "tipo": "manual", "skill": "carpintaria", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Carpintaria."},
+	"manual_cibernetica": {"nome": "Manual de Cibernética", "tipo": "manual", "skill": "cibernetica", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Cibernética."},
 	"implante_pulmao": {"nome": "Filtro pulmonar mecânico", "tipo": "implante", "peso": 1.5, "vol": 1.0, "desc": "Implante. Instale na aba Implantes."},
 	"implante_hud": {"nome": "HUD de escaneamento", "tipo": "implante", "peso": 0.4, "vol": 0.4, "desc": "Implante. Instale na aba Implantes."},
 	"implante_braco": {"nome": "Braço reforçado", "tipo": "implante", "peso": 2.5, "vol": 2.0, "desc": "Implante. Instale na aba Implantes."},
@@ -56,36 +178,36 @@ const ITEMS := {
 const IMPLANT_SLOTS := {"pulmao": "Pulmões", "olho": "Olho (HUD)", "braco_d": "Braço direito"}
 
 const IMPLANTS := {
-	"implante_pulmao": {"slot": "pulmao", "membro": "torso", "req": {"medicina": 4, "engenharia": 3}, "dreno": 0.05, "calor": 0.6,
+	"implante_pulmao": {"slot": "pulmao", "membro": "torso", "req": {"medicina": 4, "cibernetica": 3}, "dreno": 0.05, "calor": 0.6,
 		"efeito": "Reduz em 65% a entrada de esporos."},
-	"implante_hud": {"slot": "olho", "membro": "cabeca", "req": {"medicina": 3, "engenharia": 4}, "dreno": 0.03, "calor": 0.4,
+	"implante_hud": {"slot": "olho", "membro": "cabeca", "req": {"medicina": 3, "cibernetica": 4}, "dreno": 0.03, "calor": 0.4,
 		"efeito": "Escaneia infectados, caixas e nível de esporos."},
-	"implante_braco": {"slot": "braco_d", "membro": "braco_d", "req": {"medicina": 5, "engenharia": 4}, "dreno": 0.04, "calor": 0.5,
+	"implante_braco": {"slot": "braco_d", "membro": "braco_d", "req": {"medicina": 5, "cibernetica": 4}, "dreno": 0.04, "calor": 0.5,
 		"efeito": "+14 de dano corpo a corpo."},
 }
 
 const BUILDS := {
 	"piso": {"nome": "Piso metálico", "custo": {"madeira": 1, "sucata": 1}, "req": {},
-		"xp": {"mecanica": 3}, "desc": "Altera o terreno (persistente)."},
+		"xp": {"carpintaria": 3}, "desc": "Altera o terreno (persistente)."},
 	"parede": {"nome": "Parede reforçada", "custo": {"sucata": 2, "madeira": 2}, "req": {},
-		"xp": {"mecanica": 6}, "desc": "Bloqueia infectados."},
-	"porta": {"nome": "Porta", "custo": {"madeira": 3, "sucata": 2}, "req": {"mecanica": 1},
-		"xp": {"mecanica": 10}, "desc": "[E] abre e fecha."},
-	"gerador": {"nome": "Gerador a combustão", "custo": {"metal": 6, "sucata": 4}, "req": {"engenharia": 3, "logica": 2},
-		"xp": {"engenharia": 25, "logica": 15}, "desc": "Energia num raio de ~10 tiles. Precisa de combustível."},
-	"purificador": {"nome": "Purificador industrial", "custo": {"metal": 8, "sucata": 5, "filtro": 1}, "req": {"engenharia": 4, "logica": 3},
-		"xp": {"engenharia": 30, "logica": 20}, "desc": "Reduz a carga patogênica de quem fica perto. Precisa de energia."},
-	"torre": {"nome": "Torre automatizada", "custo": {"metal": 8, "sucata": 6, "bateria": 1}, "req": {"engenharia": 4, "logica": 4},
-		"xp": {"engenharia": 30, "logica": 25}, "desc": "Atira em infectados. Precisa de energia."},
+		"xp": {"carpintaria": 6}, "desc": "Bloqueia infectados."},
+	"porta": {"nome": "Porta", "custo": {"madeira": 3, "sucata": 2}, "req": {"carpintaria": 1},
+		"xp": {"carpintaria": 10}, "desc": "[E] abre e fecha."},
 	"bau": {"nome": "Baú", "custo": {"madeira": 3, "sucata": 1}, "req": {},
-		"xp": {"mecanica": 4}, "desc": "Guarda itens sem limite de volume. [E] abre."},
-	"vedacao": {"nome": "Selagem de ar", "custo": {"metal": 8, "sucata": 4, "madeira": 4}, "req": {"logica": 4, "engenharia": 3},
-		"xp": {"logica": 30, "engenharia": 20}, "desc": "Zona sem esporos. Precisa de energia."},
+		"xp": {"carpintaria": 4}, "desc": "Guarda itens sem limite de volume. [E] abre."},
+	"gerador": {"nome": "Gerador a combustão", "custo": {"metal": 6, "sucata": 4}, "req": {"eletronica": 3, "metalurgia": 2},
+		"xp": {"eletronica": 25, "metalurgia": 15}, "desc": "Energia num raio de ~10 tiles. Precisa de combustível."},
+	"purificador": {"nome": "Purificador industrial", "custo": {"metal": 8, "sucata": 5, "filtro": 1}, "req": {"eletronica": 4, "metalurgia": 2},
+		"xp": {"eletronica": 30, "metalurgia": 15}, "desc": "Reduz a carga patogênica de quem fica perto. Precisa de energia."},
+	"torre": {"nome": "Torre automatizada", "custo": {"metal": 8, "sucata": 6, "bateria": 1}, "req": {"eletronica": 4, "metalurgia": 3},
+		"xp": {"eletronica": 30, "metalurgia": 20}, "desc": "Atira em infectados. Precisa de energia."},
+	"vedacao": {"nome": "Selagem de ar", "custo": {"metal": 8, "sucata": 4, "madeira": 4}, "req": {"metalurgia": 4, "eletronica": 3, "carpintaria": 2},
+		"xp": {"metalurgia": 30, "eletronica": 20}, "desc": "Zona sem esporos. Precisa de energia."},
 }
 
 const CRAFTS := {
-	"filtro": {"nome": "Filtro de máscara", "custo": {"sucata": 2, "metal": 1}, "req": {"mecanica": 2}, "xp": {"mecanica": 14}},
-	"bateria": {"nome": "Bateria", "custo": {"metal": 1, "sucata": 2, "combustivel": 1}, "req": {"engenharia": 2}, "xp": {"engenharia": 12, "logica": 5}},
+	"filtro": {"nome": "Filtro de máscara", "custo": {"sucata": 2, "metal": 1}, "req": {"metalurgia": 2}, "xp": {"metalurgia": 14}},
+	"bateria": {"nome": "Bateria", "custo": {"metal": 1, "sucata": 2, "combustivel": 1}, "req": {"eletronica": 2}, "xp": {"eletronica": 12}},
 	"supressor": {"nome": "Supressor químico", "custo": {"antisseptico": 1, "sucata": 1}, "req": {"medicina": 3}, "xp": {"medicina": 12}},
 }
 
@@ -99,8 +221,8 @@ const LOOT := {
 	"medico": [["bandagem", 30, 1, 3], ["antisseptico", 25, 1, 2], ["kit_sutura", 15, 1, 1], ["antibiotico", 15, 1, 2],
 		["supressor", 12, 1, 2], ["agua_limpa", 8, 1, 2], ["manual_medicina", 4, 1, 1], ["kit_cirurgico", 3, 1, 1]],
 	"tecnico": [["metal", 30, 1, 4], ["sucata", 25, 2, 5], ["bateria", 14, 1, 2], ["combustivel", 14, 1, 3],
-		["filtro", 12, 1, 2], ["mascara", 5, 1, 1], ["manual_mecanica", 4, 1, 1], ["manual_logica", 4, 1, 1],
-		["manual_engenharia", 4, 1, 1], ["implante_pulmao", 1, 1, 1], ["implante_hud", 1, 1, 1],
+		["filtro", 12, 1, 2], ["mascara", 5, 1, 1], ["manual_mecanica", 3, 1, 1], ["manual_metalurgia", 3, 1, 1],
+		["manual_engenharia", 3, 1, 1], ["manual_carpintaria", 3, 1, 1], ["manual_cibernetica", 2, 1, 1], ["implante_pulmao", 1, 1, 1], ["implante_hud", 1, 1, 1],
 		["implante_braco", 1, 1, 1], ["machete", 2, 1, 1], ["fita", 8, 1, 1], ["mochila_trilha", 2, 1, 1],
 		["mochila_militar", 1, 1, 1], ["coldre", 3, 1, 1]],
 }

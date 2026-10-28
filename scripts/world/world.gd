@@ -594,15 +594,13 @@ func spawn_player(peer: int) -> Player:
 	if not saved.is_empty():
 		pos = Game.v2(saved.get("pos", [pos.x, pos.y]))
 	var p: Player = spawn_net({"t": "player", "peer": peer, "nome": pname, "pos": [pos.x, pos.y]})
-	var data: SurvivorData
 	if saved.is_empty():
-		data = SurvivorData.random_survivor(Game.rng)
+		# sobrevivente novo: o jogador monta a ficha (CreationScreen) e envia
+		p.alive = false
+		p.pending = true
 	else:
-		data = SurvivorData.from_dict(saved.get("data", {}))
-	_attach_data(p, data)
-	if saved.is_empty():
-		Game.tell(peer, "Novo sobrevivente: %s. Você acorda no Abrigo Alfa." % data.nome)
-	else:
+		var data := SurvivorData.from_dict(saved.get("data", {}))
+		_attach_data(p, data)
 		Game.tell(peer, "Bem-vindo de volta, %s." % data.nome)
 	if peer != Net.my_id():
 		Game.say_all("%s entrou na sessão." % pname)
@@ -1196,12 +1194,20 @@ func on_player_died(p: Player) -> void:
 	Game.save_game()
 
 
-## Servidor: novo sobrevivente para o jogador, no abrigo.
+## Servidor: depois da morte, o jogador cria um sobrevivente novo.
 func respawn_player(p: Player) -> void:
-	var data := SurvivorData.random_survivor(Game.rng)
+	p.pending = true
+
+
+## Servidor: ficha validada -> sobrevivente novo no abrigo.
+func create_survivor(p: Player, spec: Dictionary) -> void:
+	var data := SurvivorData.from_spec(spec, Game.rng)
 	_attach_data(p, data)
+	p.pending = false
 	p.teleport(shelter_pos())
 	Game.tell(p.peer, "Novo sobrevivente: %s. Você acorda no Abrigo Alfa." % data.nome)
+	if p.peer != Net.my_id():
+		Game.say_all("%s chegou ao abrigo." % data.nome)
 
 
 # ======================================================================= persistência (deltas)

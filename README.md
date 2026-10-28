@@ -24,7 +24,9 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **Metabolismo**: fome (calorias) e sede (água limpa vs. suja); carboidratos e proteínas foram removidos do protótipo.
 - **Medicina por membros**: 6 membros com ferida leve/profunda, sangramento, desinfecção, sutura, bandagem, antibiótico, sepse e infecção fúngica por ferida aberta.
 - **Cibernética**: implantes (filtro pulmonar, HUD de escaneamento, braço reforçado) com bateria, estresse térmico, integridade e manutenção; implante danificado enfraquece a imunidade.
-- **Habilidades por ação** (Mecânica, Lógica, Medicina, Engenharia/Eletrônica) e manuais; "parede de conhecimento" para construções e cirurgias (falha crítica ou morte sem o nível).
+- **Criação de personagem por pontos**: Força, Resistência, habilidades iniciais e traços (qualidades e defeitos), com modelos prontos; refeita a cada morte.
+- **12 habilidades por uso** (Luta, Pontaria, Atletismo, Furtividade, Mecânica, Eletrônica, Carpintaria, Metalurgia, Medicina, Cibernética, Agricultura, Culinária) e manuais; "parede de conhecimento" para construções e cirurgias.
+- **Estamina**: Shift corre; golpes cansam; fome e sobrecarga atrasam a recuperação.
 - **Perma-death com legado**: morte por infecção vira infectado de elite com inventário e implantes; morte física deixa cadáver que decompõe, atrai moscas/hordas e serve de baú.
 - **Mundo procedural por seed** (FastNoiseLite), estradas, vilas com simulação em segundo plano (estoque, caravanas, risco de infestação).
 - **Base-building**: pisos (TileMapLayer), paredes, portas, gerador, purificador, torre automatizada, selagem de ar.
@@ -52,5 +54,5 @@ scripts/art/       art_db.gd + art_catalog.gd (pacote) · gen_art.gd + gen_catal
 ```bash
 tools/setup.sh
 tools/screenshot.sh saida.png --frames=90 --debug="5:give:metal,10;20:tab:3"
-godot --headless --path . -s res://tools/test_inventory.gd   # teste da lógica do inventário
+godot --headless --path . -s res://tools/test_logic.gd   # teste da lógica do inventário
 ```

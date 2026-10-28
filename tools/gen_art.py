@@ -134,9 +134,10 @@ ICON = 28
 ITEMS = ["feijao", "carne_seca", "barra_cereal", "agua_limpa", "agua_suja", "mascara", "filtro",
          "supressor", "bandagem", "antisseptico", "kit_sutura", "antibiotico", "kit_cirurgico",
          "bateria", "combustivel", "sucata", "madeira", "metal", "cano", "machete",
-         "manual_mecanica", "manual_logica", "manual_medicina", "manual_engenharia",
+         "manual_mecanica", "manual_metalurgia", "manual_medicina", "manual_engenharia",
          "implante_pulmao", "implante_hud", "implante_braco",
-         "mochila_escolar", "mochila_trilha", "mochila_militar", "coldre", "fita", "faca", "taco", "maca", "pao", "abridor"]
+         "mochila_escolar", "mochila_trilha", "mochila_militar", "coldre", "fita", "faca", "taco", "maca", "pao", "abridor",
+         "manual_carpintaria", "manual_cibernetica"]
 
 
 def fit_icon(parts, theta):

@@ -27,11 +27,14 @@ var world: World
 var net_pos := Vector2.ZERO
 var facing: int = Facing.S
 var moving := false
+var sprinting := false
 var attack_seq := 0
 # ---- replicado pelo servidor
 var look := 1  # bits: 1 máscara, 2 braço cibernético, 4 olho (HUD)
 var alive := true
 var hurt_seq := 0
+## Esperando o jogador criar um sobrevivente (entrada na sessão ou depois de morrer).
+var pending := false
 
 # ---- locais
 var attack_cd := 0.0
@@ -93,9 +96,9 @@ func _ready() -> void:
 ## Chamado pela função de spawn antes de o nó entrar na árvore.
 func setup_net(owner_peer: int) -> void:
 	peer = owner_peer
-	var own := Net.make_sync(self, [".:net_pos", ".:facing", ".:moving", ".:attack_seq"], 0.05)
+	var own := Net.make_sync(self, [".:net_pos", ".:facing", ".:moving", ".:sprinting", ".:attack_seq"], 0.05)
 	own.name = "SyncDono"
-	var srv := Net.make_sync(self, [".:look", ".:alive", ".:hurt_seq", ".:nome"], 0.1)
+	var srv := Net.make_sync(self, [".:look", ".:alive", ".:hurt_seq", ".:nome", ".:pending"], 0.1)
 	srv.name = "SyncServidor"
 	# a autoridade é aplicada depois de criar os filhos (set_multiplayer_authority é recursivo)
 	set_multiplayer_authority(owner_peer)
@@ -135,6 +138,9 @@ func _local_control(delta: float) -> void:
 	if moving:
 		facing = _vector_to_facing(input)
 	var mult := data.speed_mult() if data != null else 1.0
+	sprinting = moving and Input.is_action_pressed("sprint") and data != null and data.can_sprint()
+	if sprinting:
+		mult *= 1.55
 	velocity = Vector2(input.x, input.y * ISO_Y_SCALE) * SPEED * mult
 	move_and_slide()
 	net_pos = position
@@ -155,7 +161,7 @@ func _server_tick(delta: float) -> void:
 	attack_flash = maxf(0.0, attack_flash - delta)
 	if alive:
 		var pos := position if is_local() else net_pos
-		data.tick(delta, {"spore": world.spore_at(pos), "moving": moving, "combat": attack_flash > 0.0,
+		data.tick(delta, {"spore": world.spore_at(pos), "moving": moving, "sprinting": sprinting, "combat": attack_flash > 0.0,
 			"purifier": world.purifier_near(pos)})
 		look = int(data.has_mask()) | (2 if data.implant_active("braco_d") else 0) | (4 if data.implant_active("olho") else 0)
 		if not data.alive:
@@ -284,6 +290,7 @@ func _server_attack(dir_index: int) -> void:
 	attack_flash = 0.15
 	var pos := position if is_local() else net_pos
 	var dir := Vector2.from_angle(float(posmod(dir_index, 8)) * PI / 4.0)
+	data.spend_stamina(data.attack_stamina())
 	var dmg := data.melee_damage()
 	var hit := false
 	for n in get_tree().get_nodes_in_group("infected"):
@@ -294,7 +301,42 @@ func _server_attack(dir_index: int) -> void:
 			e.take_damage(dmg, self)
 			hit = true
 	if hit:
-		data.wear_weapon()
+		data.on_melee_hit()
+
+
+## Dono: envia a ficha de criação ao servidor.
+func send_creation(spec: Dictionary) -> void:
+	if Net.is_server():
+		_create(spec)
+	else:
+		_req_create.rpc_id(1, spec)
+
+
+@rpc("any_peer", "reliable")
+func _req_create(spec: Dictionary) -> void:
+	if not Net.is_server() or multiplayer.get_remote_sender_id() != peer:
+		return
+	_create(spec)
+
+
+func _create(spec: Dictionary) -> void:
+	if not pending:
+		return
+	var err := DB.creation_error(spec)
+	if err != "":
+		Game.tell(peer, "Ficha recusada: " + err)
+		if is_local():
+			_creation_refused()
+		else:
+			_creation_refused.rpc_id(peer)
+		return
+	world.create_survivor(self, spec)
+
+
+@rpc("authority", "reliable")
+func _creation_refused() -> void:
+	if Game.hud != null:
+		Game.hud.creation_refused()
 
 
 ## Dano vindo dos infectados (servidor).

@@ -29,4 +29,13 @@ const ICONS := {
 	"legado": 19,
 	"sangue": 20,
 	"calor": 21,
+	"estamina": 22,
+	"cerebro": 23,
+	"municao": 24,
+	"ruido": 25,
+	"olho": 26,
+	"planta": 27,
+	"panela": 28,
+	"carro": 29,
+	"pessoa": 30,
 }

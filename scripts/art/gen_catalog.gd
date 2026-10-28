@@ -55,7 +55,7 @@ const ICONS := {
 	"cano": 18,
 	"machete": 19,
 	"manual_mecanica": 20,
-	"manual_logica": 21,
+	"manual_metalurgia": 21,
 	"manual_medicina": 22,
 	"manual_engenharia": 23,
 	"implante_pulmao": 24,
@@ -71,6 +71,8 @@ const ICONS := {
 	"maca": 34,
 	"pao": 35,
 	"abridor": 36,
+	"manual_carpintaria": 37,
+	"manual_cibernetica": 38,
 }
 
 const GROUND_PATH := "res://assets/art/generated/world/ground.png"

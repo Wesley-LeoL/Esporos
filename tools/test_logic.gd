@@ -1,6 +1,6 @@
 extends SceneTree
-## Teste de lógica do inventário (fase 2). Rodar:
-##   godot --headless --path . -s res://tools/test_inventory.gd
+## Teste da lógica de sobrevivência (inventário, criação, estamina...). Rodar:
+##   godot --headless --path . -s res://tools/test_logic.gd
 
 var fails := 0
 
@@ -124,6 +124,28 @@ func _initialize() -> void:
 	var l2 := DB.roll_loot("tecnico", 6, b, RandomNumberGenerator.new(), 0.0)
 	check(a.state == b.state, "sorteio de loot não gasta o gerador do mapa com o estado dos itens")
 	check(Items.total_units(l1) == Items.total_units(l2), "mesmos itens nos dois sorteios")
+
+	# fase 3: criação por pontos, atributos, traços e estamina
+	for pn in DB.PRESETS:
+		check(DB.creation_error(DB.PRESETS[pn]) == "", "modelo '%s' é válido (%d pts)" % [pn, DB.creation_cost(DB.PRESETS[pn])])
+	check(DB.creation_error({"forca": 9, "resist": 9, "skills": {"combate": 3}, "traits": []}) != "", "ficha cara demais é recusada")
+	check(DB.creation_error({"forca": 5, "resist": 5, "skills": {}, "traits": ["atleta", "asmatico"]}) != "", "traços em conflito são recusados")
+	check(DB.creation_error({"forca": 5, "resist": 5, "skills": {"hackear": 1}, "traits": []}) != "", "habilidade inexistente é recusada")
+	var many_neg := {"forca": 5, "resist": 5, "skills": {}, "traits": ["pulmao_fraco", "glutao", "asmatico", "sangue_fino", "lento"]}
+	check(DB.creation_cost(many_neg) == -DB.TRAIT_REFUND_MAX, "defeitos devolvem no máximo %d" % DB.TRAIT_REFUND_MAX)
+	var brute := SurvivorData.from_spec({"nome": "Teste", "forca": 8, "resist": 6, "skills": {"combate": 3}, "traits": ["lento"]}, r)
+	check(brute.nome == "Teste" and brute.level("combate") == 3, "ficha aplicada")
+	check(brute.carry_max() > 19.0, "força 8 carrega mais (%.1f kg)" % brute.carry_max())
+	check(brute.speed_mult() < 1.0, "traço lento reduz velocidade")
+	var st0 := brute.stamina
+	brute.tick(1.0, {"moving": true, "sprinting": true})
+	check(brute.stamina < st0, "correr gasta estamina")
+	brute.stamina = 0.0
+	brute.tick(1.0, {"moving": false})
+	check(brute.stamina > 0.0, "parado recupera estamina")
+	var old_sk := SurvivorData.from_dict({"skills": {"engenharia": {"lv": 4, "xp": 0}, "logica": {"lv": 2, "xp": 0}}})
+	check(old_sk.level("eletronica") == 4 and old_sk.level("metalurgia") == 2, "habilidades antigas convertidas")
+	check(Items.sanitize([{"id": "manual_logica", "n": 1}])[0]["id"] == "manual_metalurgia", "manual antigo renomeado")
 
 	print("FALHAS: %d" % fails)
 	quit(1 if fails > 0 else 0)
