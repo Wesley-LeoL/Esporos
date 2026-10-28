@@ -3,18 +3,29 @@ extends Node2D
 ## Mundo procedural isométrico: terreno por ruído, estradas, vilas com simulação em
 ## segundo plano, concentração de esporos (letal na borda), infectados, construção,
 ## morte/legado e persistência apenas dos deltas feitos pelo jogador.
+##
+## Mundo em chunks (fase 7): a geração só PLANEJA (dados determinísticos pela seed, iguais
+## em todos os peers): prédios, objetos, caixas, arte de chão, estradas e vilas. Os nós e os
+## tiles só existem nos chunks de CHUNK x CHUNK células perto de quem está olhando (todos
+## os jogadores no anfitrião; o próprio jogador nos clientes). O estado que muda (caixas,
+## construções, baús, pisos) fica em dicionários de dados e vale com o chunk carregado ou não.
 
 ## Grade da arte: células isométricas 2:1 de 80x40 px (pacote em assets/art/tiles).
 const TILE_W := 80
 const TILE_H := 40
 const HALF_W := TILE_W / 2.0
 const HALF_H := TILE_H / 2.0
-const RADIUS := 64.0
+const RADIUS := 150.0
+const CHUNK := 16
+## Chunks carregados ao redor de quem olha (distância de xadrez) e distância para descarregar.
+const LOAD_R := 2
+const UNLOAD_R := 3
+const N_RUINS := 440
 const SAFE_RADIUS_PX := 325.0
 const SEAL_RADIUS := 190.0
 const POWER_RADIUS_PX := 525.0
 const PURIFY_RADIUS_PX := 150.0
-const N_VILLAGES := 8
+const N_VILLAGES := 16
 
 enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA }
 
@@ -25,11 +36,13 @@ const PROPS: Array[String] = ["Advertising5", "Advertising6", "Advertising7", "S
 ## Peso dos prédios do pacote FreeSample contra os do Town Sampler (ExtraCatalog).
 const FS_WEIGHT := 60.0
 ## Versão do save: muda quando a geração do mundo muda (saves antigos não batem com o mapa).
-const SAVE_VERSION := 4
-## Versões de save que ainda carregam (a 3 tem inventário antigo e é convertida).
-const SAVE_COMPAT := [3, 4]
+const SAVE_VERSION := 5
+## Versões de save que ainda carregam. Antes da 5 o mapa era outro (raio 64, sem chunks):
+## desses saves só os sobreviventes e o legado são aproveitados (ver Game.read_save).
+const SAVE_COMPAT := [3, 4, 5]
 const VILLAGE_NAMES: Array[String] = ["Abrigo Alfa", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
-	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix"]
+	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix", "Morro Azul",
+	"Forte Néon", "Cratera", "Porto Velho", "Colmeia", "Sétima Linha", "Refúgio Sul", "Barreira Leste"]
 
 var seed_value: int = 0
 var rng := RandomNumberGenerator.new()
@@ -47,11 +60,27 @@ var players := {}
 var noise := FastNoiseLite.new()
 var spore_noise := FastNoiseLite.new()
 var villages: Array[VillageData] = []
-var containers: Array[LootContainer] = []
-## Baús construídos pelos jogadores (célula -> LootContainer).
+## Plano da geração: chunk -> lista de entradas {"t": "b" prédio, "p" objeto, "c" caixa,
+## "g" arte de chão, "cv" tampa de bueiro}.
+var plan := {}
+## Prédios planejados pela célula de origem (para demolir com o chunk descarregado).
+var planned_buildings := {}
+## Caixas do mapa: id -> {"cell", "table", "village", "items", "dirty"}.
+var container_data: Array[Dictionary] = []
+## Nós das caixas carregadas (id -> LootContainer).
+var container_nodes := {}
+## Construções fixas (abrigo) e dos jogadores: célula -> {"kind", "fuel", "open", "eternal"}.
+var built := {}
+## Baús construídos: célula -> lista de itens. Nós carregados em 'chests'.
+var chest_data := {}
 var chests := {}
+## Nós de estruturas carregadas (célula -> Structure; prédios ocupam várias células).
 var structures := {}
+## Células ocupadas (dados, valem para o mapa inteiro).
 var occupied := {}
+## Chunks carregados: chunk -> {"nodes": Array, "art": Node2D}.
+var loaded := {}
+var _chunk_t := 0.0
 var terrain_deltas := {}
 var removed_cells := {}
 var road_cells := {}
@@ -98,7 +127,6 @@ func generate(new_seed: int) -> void:
 	spawner.spawn_function = _spawn_entity
 	ghost = BuildGhost.new()
 	add_child(ghost)
-	_paint_terrain()
 	_place_villages()
 	_connect_villages()
 	_decorate_villages()
@@ -131,24 +159,38 @@ func _gtile(t: int, c: Vector2i) -> Vector2i:
 	return Vector2i(t, v)
 
 
-func _paint_terrain() -> void:
-	var lim := int(RADIUS) + 6
-	for x in range(-lim, lim + 1):
-		for y in range(-lim, lim + 1):
-			var d := Vector2(x, y).length()
-			if d > RADIUS + 5.0:
-				continue
-			var t: int = T.CONC_A if noise.get_noise_2d(x * 3.1 + 40.0, y * 3.1) < 0.05 else T.CONC_B
-			var n := noise.get_noise_2d(x, y)
-			if n > 0.28:
-				t = T.TERRA
-			elif n < -0.3:
-				t = T.MANCHA
-			var edge := smoothstep(RADIUS * 0.55, RADIUS, d)
-			var sn := spore_noise.get_noise_2d(x * 1.7, y * 1.7) * 0.5 + 0.5
-			if d > RADIUS - 1.5 or sn < edge * 0.9:
-				t = T.ESPOROS
-			ground.set_cell(Vector2i(x, y), 0, _gtile(t, Vector2i(x, y)))
+## Tipo de chão de uma célula (calculado ao carregar o chunk). -1 = fora do mapa.
+func _terrain(c: Vector2i) -> int:
+	var d := Vector2(c).length()
+	if d > RADIUS + 5.0:
+		return -1
+	if road_cells.has(c):
+		return T.ESTRADA
+	for v in villages:
+		if maxi(absi(c.x - v.cell.x), absi(c.y - v.cell.y)) <= 6:
+			return T.VILA
+	var t: int = T.CONC_A if noise.get_noise_2d(c.x * 3.1 + 40.0, c.y * 3.1) < 0.05 else T.CONC_B
+	var n := noise.get_noise_2d(c.x, c.y)
+	if n > 0.28:
+		t = T.TERRA
+	elif n < -0.3:
+		t = T.MANCHA
+	var edge := smoothstep(RADIUS * 0.55, RADIUS, d)
+	var sn := spore_noise.get_noise_2d(c.x * 1.7, c.y * 1.7) * 0.5 + 0.5
+	if d > RADIUS - 1.5 or sn < edge * 0.9:
+		t = T.ESPOROS
+	return t
+
+
+static func chunk_of(c: Vector2i) -> Vector2i:
+	return Vector2i(floori(c.x / float(CHUNK)), floori(c.y / float(CHUNK)))
+
+
+func _plan_add(c: Vector2i, e: Dictionary) -> void:
+	var ch := chunk_of(c)
+	if not plan.has(ch):
+		plan[ch] = []
+	plan[ch].append(e)
 
 
 func _place_villages() -> void:
@@ -159,11 +201,12 @@ func _place_villages() -> void:
 	while villages.size() < N_VILLAGES and tries < 500:
 		tries += 1
 		var ang := rng.randf() * TAU
-		var dist := rng.randf_range(18.0, RADIUS - 14.0)
+		# vilas ficam fora da zona densa de esporos (que começa a ~55% do raio e mata perto da borda)
+		var dist := rng.randf_range(18.0, RADIUS * 0.72)
 		var c := Vector2i(roundi(cos(ang) * dist), roundi(sin(ang) * dist))
 		var ok := true
 		for v in villages:
-			if Vector2(v.cell - c).length() < 20.0:
+			if Vector2(v.cell - c).length() < 26.0:
 				ok = false
 		if not ok:
 			continue
@@ -198,7 +241,6 @@ func _carve_road(a: VillageData, b: VillageData) -> void:
 	_mark_road_block(a.cell)
 	_mark_road_block(b.cell)
 	for p in path:
-		ground.set_cell(p, 0, _gtile(T.ESTRADA, p))
 		road_cells[p] = true
 		_mark_road_block(p)
 		pts.append(ground.map_to_local(p))
@@ -221,7 +263,6 @@ func _mark_road_block(c: Vector2i) -> void:
 		for dy in 2:
 			var cell := origin + Vector2i(dx, dy)
 			road_cells[cell] = true
-			ground.set_cell(cell, 0, _gtile(T.ESTRADA, cell))
 	_queue_ground_art("Road_Chunk5", rng.randi() % 4, origin, 1)
 
 
@@ -230,29 +271,15 @@ func _queue_ground_art(art: String, v: int, cell: Vector2i, layer: int) -> void:
 	_ground_art.append({"art": art, "v": v, "cell": cell, "layer": layer})
 
 
+## Distribui a arte de chão planejada pelos chunks (o carregamento ordena em profundidade).
 func _flush_ground_art() -> void:
-	_ground_art.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		if a["layer"] != b["layer"]:
-			return a["layer"] < b["layer"]
-		var ka: int = a["cell"].x + a["cell"].y
-		var kb: int = b["cell"].x + b["cell"].y
-		if ka != kb:
-			return ka < kb
-		return a["cell"].x < b["cell"].x)
 	for e in _ground_art:
-		var sp := ArtDB.sprite(e["art"], e["v"], "top")
-		sp.position += ground.map_to_local(e["cell"]) + Vector2(0, -HALF_H)
-		art_ground.add_child(sp)
+		_plan_add(e["cell"], {"t": "g", "art": e["art"], "v": e["v"], "cell": e["cell"], "layer": e["layer"]})
 	_ground_art.clear()
 
 
 func _decorate_villages() -> void:
 	for v in villages:
-		for dx in range(-6, 7):
-			for dy in range(-6, 7):
-				var c := v.cell + Vector2i(dx, dy)
-				if not road_cells.has(c):
-					ground.set_cell(c, 0, _gtile(T.VILA, c))
 		# praça: 3x3 blocos de calçada de 4x4 células, mais calçadas menores ao redor
 		for i in 3:
 			for j in 3:
@@ -332,35 +359,48 @@ func _place_random_building(center: Vector2i, rmin: int, rmax: int, context := "
 	return false
 
 
-func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i, town := "") -> Structure:
+func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i, town := "") -> void:
+	var e := {"t": "b", "art": art, "v": v, "cell": c, "fp": fp, "town": town}
+	_plan_add(c, e)
+	planned_buildings[c] = e
+	for i in fp.x:
+		for j in fp.y:
+			occupied[c + Vector2i(i, j)] = true
+
+
+func _make_building(e: Dictionary) -> Structure:
 	var s := Structure.new()
 	s.kind = "edificio"
-	s.town = town
-	s.cell = c
+	s.town = e["town"]
+	s.cell = e["cell"]
 	s.world = self
-	s.art = art
-	s.art_variant = v
-	s.fp = fp
+	s.art = e["art"]
+	s.art_variant = e["v"]
+	s.fp = e["fp"]
 	# centro da pegada: topo da célula inicial + deslocamento até o centro do losango
-	var top := ground.map_to_local(c) + Vector2(0, -HALF_H)
-	var w := float(fp.x)
-	var d := float(fp.y)
+	var top := ground.map_to_local(s.cell) + Vector2(0, -HALF_H)
+	var w := float(s.fp.x)
+	var d := float(s.fp.y)
 	s.position = top + Vector2(HALF_W * 0.5 * (w - d), HALF_H * 0.5 * (w + d))
 	entities.add_child(s)
 	for cell in s.cells():
 		structures[cell] = s
-		occupied[cell] = true
 	return s
 
 
 func _add_prop(art: String, v: int, c: Vector2i, source := "fs") -> void:
-	var pr := Prop.new()
-	pr.art = art
-	pr.variant = v
-	pr.source = source
-	pr.position = ground.map_to_local(c)
-	entities.add_child(pr)
+	_plan_add(c, {"t": "p", "art": art, "v": v, "cell": c, "source": source})
 	occupied[c] = true
+
+
+func _make_prop(e: Dictionary) -> Node2D:
+	var pr := Prop.new()
+	pr.art = e["art"]
+	pr.variant = e["v"]
+	pr.source = e["source"]
+	pr.position = ground.map_to_local(e["cell"])
+	entities.add_child(pr)
+	return pr
 
 
 ## Objetos do Neon District por grupo (rua, vila, industria, abrigo, chao).
@@ -399,15 +439,7 @@ func _decorate_roads() -> void:
 	blocks.sort()
 	for origin: Vector2i in blocks:
 		if rng.randf() < 0.1 and not covers.is_empty():
-			var cover: String = _pick(covers)
-			var e: Dictionary = ExtraCatalog.NEON[cover]
-			var sp := Sprite2D.new()
-			sp.texture = load(ExtraCatalog.NEON_DIR + cover + ".png")
-			var r: Array = e["r"]
-			sp.region_enabled = true
-			sp.region_rect = Rect2(r[0], r[1], int(r[2]) - int(r[0]) + 1, int(r[3]) - int(r[1]) + 1)
-			sp.position = ground.map_to_local(origin) + Vector2(0, HALF_H)
-			art_ground.add_child(sp)
+			_plan_add(origin, {"t": "cv", "art": _pick(covers), "cell": origin})
 		if rng.randf() > 0.55:
 			continue
 		# célula vizinha ao bloco, fora da pista
@@ -422,26 +454,27 @@ func _decorate_roads() -> void:
 			_add_prop(_pick(street), 0, c, "neon")
 
 
-func _remove_structure(s: Structure) -> void:
+## Tira o nó de uma estrutura carregada (não mexe nos dados).
+func _free_structure_node(s: Structure) -> void:
 	for cell in s.cells():
-		structures.erase(cell)
-		occupied.erase(cell)
+		if structures.get(cell) == s:
+			structures.erase(cell)
 	s.queue_free()
 
 
 func _build_shelter(v: VillageData) -> void:
-	var gen := _add_structure("gerador", v.cell + Vector2i(2, -2))
-	gen.eternal = true
-	gen.fuel = 100.0
-	_add_structure("purificador", v.cell + Vector2i(-1, -1)).eternal = true
-	_add_structure("vedacao", v.cell + Vector2i(1, 1)).eternal = true
+	built[v.cell + Vector2i(2, -2)] = {"kind": "gerador", "fuel": 100.0, "open": false, "eternal": true}
+	built[v.cell + Vector2i(-1, -1)] = {"kind": "purificador", "fuel": 0.0, "open": false, "eternal": true}
+	built[v.cell + Vector2i(1, 1)] = {"kind": "vedacao", "fuel": 0.0, "open": false, "eternal": true}
+	for c in [v.cell + Vector2i(2, -2), v.cell + Vector2i(-1, -1), v.cell + Vector2i(1, 1)]:
+		occupied[c] = true
 	var starter := _add_container(v.cell + Vector2i(-2, 1), "comum", v.id)
-	starter.items = Items.from_counts({"feijao": 3, "agua_limpa": 3, "bandagem": 2, "sucata": 4, "madeira": 4,
+	container_data[starter]["items"] = Items.from_counts({"feijao": 3, "agua_limpa": 3, "bandagem": 2, "sucata": 4, "madeira": 4,
 		"metal": 2, "fita": 1, "faca": 1, "martelo": 1, "pregos": 16}, null, 0.0)
 
 
 func _scatter_ruins() -> void:
-	for i in 80:
+	for i in N_RUINS:
 		var ang := rng.randf() * TAU
 		var dist := rng.randf_range(6.0, RADIUS - 8.0)
 		var c := Vector2i(roundi(cos(ang) * dist), roundi(sin(ang) * dist))
@@ -466,47 +499,213 @@ func _free_cell(c: Vector2i) -> bool:
 	return not occupied.has(c) and not road_cells.has(c) and Vector2(c).length() < RADIUS - 3.0
 
 
-func _add_structure(kind: String, c: Vector2i) -> Structure:
+## Nó de uma construção (dados em 'built').
+func _make_structure(c: Vector2i, d: Dictionary) -> Structure:
 	var s := Structure.new()
-	s.kind = kind
+	s.kind = d["kind"]
 	s.cell = c
 	s.world = self
+	s.eternal = bool(d.get("eternal", false))
+	s.fuel = float(d.get("fuel", 0.0))
+	s.open = bool(d.get("open", false))
 	s.position = ground.map_to_local(c)
 	entities.add_child(s)
 	structures[c] = s
-	occupied[c] = true
 	return s
 
 
-func _add_chest(c: Vector2i) -> LootContainer:
-	if chests.has(c):
-		return chests[c]
+func _make_chest(c: Vector2i) -> LootContainer:
 	var lc := LootContainer.new()
 	lc.chest = true
 	lc.cell = c
 	lc.table = "bau"
+	lc.items = chest_data.get(c, [])
 	lc.position = ground.map_to_local(c)
 	entities.add_child(lc)
 	chests[c] = lc
-	occupied[c] = true
 	return lc
 
 
-func _add_container(c: Vector2i, table: String, village_id: int) -> LootContainer:
-	var lc := LootContainer.new()
-	lc.id = containers.size()
-	lc.table = table
-	lc.village_id = village_id
+## Planeja uma caixa do mapa; devolve o id.
+func _add_container(c: Vector2i, table: String, village_id: int) -> int:
+	var id := container_data.size()
 	# o estado de cada item (durabilidade, carga, validade) usa um gerador próprio por caixa,
 	# para não mudar a sequência do gerador do mapa
 	var srng := RandomNumberGenerator.new()
-	srng.seed = hash([seed_value, lc.id])
-	lc.items = DB.roll_loot(table, rng.randi_range(2, 4), rng, srng, 0.0)
-	lc.position = ground.map_to_local(c)
-	entities.add_child(lc)
-	containers.append(lc)
+	srng.seed = hash([seed_value, id])
+	container_data.append({"cell": c, "table": table, "village": village_id,
+		"items": DB.roll_loot(table, rng.randi_range(2, 4), rng, srng, 0.0), "dirty": false})
+	_plan_add(c, {"t": "c", "id": id, "cell": c})
 	occupied[c] = true
+	return id
+
+
+func _make_container(id: int) -> LootContainer:
+	var cd: Dictionary = container_data[id]
+	var lc := LootContainer.new()
+	lc.id = id
+	lc.table = cd["table"]
+	lc.village_id = int(cd["village"])
+	lc.items = cd["items"]
+	lc.dirty = bool(cd["dirty"])
+	lc.position = ground.map_to_local(cd["cell"])
+	entities.add_child(lc)
+	container_nodes[id] = lc
 	return lc
+
+
+# ======================================================================= chunks
+## Posições de quem precisa do mundo carregado: todos os jogadores no anfitrião (física,
+## IA e colisão acontecem lá), só o próprio jogador nos clientes.
+func _viewers() -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	if Net.is_server():
+		for k in players:
+			var p: Player = players[k]
+			out.append(p.position if p.is_local() else p.net_pos)
+	else:
+		var lp := local_player()
+		if lp != null:
+			out.append(lp.position)
+	if out.is_empty():
+		out.append(ground.map_to_local(Vector2i.ZERO))
+	return out
+
+
+## Carrega os chunks perto de quem olha e descarrega os distantes. 'limit' chunks por
+## chamada (0 = todos de uma vez, usado no começo).
+func update_chunks(limit := 3) -> void:
+	var centers: Array[Vector2i] = []
+	for pos in _viewers():
+		centers.append(chunk_of(ground.local_to_map(pos)))
+	var want: Array[Vector2i] = []
+	var max_ch := ceili((RADIUS + 6.0) / CHUNK)
+	for cc in centers:
+		for dx in range(-LOAD_R, LOAD_R + 1):
+			for dy in range(-LOAD_R, LOAD_R + 1):
+				var ch := cc + Vector2i(dx, dy)
+				if absi(ch.x) > max_ch or absi(ch.y) > max_ch or loaded.has(ch) or ch in want:
+					continue
+				want.append(ch)
+	# os mais próximos primeiro
+	var c0 := centers[0]
+	want.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return (a - c0).length_squared() < (b - c0).length_squared())
+	var n := 0
+	for ch in want:
+		if limit > 0 and n >= limit:
+			break
+		_load_chunk(ch)
+		n += 1
+	for ch: Vector2i in loaded.keys():
+		var far := true
+		for cc in centers:
+			if maxi(absi(ch.x - cc.x), absi(ch.y - cc.y)) <= UNLOAD_R:
+				far = false
+				break
+		if far:
+			_unload_chunk(ch)
+
+
+func is_loaded(c: Vector2i) -> bool:
+	return loaded.has(chunk_of(c))
+
+
+func _load_chunk(ch: Vector2i) -> void:
+	var nodes: Array = []
+	var holder := Node2D.new()
+	art_ground.add_child(holder)
+	var base := ch * CHUNK
+	for x in CHUNK:
+		for y in CHUNK:
+			var c := base + Vector2i(x, y)
+			var t := _terrain(c)
+			if t < 0:
+				continue
+			ground.set_cell(c, 0, _gtile(t, c))
+			if terrain_deltas.has(c):
+				build_layer.set_cell(c, 0, _gtile(int(terrain_deltas[c]), c))
+	var entries: Array = plan.get(ch, [])
+	var art: Array = []
+	var covers: Array = []
+	for e in entries:
+		match String(e["t"]):
+			"g":
+				art.append(e)
+			"cv":
+				covers.append(e)
+			"b":
+				if not removed_cells.has(e["cell"]):
+					nodes.append(_make_building(e))
+			"p":
+				nodes.append(_make_prop(e))
+			"c":
+				nodes.append(_make_container(int(e["id"])))
+	# arte de chão: calçadas antes das estradas, depois em ordem de profundidade
+	art.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["layer"] != b["layer"]:
+			return a["layer"] < b["layer"]
+		var ka: int = a["cell"].x + a["cell"].y
+		var kb: int = b["cell"].x + b["cell"].y
+		if ka != kb:
+			return ka < kb
+		return a["cell"].x < b["cell"].x)
+	for e in art:
+		var sp := ArtDB.sprite(e["art"], e["v"], "top")
+		sp.position += ground.map_to_local(e["cell"]) + Vector2(0, -HALF_H)
+		holder.add_child(sp)
+	for e in covers:
+		_make_cover(holder, e)
+	for c: Vector2i in built:
+		if chunk_of(c) == ch:
+			nodes.append(_make_structure(c, built[c]))
+	for c: Vector2i in chest_data:
+		if chunk_of(c) == ch:
+			nodes.append(_make_chest(c))
+	loaded[ch] = {"nodes": nodes, "art": holder}
+
+
+func _make_cover(holder: Node2D, e: Dictionary) -> void:
+	var cover: String = e["art"]
+	var ne: Dictionary = ExtraCatalog.NEON[cover]
+	var sp := Sprite2D.new()
+	sp.texture = load(ExtraCatalog.NEON_DIR + cover + ".png")
+	var r: Array = ne["r"]
+	sp.region_enabled = true
+	sp.region_rect = Rect2(r[0], r[1], int(r[2]) - int(r[0]) + 1, int(r[3]) - int(r[1]) + 1)
+	sp.position = ground.map_to_local(e["cell"]) + Vector2(0, HALF_H)
+	holder.add_child(sp)
+
+
+func _unload_chunk(ch: Vector2i) -> void:
+	var info: Dictionary = loaded[ch]
+	for node in info["nodes"]:
+		if not is_instance_valid(node):
+			continue
+		if node is Structure:
+			var st := node as Structure
+			if built.has(st.cell):
+				built[st.cell]["fuel"] = st.fuel
+				built[st.cell]["open"] = st.open
+			_free_structure_node(st)
+			continue
+		if node is LootContainer:
+			var lc := node as LootContainer
+			if lc.chest:
+				chest_data[lc.cell] = lc.items
+				chests.erase(lc.cell)
+			else:
+				container_data[lc.id]["items"] = lc.items
+				container_nodes.erase(lc.id)
+		node.queue_free()
+	(info["art"] as Node2D).queue_free()
+	var base := ch * CHUNK
+	for x in CHUNK:
+		for y in CHUNK:
+			var c := base + Vector2i(x, y)
+			ground.erase_cell(c)
+			build_layer.erase_cell(c)
+	loaded.erase(ch)
 
 
 # ======================================================================= esporos
@@ -522,6 +721,12 @@ func spore_at(world_pos: Vector2) -> float:
 	var tp := tile_pos(world_pos)
 	var s := 0.08 + 1.4 * smoothstep(RADIUS * 0.55, RADIUS, tp.length())
 	s += spore_noise.get_noise_2d(tp.x * 0.6, tp.y * 0.6) * 0.04
+	# vilas que caíram viram zonas mortas tomadas por esporos
+	for v in villages:
+		if v.infested:
+			var dv := tp.distance_to(Vector2(v.cell))
+			if dv < 14.0:
+				s += 0.45 * (1.0 - smoothstep(6.0, 14.0, dv))
 	for n in get_tree().get_nodes_in_group("seals"):
 		var st := n as Structure
 		if st.powered:
@@ -693,6 +898,16 @@ func _spawn_entity(d: Dictionary) -> Node:
 			lc.position = Game.v2(d["pos"])
 			lc.setup_net()
 			node = lc
+		"npc":
+			var npc := Npc.new()
+			npc.world = self
+			npc.village_id = int(d["vid"])
+			npc.role = str(d["role"])
+			npc.nome = str(d["nome"])
+			npc.position = Game.v2(d["pos"])
+			npc.home = Game.v2(d.get("home", d["pos"]))
+			npc.setup_net()
+			node = npc
 		"car":
 			var car := Caravan.new()
 			car.world = self
@@ -725,8 +940,7 @@ func node_of(key: String) -> Node:
 	var rest := key.substr(2)
 	match kind:
 		"c:":
-			var i := int(rest)
-			return containers[i] if i >= 0 and i < containers.size() else null
+			return container_nodes.get(int(rest))
 		"s:", "b:":
 			var xy := rest.split(",")
 			if xy.size() < 2:
@@ -824,8 +1038,9 @@ func drop_items(pos: Vector2, list: Array) -> void:
 
 
 # ======================================================================= estado compartilhado
-## Servidor: o conteúdo de um recipiente mudou. Caixas e baús vão por RPC; sacos e cadáveres
-## são replicados pelo sincronizador (a lista é trocada para ele perceber a mudança).
+## Servidor: o conteúdo de um recipiente mudou. Caixas e baús vão por RPC (e ficam nos
+## dados); sacos e cadáveres são replicados pelo sincronizador (a lista é trocada para ele
+## perceber a mudança).
 func container_changed(node: Node2D) -> void:
 	node.items = node.items.duplicate(true)
 	node.queue_redraw()
@@ -836,26 +1051,49 @@ func container_changed(node: Node2D) -> void:
 				lc.queue_free()
 			return
 		lc.dirty = true
+		_store_items(key_of(lc), lc.items)
 		_container_items.rpc(key_of(lc), lc.items)
 
 
-@rpc("authority", "reliable")
-func _container_items(key: String, items: Array) -> void:
+## Grava o conteúdo nos dados (caixa "c:id" ou baú "b:x,y") e no nó, se carregado.
+func _store_items(key: String, items: Array) -> void:
+	if key.begins_with("c:"):
+		var id := int(key.substr(2))
+		if id >= 0 and id < container_data.size():
+			container_data[id]["items"] = items
+			container_data[id]["dirty"] = true
+	elif key.begins_with("b:"):
+		var xy := key.substr(2).split(",")
+		var cell := Vector2i(int(xy[0]), int(xy[1]))
+		if chest_data.has(cell):
+			chest_data[cell] = items
 	var lc := node_of(key) as LootContainer
-	if lc != null:
-		lc.items = Items.sanitize(items)
+	if lc != null and lc.items != items:
+		lc.items = items
 		lc.dirty = true
 		lc.queue_redraw()
 
 
+@rpc("authority", "reliable")
+func _container_items(key: String, items: Array) -> void:
+	_store_items(key, Items.sanitize(items))
+
+
 ## Servidor: estado de uma estrutura (combustível, porta) mudou.
 func structure_changed(st: Structure) -> void:
+	if built.has(st.cell):
+		built[st.cell]["fuel"] = st.fuel
+		built[st.cell]["open"] = st.open
 	_structure_state.rpc(st.cell.x, st.cell.y, st.fuel, st.open)
 
 
 @rpc("authority", "reliable")
 func _structure_state(x: int, y: int, fuel: float, open: bool) -> void:
-	var st: Structure = structures.get(Vector2i(x, y))
+	var c := Vector2i(x, y)
+	if built.has(c):
+		built[c]["fuel"] = fuel
+		built[c]["open"] = open
+	var st: Structure = structures.get(c)
 	if st != null:
 		st.apply_state(fuel, open)
 
@@ -934,14 +1172,27 @@ func try_place(kind: String, c: Vector2i, p: Player) -> bool:
 func _build_done(kind: String, x: int, y: int) -> void:
 	var c := Vector2i(x, y)
 	if kind == "bau":
-		_add_chest(c)
+		if not chest_data.has(c):
+			chest_data[c] = []
+			occupied[c] = true
+			if is_loaded(c):
+				_track(c, _make_chest(c))
 	elif kind == "piso":
-		build_layer.set_cell(c, 0, _gtile(T.PISO, c))
 		terrain_deltas[c] = T.PISO
-	elif not structures.has(c):
-		var s := _add_structure(kind, c)
-		if kind == "gerador":
-			s.fuel = 0.0
+		if is_loaded(c):
+			build_layer.set_cell(c, 0, _gtile(T.PISO, c))
+	elif not built.has(c):
+		built[c] = {"kind": kind, "fuel": 0.0, "open": false, "eternal": false}
+		occupied[c] = true
+		if is_loaded(c):
+			_track(c, _make_structure(c, built[c]))
+
+
+## Registra um nó criado depois do carregamento no chunk dele (para descarregar junto).
+func _track(c: Vector2i, node: Node) -> void:
+	var ch := chunk_of(c)
+	if loaded.has(ch):
+		loaded[ch]["nodes"].append(node)
 
 
 ## Servidor: valida e demole; devolve materiais ao jogador.
@@ -954,6 +1205,7 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 	if chests.has(c):
 		var ch: LootContainer = chests[c]
 		drop_items(ch.position, ch.items)
+		ch.items = []
 		_demolish_done.rpc(c.x, c.y, false)
 		p.data.give("madeira", 1)
 		Game.tell(p.peer, "Baú desmontado (o conteúdo ficou no chão).")
@@ -991,24 +1243,34 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 	return false
 
 
+## Todos os peers: aplica uma demolição nos dados e, se o chunk estiver carregado, nos nós.
+## (x, y) é a célula de origem da estrutura.
 @rpc("authority", "call_local", "reliable")
 func _demolish_done(x: int, y: int, floor_only: bool) -> void:
 	var c := Vector2i(x, y)
-	if chests.has(c):
-		(chests[c] as LootContainer).queue_free()
-		chests.erase(c)
+	if chest_data.has(c):
+		chest_data.erase(c)
 		occupied.erase(c)
+		if chests.has(c):
+			(chests[c] as LootContainer).queue_free()
+			chests.erase(c)
 		return
 	if floor_only:
 		build_layer.erase_cell(c)
 		terrain_deltas.erase(c)
 		return
+	if planned_buildings.has(c):
+		removed_cells[c] = true
+		var e: Dictionary = planned_buildings[c]
+		for i in e["fp"].x:
+			for j in e["fp"].y:
+				occupied.erase(c + Vector2i(i, j))
+	elif built.has(c):
+		built.erase(c)
+		occupied.erase(c)
 	var s: Structure = structures.get(c)
-	if s == null:
-		return
-	if s.kind == "ruina" or s.kind == "edificio":
-		removed_cells[s.cell] = true
-	_remove_structure(s)
+	if s != null:
+		_free_structure_node(s)
 
 
 # ======================================================================= som
@@ -1108,8 +1370,10 @@ func _village_step() -> void:
 	for v in villages:
 		var was := v.infested
 		v.step(rng, clampf(Vector2(v.cell).length() / RADIUS, 0.0, 1.0))
+		_request_step(v)
 		if v.infested and not was:
-			Game.say_all("A vila %s foi infestada!" % v.nome)
+			Game.say_all("A vila %s caiu: virou uma zona morta tomada por esporos e infectados." % v.nome)
+		_npc_step(v)
 		if v.infested:
 			_check_cleared(v)
 			continue
@@ -1117,20 +1381,18 @@ func _village_step() -> void:
 		if v.caravan_cd <= 0.0:
 			v.caravan_cd = rng.randf_range(40.0, 80.0)
 			_try_spawn_caravan(v)
-		for lc in containers:
-			if lc.village_id == v.id and lc.items.is_empty() and rng.randf() < 0.08:
+		for i in container_data.size():
+			var cd: Dictionary = container_data[i]
+			if int(cd["village"]) == v.id and cd["items"].is_empty() and rng.randf() < 0.08:
 				var total := float(v.stock["comida"]) + float(v.stock["sucata"]) + float(v.stock["medico"])
 				if total > 15.0:
 					var keys := ["comida", "sucata", "medico"]
 					var k: String = keys[rng.randi() % 3]
 					v.stock[k] = maxf(0.0, float(v.stock[k]) - 4.0)
-					lc.items = DB.roll_loot(lc.table, 1, rng)
-					container_changed(lc)
-					lc.queue_redraw()
-	var list: Array = []
-	for v in villages:
-		list.append(v.to_dict())
-	_villages_state.rpc(list)
+					var items := DB.roll_loot(cd["table"], 1, rng)
+					_store_items("c:%d" % i, items)
+					_container_items.rpc("c:%d" % i, items)
+	_villages_state.rpc(_villages_list())
 
 
 func _check_cleared(v: VillageData) -> void:
@@ -1145,6 +1407,7 @@ func _check_cleared(v: VillageData) -> void:
 			v.infested = false
 			v.infestation = 25.0
 			v.pop = 3
+			v.prosperity = 10.0
 			v.clear_t = 0.0
 			Game.say_all("A vila %s foi libertada! Sobreviventes voltam a ela." % v.nome)
 	else:
@@ -1185,8 +1448,180 @@ func caravan_arrived(c: Caravan) -> void:
 		Game.tell(p.peer, "Uma caravana chegou a %s." % dest.nome)
 
 
+# ======================================================================= vilas vivas (fase 7)
+## Distância (em tiles) de uma posição até o centro da vila.
+func village_dist(v: VillageData, pos: Vector2) -> float:
+	return tile_pos(pos).distance_to(Vector2(v.cell))
+
+
+## Servidor: pedidos de socorro (abrir, vencer o prazo, concluir).
+func _request_step(v: VillageData) -> void:
+	if v.maybe_request(rng, Game.play_time, 6.0):
+		Game.say_all("PEDIDO DE SOCORRO — %s: %s. Prazo: %d min." % [v.nome, v.request_text(), int(VillageData.REQUEST_TIME / 60.0)])
+		return
+	if v.request.is_empty():
+		return
+	if v.request_done():
+		_village_success(v)
+	elif Game.play_time > float(v.request.get("prazo", 0.0)):
+		v.fail()
+		Game.say_all("Ninguém ajudou %s a tempo. A vila perdeu moradores e está mais vulnerável." % v.nome)
+		if v.infested:
+			Game.say_all("A vila %s caiu: virou uma zona morta tomada por esporos e infectados." % v.nome)
+
+
+func _village_success(v: VillageData) -> void:
+	v.succeed()
+	Game.say_all("%s recebeu ajuda! A vila prospera (nível %d) e a reputação da equipe subiu." % [v.nome, v.level()])
+
+
+## Servidor: um infectado morreu (conta para pedidos de "eliminar infectados").
+func on_infected_killed(pos: Vector2) -> void:
+	for v in villages:
+		if v.request.is_empty() or int(v.request.get("kills", 0)) <= 0:
+			continue
+		if village_dist(v, pos) < 30.0:
+			v.request["kills"] = int(v.request["kills"]) - 1
+			if v.request_done():
+				_village_success(v)
+				_villages_state.rpc(_villages_list())
+
+
+func _villages_list() -> Array:
+	var list: Array = []
+	for v in villages:
+		list.append(v.to_dict())
+	return list
+
+
+## Servidor: NPCs aparecem quando alguém se aproxima de uma vila viva e somem quando
+## todos se afastam ou a vila cai.
+func _npc_step(v: VillageData) -> void:
+	var mine: Array = []
+	for n in get_tree().get_nodes_in_group("npcs"):
+		if (n as Npc).village_id == v.id and not n.is_queued_for_deletion():
+			mine.append(n)
+	var near := false
+	for k in players:
+		var p: Player = players[k]
+		if village_dist(v, p.position if p.is_local() else p.net_pos) < 40.0:
+			near = true
+			break
+	if v.infested or not near:
+		for n in mine:
+			n.queue_free()
+		return
+	if not mine.is_empty():
+		return
+	var center := ground.map_to_local(v.cell)
+	var roles: Array[String] = ["comerciante"]
+	for i in maxi(1, v.level()):
+		roles.append("guarda")
+	for i in mini(3, maxi(1, v.pop / 3)):
+		roles.append("morador")
+	if v.safe:
+		roles = ["comerciante", "guarda", "morador"]
+	for role in roles:
+		var off := Vector2(rng.randf_range(-120, 120), rng.randf_range(-60, 60))
+		if role == "comerciante":
+			off = Vector2(-90, 50) if not v.safe else Vector2(-150, 10)
+		var pos := center + off
+		spawn_net({"t": "npc", "vid": v.id, "role": role, "nome": SurvivorData.NAMES[rng.randi() % SurvivorData.NAMES.size()],
+			"pos": [pos.x, pos.y], "home": [pos.x, pos.y]})
+
+
+func _village_ok_for(p: Player, vid: int) -> VillageData:
+	if vid < 0 or vid >= villages.size():
+		return null
+	var v := villages[vid]
+	if v.infested or village_dist(v, p.position if p.is_local() else p.net_pos) > 16.0:
+		Game.tell(p.peer, "Você precisa estar na vila.")
+		return null
+	return v
+
+
+## Servidor: entrega itens para o pedido de socorro da vila.
+func deliver(p: Player, vid: int) -> void:
+	var v := _village_ok_for(p, vid)
+	if v == null or v.request.is_empty():
+		return
+	var given := 0
+	var need: Dictionary = v.request["need"]
+	for cat in need:
+		var left := int(need[cat])
+		for inst in p.data.all_items().duplicate():
+			if left <= 0:
+				break
+			if VillageData.item_category(inst["id"]) != cat or int(inst.get("u", 0)) == p.data.hand_u:
+				continue
+			if Items.spoiled(inst):
+				continue
+			var k := mini(left, int(inst["n"]))
+			p.data.remove_u(int(inst["u"]), k)
+			left -= k
+			given += k
+		need[cat] = left
+	if given == 0:
+		Game.tell(p.peer, "Você não tem o que a vila precisa.")
+		return
+	v.rep += float(given)
+	Game.tell(p.peer, "Você entregou %d itens para %s." % [given, v.nome])
+	if v.request_done():
+		_village_success(v)
+		# recompensa para quem completou a entrega
+		var reward := {"comida": {"feijao": 2, "agua_limpa": 2}, "sucata": {"pregos": 12, "metal": 2},
+			"medico": {"bandagem": 2, "antisseptico": 1}}[v.specialty] as Dictionary
+		for id in reward:
+			p.data.give(id, int(reward[id]))
+		Game.tell(p.peer, "Recompensa de %s: %s." % [v.nome, DB.cost_text(reward)])
+	_villages_state.rpc(_villages_list())
+
+
+## Servidor: doação (sobe a reputação e o estoque da vila).
+func donate(p: Player, vid: int, u: int, n: int) -> void:
+	var v := _village_ok_for(p, vid)
+	if v == null:
+		return
+	var f := p.data.find(u)
+	if f.is_empty() or String(f[0]).begins_with("equip:"):
+		return
+	var cat := VillageData.item_category(f[1]["id"])
+	if cat == "":
+		Game.tell(p.peer, "A vila não precisa disso.")
+		return
+	var part := p.data.remove_u(u, n)
+	var k := int(part.get("n", 0))
+	v.rep += float(VillageData.DONATE_REP[cat]) * float(k)
+	var stock_key := {"comida": "comida", "med": "medico", "material": "sucata", "eletronico": "sucata"}[cat] as String
+	v.stock[stock_key] = float(v.stock[stock_key]) + float(k)
+	Game.tell(p.peer, "Doação para %s: %s (+%d reputação)." % [v.nome, Items.label(part), int(VillageData.DONATE_REP[cat] * k)])
+	_villages_state.rpc(_villages_list())
+
+
+## Servidor: compra do comerciante com a reputação da equipe.
+func buy(p: Player, vid: int, item_id: String) -> void:
+	var v := _village_ok_for(p, vid)
+	if v == null:
+		return
+	for o in VillageData.OFFERS[v.specialty]:
+		if o[0] != item_id or v.level() < int(o[2]):
+			continue
+		if v.rep < float(o[1]):
+			Game.tell(p.peer, "Reputação insuficiente com %s." % v.nome)
+			return
+		v.rep -= float(o[1])
+		p.data.give(item_id, 1)
+		Game.tell(p.peer, "Você recebeu %s de %s." % [DB.item_name(item_id), v.nome])
+		_villages_state.rpc(_villages_list())
+		return
+
+
 # ======================================================================= vida e morte
 func _process(delta: float) -> void:
+	_chunk_t -= delta
+	if _chunk_t <= 0.0:
+		_chunk_t = 0.25
+		update_chunks(0 if loaded.is_empty() else 3)
 	if not Net.is_server() or players.is_empty():
 		return
 	_spawn_t -= delta
@@ -1252,11 +1687,15 @@ func create_survivor(p: Player, spec: Dictionary) -> void:
 ## Alterações do mundo gerado (iguais para save e para quem entra na sessão).
 func world_deltas() -> Dictionary:
 	var st: Array = []
-	for c in structures:
-		var s: Structure = structures[c]
-		if s.kind == "ruina" or s.kind == "edificio" or s.eternal:
+	for c: Vector2i in built:
+		var b: Dictionary = built[c]
+		if b.get("eternal", false):
 			continue
-		st.append(s.to_dict())
+		var node: Structure = structures.get(c)
+		if node != null:
+			b["fuel"] = node.fuel
+			b["open"] = node.open
+		st.append({"kind": b["kind"], "cell": [c.x, c.y], "fuel": b["fuel"], "open": b["open"]})
 	var floors: Array = []
 	for c in terrain_deltas:
 		floors.append([c.x, c.y, int(terrain_deltas[c])])
@@ -1264,15 +1703,15 @@ func world_deltas() -> Dictionary:
 	for c in removed_cells:
 		removed.append([c.x, c.y])
 	var cont := {}
-	for lc in containers:
-		if lc.dirty:
-			cont[str(lc.id)] = lc.items.duplicate(true)
+	for i in container_data.size():
+		if container_data[i]["dirty"]:
+			cont[str(i)] = container_data[i]["items"].duplicate(true)
 	var vil: Array = []
 	for v in villages:
 		vil.append(v.to_dict())
 	var ch: Array = []
-	for c in chests:
-		ch.append([c.x, c.y, chests[c].items.duplicate(true)])
+	for c: Vector2i in chest_data:
+		ch.append([c.x, c.y, chest_data[c].duplicate(true)])
 	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
 		"containers": cont, "chests": ch, "villages": vil}
 
@@ -1305,31 +1744,34 @@ func to_dict() -> Dictionary:
 
 ## Aplica as alterações do mundo (servidor ao carregar e clientes ao entrar).
 func apply_deltas(save: Dictionary) -> void:
+	# chamado logo depois de generate(), antes de qualquer chunk carregar: só mexe nos dados
 	for r in save.get("removed", []):
 		var c := Game.v2i(r)
 		removed_cells[c] = true
-		if structures.has(c):
-			_remove_structure(structures[c])
+		if planned_buildings.has(c):
+			var e: Dictionary = planned_buildings[c]
+			for i in e["fp"].x:
+				for j in e["fp"].y:
+					occupied.erase(c + Vector2i(i, j))
 	for f in save.get("floors", []):
-		var c2 := Vector2i(int(f[0]), int(f[1]))
-		build_layer.set_cell(c2, 0, _gtile(int(f[2]), c2))
-		terrain_deltas[c2] = int(f[2])
+		terrain_deltas[Vector2i(int(f[0]), int(f[1]))] = int(f[2])
 	for sd in save.get("structures", []):
-		if structures.has(Game.v2i(sd["cell"])):
+		var c3 := Game.v2i(sd["cell"])
+		if built.has(c3) or not DB.BUILDS.has(str(sd["kind"])):
 			continue
-		var s2 := _add_structure(str(sd["kind"]), Game.v2i(sd["cell"]))
-		s2.fuel = float(sd.get("fuel", 0.0))
-		s2.open = bool(sd.get("open", false))
+		built[c3] = {"kind": str(sd["kind"]), "fuel": float(sd.get("fuel", 0.0)), "open": bool(sd.get("open", false)),
+			"eternal": false}
+		occupied[c3] = true
 	var cont: Dictionary = save.get("containers", {})
 	for k in cont:
 		var idx := int(k)
-		if idx >= 0 and idx < containers.size():
-			containers[idx].items = Items.sanitize(cont[k])
-			containers[idx].dirty = true
-			containers[idx].queue_redraw()
+		if idx >= 0 and idx < container_data.size():
+			container_data[idx]["items"] = Items.sanitize(cont[k])
+			container_data[idx]["dirty"] = true
 	for cd in save.get("chests", []):
-		var chest := _add_chest(Vector2i(int(cd[0]), int(cd[1])))
-		chest.items = Items.sanitize(cd[2])
+		var cc := Vector2i(int(cd[0]), int(cd[1]))
+		chest_data[cc] = Items.sanitize(cd[2])
+		occupied[cc] = true
 	for vd in save.get("villages", []):
 		var vid := int(vd["id"])
 		if vid < villages.size():

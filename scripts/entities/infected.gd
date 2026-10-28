@@ -205,6 +205,7 @@ func _die() -> void:
 	if not elite and randf() < 0.18:
 		drops = DB.roll_loot("comum", 1, world.rng)
 	world.drop_loot(position, drops)
+	world.on_infected_killed(position)
 	if legacy:
 		Game.say_all("O infectado de elite que era %s foi abatido." % legacy_name)
 	queue_free()

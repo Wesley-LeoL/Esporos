@@ -186,6 +186,8 @@ func start_server(continue_save: bool, coop: bool) -> void:
 	var save := {}
 	if continue_save and Game.has_save():
 		save = Game.read_save()
+		if int(save.get("version", 0)) < World.SAVE_VERSION:
+			save = _old_save(save)
 	else:
 		Game.delete_save()
 	Game.legacy = save.get("legacy", [])
@@ -198,6 +200,16 @@ func start_server(continue_save: bool, coop: bool) -> void:
 	hud.set_active(true)
 	if coop:
 		Game.say("Sessão co-op aberta na porta %d. Os amigos entram pelo seu IP." % Net.PORT)
+
+
+## Save de antes do mundo em chunks (versão < 5): o mapa mudou, então só os sobreviventes
+## (de volta ao abrigo), o legado e o tempo de jogo continuam.
+func _old_save(save: Dictionary) -> Dictionary:
+	var surv: Dictionary = save.get("survivors", {})
+	for k in surv:
+		surv[k].erase("pos")
+	return {"seed": save.get("seed", Game.rng.randi()), "legacy": save.get("legacy", []),
+		"play_time": save.get("play_time", 0.0), "survivors": surv}
 
 
 ## Pacote de boas-vindas para quem entra: seed + alterações do mundo + legado.

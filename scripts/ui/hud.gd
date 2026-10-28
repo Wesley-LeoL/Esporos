@@ -16,7 +16,7 @@ const VITALS := [
 ]
 const TAB_DEFS := [["inv", "Inventário", "mochila"], ["corpo", "Corpo", "corpo"], ["skills", "Habilidades", "chip"],
 	["build", "Construção", "martelo"], ["impl", "Implantes", "bateria"], ["mundo", "Mundo", "mundo"],
-	["legado", "Legado", "legado"]]
+	["legado", "Legado", "legado"], ["vila", "Vila", "pessoa"]]
 const HINTS := [["SHIFT", "CORRER"], ["C", "AGACHAR"], ["ESPAÇO", "ATACAR"], ["R", "RECARREGAR"], ["E", "INTERAGIR"],
 	["TAB", "MENU"], ["X", "DEMOLIR"], ["F1", "CONSOLE"]]
 const OK_COLOR := Color("#7fe0a0")
@@ -72,6 +72,8 @@ var _creation_sent := false
 ## Medicina cooperativa: paciente escolhido na aba Corpo (0 = você) e dados recebidos.
 var patient_peer := 0
 var patient_info := {}
+## Vila aberta pela conversa com um NPC (-1 = a mais próxima).
+var village_open := -1
 var busy_panel: PanelContainer
 var busy_text: Label
 var busy_bar: PixelBar
@@ -525,6 +527,12 @@ func _player() -> Player:
 
 
 # ------------------------------------------------------------------ menu
+## Conversa com um NPC: abre a aba Vila.
+func open_village(vid: int) -> void:
+	village_open = vid
+	open_menu(7)
+
+
 ## Abre a janela de saque de um recipiente (aba Inventário em duas colunas).
 func open_loot(node: Node2D) -> void:
 	open_menu(0)
@@ -550,6 +558,7 @@ func open_menu(tab: int = -1) -> void:
 
 func close_menu() -> void:
 	loot_node = null
+	village_open = -1
 	menu_root.visible = false
 	get_tree().paused = false
 
@@ -899,6 +908,7 @@ func _rebuild() -> void:
 		4: _tab_implants(d)
 		5: _tab_world(p)
 		6: _tab_legacy(d)
+		7: _tab_village(p)
 
 
 func _act(cb: Callable) -> Callable:
@@ -1514,14 +1524,99 @@ func _tab_world(p: Player) -> void:
 	var w := Game.world
 	var tp := w.tile_pos(p.position)
 	_lbl(box, "Seed %d · raio do mundo %d tiles · você está a %d do centro · esporos %.2f" % [w.seed_value, int(World.RADIUS), int(tp.length()), w.spore_at(p.position)], UITheme.MUTED)
+	_head(box, "Pedidos de socorro")
+	var any := false
+	for v in w.villages:
+		if v.request.is_empty():
+			continue
+		any = true
+		var rr := _row(box)
+		rr.add_child(UITheme.icon_rect("alerta", UITheme.WARN, 32))
+		var left := maxf(0.0, float(v.request.get("prazo", 0.0)) - Game.play_time)
+		_lbl(rr, "%s [%d,%d] — %s · prazo %s" % [v.nome, v.cell.x, v.cell.y, v.request_text(), _fmt_time(left)], UITheme.WARN)
+	if not any:
+		_lbl(box, "Nenhum pedido aberto.", UITheme.MUTED)
 	_head(box, "Vilas (simulação em segundo plano)")
 	for v in w.villages:
 		var col := UITheme.DANGER if v.infested else OK_COLOR if v.safe else UITheme.TEXT
 		var row := _row(box)
 		row.add_child(UITheme.icon_rect("caveira" if v.infested else "mundo", col, 32))
-		_lbl(row, "%s [%d,%d] — %s · pop %d · comida %d · sucata %d · médico %d · risco %d%%" % [v.nome, v.cell.x, v.cell.y,
-			v.status_text(), v.pop, int(v.stock["comida"]), int(v.stock["sucata"]), int(v.stock["medico"]), int(v.infestation)], col)
-	_lbl(box, "Caravanas viajam pelas estradas levando recursos. Vilas sem comida acumulam risco e podem ser infestadas; liberte-as matando os infectados.", UITheme.MUTED)
+		_lbl(row, "%s [%d,%d] — %s · nível %d · pop %d · reputação %d · comida %d · sucata %d · médico %d · risco %d%%" % [v.nome,
+			v.cell.x, v.cell.y, v.status_text(), v.level(), v.pop, int(v.rep), int(v.stock["comida"]), int(v.stock["sucata"]),
+			int(v.stock["medico"]), int(v.infestation)], col)
+	_lbl(box, "Vilas ajudadas prosperam (mais produção, guardas e ofertas). Pedidos ignorados as enfraquecem até caírem e virarem zonas mortas; limpe os infectados por perto para libertá-las.", UITheme.MUTED)
+
+
+## Painel da vila: pedido de socorro, comerciante e doações.
+func _tab_village(p: Player) -> void:
+	var box: VBoxContainer = boxes["vila"]
+	_clear(box)
+	var w := Game.world
+	var v: VillageData = null
+	if village_open >= 0 and village_open < w.villages.size():
+		v = w.villages[village_open]
+	else:
+		for vv in w.villages:
+			if w.village_dist(vv, p.position) < 16.0:
+				v = vv
+	if v == null or w.village_dist(v, p.position) > 16.0:
+		_lbl(box, "Vá até uma vila e fale com um morador [E].", UITheme.MUTED)
+		return
+	var d := p.data
+	var top := _row(box)
+	top.add_child(UITheme.icon_rect("pessoa", UITheme.ACCENT, 44))
+	var info := _vbox(4)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(info)
+	info.add_child(_label("%s · %s · NÍVEL %d · POPULAÇÃO %d · REPUTAÇÃO DA EQUIPE %d" % [v.nome.to_upper(), v.status_text().to_upper(),
+		v.level(), v.pop, int(v.rep)], S, UITheme.ACCENT))
+	_bar(info, v.prosperity, 100.0, OK_COLOR, 400, 16)
+	info.add_child(_label("Especialidade: %s · risco de infestação %d%%" % [{"comida": "comida", "sucata": "materiais", "medico": "remédios"}[v.specialty],
+		int(v.infestation)], S, UITheme.MUTED))
+	if v.infested:
+		_lbl(box, "Esta vila caiu. Limpe os infectados por perto para que os sobreviventes voltem.", UITheme.DANGER)
+		return
+	_head(box, "Pedido de socorro")
+	if v.request.is_empty():
+		_lbl(box, "Nenhum pedido agora.", UITheme.MUTED)
+	else:
+		var rr := _row(box)
+		var left := maxf(0.0, float(v.request.get("prazo", 0.0)) - Game.play_time)
+		_lbl(rr, "%s · prazo %s" % [v.request_text(), _fmt_time(left)], UITheme.WARN)
+		var can := false
+		for cat in v.request["need"]:
+			if int(v.request["need"][cat]) <= 0:
+				continue
+			for inst in d.all_items():
+				if VillageData.item_category(inst["id"]) == cat and not Items.spoiled(inst):
+					can = true
+		var vid := v.id
+		_btn(rr, "Entregar", _act(func() -> void: _player().act("deliver", [vid])), can)
+	_head(box, "Comerciante (paga com reputação)")
+	for o in VillageData.OFFERS[v.specialty]:
+		var row := _row(box)
+		row.add_child(_item_icon(o[0], 40))
+		var ok_lv := v.level() >= int(o[2])
+		_lbl(row, "%s · %d de reputação%s" % [DB.item_name(o[0]), int(o[1]), "" if ok_lv else " · exige vila nível %d" % int(o[2])],
+			UITheme.TEXT if ok_lv else NO_COLOR)
+		var id: String = o[0]
+		var vid2 := v.id
+		_btn(row, "Trocar", _act(func() -> void: _player().act("buy", [vid2, id])), ok_lv and v.rep >= float(o[1]))
+	_head(box, "Doar (sobe a reputação)")
+	var any := false
+	for inst in d.all_items():
+		var cat := VillageData.item_category(inst["id"])
+		if cat == "" or int(inst["u"]) == d.hand_u:
+			continue
+		any = true
+		var row2 := _row(box)
+		_item_line(row2, inst)
+		var u := int(inst["u"])
+		var n := int(inst["n"])
+		var vid3 := v.id
+		_btn(row2, "Doar (+%d)" % int(VillageData.DONATE_REP[cat] * n), _act(func() -> void: _player().act("donate", [vid3, u, n])))
+	if not any:
+		_lbl(box, "Você não tem comida, remédios ou materiais para doar.", UITheme.MUTED)
 
 
 func _tab_legacy(d: SurvivorData) -> void:

@@ -30,7 +30,7 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **12 habilidades por uso** (Luta, Pontaria, Atletismo, Furtividade, Mecânica, Eletrônica, Carpintaria, Metalurgia, Medicina, Cibernética, Agricultura, Culinária) e manuais; "parede de conhecimento" para construções e cirurgias.
 - **Estamina**: Shift corre; golpes cansam; fome e sobrecarga atrasam a recuperação.
 - **Perma-death com legado**: morte por infecção vira infectado de elite com inventário e implantes; morte física deixa cadáver que decompõe, atrai moscas/hordas e serve de baú.
-- **Mundo procedural por seed** (FastNoiseLite), estradas, vilas com simulação em segundo plano (estoque, caravanas, risco de infestação).
+- **Mundo procedural por seed em chunks** (raio 150 tiles, 16 vilas): só os chunks perto dos jogadores existem como nós. Estradas, caravanas e **vilas vivas** com NPCs (comerciante, guardas, moradores), prosperidade, reputação, comércio e **pedidos de socorro** com prazo; vilas ignoradas caem e viram zonas mortas.
 - **Base-building**: pisos (TileMapLayer), paredes, portas, gerador, purificador, torre automatizada, selagem de ar.
 - **Persistência de deltas**: só construções, terreno, caixas saqueadas, baús, cadáveres, elites, vilas e legado vão para o save (saves da versão anterior são convertidos).
 
@@ -45,7 +45,7 @@ Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no m
 autoload/   input_setup.gd (ações) · net.gd (sessão co-op, ENet, replicação) · game.gd (mensagens, save, legado, debug)
 scripts/data/      db.gd (itens, implantes, construções) · items.gd (instâncias e listas de itens) · survivor_data.gd (toda a lógica de sobrevivência)
 scripts/world/     world.gd (mundo, spawn, vilas, construção, morte) · village_data.gd
-scripts/entities/  structure · infected · corpse · loot_container · caravan · build_ghost
+scripts/entities/  structure · infected · npc · corpse · loot_container · caravan · build_ghost · shot_fx
 scripts/player/    player.gd
 scripts/ui/        hud.gd (layout) · ui_theme.gd (cores, fonte, tema) · pixel_bar.gd · scan_overlay.gd · dev_console.gd
 tools/             setup.sh · screenshot.sh/.gd (prints headless) · gen_art.py, art_models.py, art_render.py (arte gerada) · build_art_catalog.py
@@ -56,5 +56,6 @@ scripts/art/       art_db.gd + art_catalog.gd (pacote) · gen_art.gd + gen_catal
 ```bash
 tools/setup.sh
 tools/screenshot.sh saida.png --frames=90 --debug="5:give:metal,10;20:tab:3"
-godot --headless --path . -s res://tools/test_logic.gd   # teste da lógica do inventário
+godot --headless --path . -s res://tools/test_logic.gd   # lógica do sobrevivente (inventário, criação, implantes...)
+godot --headless --path . res://tools/test_world.tscn    # geração do mundo e vilas
 ```

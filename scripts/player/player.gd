@@ -14,7 +14,7 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine"]
+	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy"]
 ## Ações que levam tempo (barra de progresso; mover-se ou levar dano interrompe).
 const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item"]
 const TREAT_NAMES := {"antibiotico": "Aplicando antibiótico", "desinfetar": "Desinfetando", "enfaixar": "Enfaixando",
@@ -415,6 +415,12 @@ func _run_act(action: String, args: Array) -> void:
 			_server_attack(int(args[0]), float(args[1]) if args.size() > 1 else float(int(args[0])) * PI / 4.0)
 		"reload":
 			data.reload()
+		"deliver":
+			world.deliver(self, int(args[0]))
+		"donate":
+			world.donate(self, int(args[0]), int(args[1]), int(args[2]))
+		"buy":
+			world.buy(self, int(args[0]), str(args[1]))
 		"save":
 			Game.save_game()
 			Game.tell(peer, "Jogo salvo pelo anfitrião.")
@@ -755,6 +761,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact") and nearby != null and is_instance_valid(nearby):
 		if (nearby is LootContainer or nearby is Corpse) and Game.hud != null:
 			Game.hud.open_loot(nearby)
+		elif nearby is Npc and Game.hud != null:
+			Game.hud.open_village((nearby as Npc).village_id)
 		else:
 			act("interact", [world.key_of(nearby)])
 	elif event.is_action_pressed("cancel"):

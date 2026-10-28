@@ -147,6 +147,15 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Ações com tempo:** tratar (2 a 8 s), operar (14 s), remover implante (10 s), manutenção (5 s), fabricar, consertar, recarregar (1,6 s pistola, 2,4 s espingarda), comer, beber, vestir mochila ou máscara, trocar filtro e ler manuais. Uma barra aparece no HUD e sobre a cabeça do personagem (todos veem). Andar ou levar um golpe interrompe. Medicina, Cibernética e Pontaria encurtam o tempo.
 - **Tratar um aliado:** na aba Corpo escolha o paciente (aliados a até ~2 tiles). Curativos, antibiótico, sutura, instalação e remoção de implantes usam os suprimentos e as habilidades de quem trata. Os dois ficam parados e vulneráveis; se qualquer um se mexer ou for atacado, o procedimento para. Tratar outra pessoa é 25% mais rápido e rende 50% mais experiência; suturar a si mesmo falha mais e operar a si mesmo deixa o implante com integridade 80%.
 
+### Mundo em chunks e vilas vivas (fase 7)
+
+- **Mundo maior:** raio de 150 tiles (antes 64), 16 vilas e ~440 ruínas. A geração planeja tudo em dados a partir da seed (igual em todos os peers); só os chunks de 16×16 células perto dos jogadores viram nós e tiles. O anfitrião carrega ao redor de todos os jogadores; cada cliente, ao redor de si. Caixas, construções, baús e pisos ficam em dados e valem com o chunk carregado ou não.
+- **Vilas vivas:** prosperidade (nível 0 a 3) aumenta a produção, o número de guardas e as ofertas do comerciante. NPCs (comerciante, guardas, moradores) aparecem quando alguém se aproxima; guardas atacam infectados perto da vila. [E] num NPC abre o painel da vila.
+- **Pedidos de socorro:** a vila pede comida, remédios, materiais ou peças eletrônicas, ou que se eliminem infectados por perto, com prazo de 6 minutos (aviso para todos e lista na aba Mundo). Atender sobe prosperidade, reputação e população e dá recompensa a quem entregou. Ignorar faz a vila perder moradores e acumular infestação, até cair.
+- **Reputação:** doações e pedidos atendidos dão reputação da equipe com aquela vila; o comerciante troca itens da especialidade da vila por reputação.
+- **Zonas mortas:** vila que cai fica sem NPCs, cercada de infectados e com esporos densos ao redor. Limpar a área por 30 s liberta a vila.
+- Saves de antes desta fase: o mapa mudou, então só os sobreviventes (de volta ao abrigo), o legado e o tempo de jogo são aproveitados.
+
 ## Estado da implementação
 
 | Fase | Conteúdo | Situação |
@@ -157,5 +166,5 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 4 | Cibernética neural (processador, limite de implantes, rejeição, estresse e sobrecarga sináptica, remoção de implantes) | **feito** |
 | 5 | Ferramentas e materiais, lanterna, cantil, médicos novos, armas de fogo com munição, som e furtividade | **feito** |
 | 6 | Ações com tempo (barra, interrupção por movimento ou dano) e medicina cooperativa (curativos e cirurgias em aliados) | **feito** |
-| 7 | Mundo em chunks, vilas vivas com NPCs e pedidos de socorro | a fazer |
+| 7 | Mundo em chunks (raio 150), vilas vivas com NPCs, prosperidade, reputação, comércio, pedidos de socorro e zonas mortas | **feito** |
 | 8 | Agricultura e culinária; veículos | a fazer |

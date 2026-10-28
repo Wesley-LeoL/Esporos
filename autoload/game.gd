@@ -250,6 +250,22 @@ func debug_command(cmd: String) -> void:
 			p.act("examine", [int(arg)])
 		"treat_ally":
 			p.act("treat", [a[0], a[1], int(a[2]) if a.size() > 2 else 1])
+		"tpv":
+			var v: VillageData = world.villages[int(arg)]
+			p.teleport(world.ground.map_to_local(v.cell + Vector2i(2, 3)))
+		"village":
+			hud.open_village(int(arg))
+		"request":
+			# força um pedido de socorro na vila (testes)
+			var v2: VillageData = world.villages[int(a[0])]
+			v2.request_cd = 0.0
+			v2.request = {}
+			v2.stock["comida"] = 5.0
+		"deliver":
+			p.act("deliver", [int(arg)])
+		"chunks":
+			print("chunks carregados: %d · estruturas: %d · caixas: %d · infectados: %d" % [world.loaded.size(),
+				world.structures.size(), world.container_nodes.size(), get_tree().get_nodes_in_group("infected").size()])
 		"clock":
 			play_time += float(arg)
 		"take_all_near":
