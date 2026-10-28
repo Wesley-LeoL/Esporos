@@ -25,6 +25,17 @@ static func draw_frame(ci: CanvasItem, sheet: String, row: int, col: int,
 	ci.draw_texture_rect_region(texture(sheet), dst, src, tint)
 
 
+## Um quadro da folha como textura (miniaturas da janela de construção).
+static func frame_texture(sheet: String, row: int = 0, col: int = 0) -> Texture2D:
+	if not GenCatalog.SHEETS.has(sheet):
+		return null
+	var s: Dictionary = GenCatalog.SHEETS[sheet]
+	var at := AtlasTexture.new()
+	at.atlas = texture(sheet)
+	at.region = Rect2(col * float(s["fw"]), row * float(s["fh"]), float(s["fw"]), float(s["fh"]))
+	return at
+
+
 static func icon(item: String) -> Texture2D:
 	if not GenCatalog.ICONS.has(item):
 		return null

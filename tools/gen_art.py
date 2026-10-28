@@ -131,6 +131,18 @@ def gen_props():
     crop_sheet("moto", "props", [[R(am.moto(), FACING_THETA[d]) for d in range(8)]], "moto (8 direções)")
     crop_sheet("canteiro", "structures", [[R(am.planter(st)) for st in range(5)]], "canteiro (vazio..murcho)")
     crop_sheet("fogareiro", "structures", [[R(am.stove(True)), R(am.stove(False))]], "fogareiro")
+    # paredes de borda: linha 0 = borda x+ (entre a célula e a vizinha x+1), linha 1 = borda y+
+    for name in ("parede_madeira", "parede_metal", "meia_parede", "janela"):
+        crop_sheet(name, "structures", [[R(am.edge_wall(name, d))] for d in (0, 1)], name + " (bordas)")
+    for name in ("porta", "portao"):
+        crop_sheet(name, "structures", [[R(am.edge_wall(name, d, False)), R(am.edge_wall(name, d, True))] for d in (0, 1)],
+                   name + " (bordas, fechada/aberta)")
+    crop_sheet("eolico", "structures", [[R(am.wind_turbine(h)) for h in range(1, 6)]], "eólico (1 a 5 módulos)")
+    for name, on_off in (("bancada", False), ("mesa_reparo", False), ("bateria_casa", True), ("coletor", True),
+                         ("cama", False), ("luminaria", True), ("poste", True), ("letreiro", True), ("mesa", False),
+                         ("cadeira", False), ("sofa", False), ("tapete", False), ("vaso", False), ("estante", False)):
+        cols = [R(am.object_model(name, True)), R(am.object_model(name, False))] if on_off else [R(am.object_model(name, True))]
+        crop_sheet(name, "structures", [cols], name)
 
 
 # ---------------------------------------------------------------- ícones
@@ -185,7 +197,7 @@ def gen_icons():
 
 
 # ---------------------------------------------------------------- chão
-GROUND_TYPES = ["CONC_A", "CONC_B", "ESPOROS", "ESTRADA", "TERRA", "PISO", "MANCHA", "VILA"]
+GROUND_TYPES = ["CONC_A", "CONC_B", "ESPOROS", "ESTRADA", "TERRA", "PISO", "MANCHA", "VILA", "PISO_MADEIRA", "PISO_CONCRETO"]
 TW, TH = 80, 40
 
 
@@ -276,6 +288,21 @@ def ground_tile(kind, var):
         base[joints] = _col("indigo", 1)
         base[(rnd > 0.95) & ~joints] = _col("slate", 3)
         base[(rnd < 0.03) & ~joints] = _col("indigo", 1)
+    elif kind == "PISO_MADEIRA":
+        # tábuas ao longo de u, com juntas escalonadas
+        fill(_col("wood", 2))
+        board = np.floor(v * 6)
+        base[(board % 2) == 0] = _col("wood", 3)
+        base[(v * 6) % 1 < 0.08] = _col("wood", 0)
+        stag = ((u * 3 + board * 0.5) % 1) < 0.03
+        base[stag] = _col("wood", 1)
+        base[rnd > 0.97] = _col("wood", 1)
+    elif kind == "PISO_CONCRETO":
+        fill(_col("slate", 2))
+        base[rnd > 0.9] = _col("slate", 3)
+        base[rnd < 0.04] = _col("slate", 1)
+        seam = (u % 1 < 0.025) | (v % 1 < 0.025) | (np.abs(u - 0.5) < 0.012) | (np.abs(v - 0.5) < 0.012)
+        base[seam] = _col("slate", 1)
     img[:, :, :3] = base
     img[:, :, 3] = np.where(mask, 255, 0)
     return img

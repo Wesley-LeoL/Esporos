@@ -444,20 +444,37 @@ func wear_weapon() -> void:
 
 
 ## Conserta a durabilidade de um item com fita adesiva.
-func repair(u: int) -> void:
+## Itens que só se consertam na mesa de reparos (armas de fogo, mochilas e coldres).
+static func needs_bench(id: String) -> bool:
+	return String(Items.def(id).get("tipo", "")) in ["arma_fogo", "mochila", "coldre"]
+
+
+## Conserto. Fita adesiva conserta armas brancas, ferramentas e a máscara em qualquer lugar
+## (+30%); na mesa de reparos ('bench') tudo conserta mais (+45%), e armas de fogo, mochilas
+## e coldres só lá (a arma de fogo gasta também 1 sucata).
+func repair(u: int, bench := false) -> void:
 	var f := find(u)
 	if f.is_empty() or not f[1].has("dur"):
 		return
 	var inst: Dictionary = f[1]
+	var id: String = inst["id"]
 	if float(inst["dur"]) >= 100.0:
 		message.emit("Não precisa de conserto.")
 		return
-	if not spend("fita"):
-		message.emit("Você precisa de fita adesiva.")
+	if needs_bench(id) and not bench:
+		message.emit("%s só se conserta numa mesa de reparos." % DB.item_name(id))
 		return
-	inst["dur"] = minf(100.0, float(inst["dur"]) + 30.0 + 3.0 * float(level("mecanica")))
-	add_xp("mecanica", 3.0)
-	message.emit("Consertado: %s (%d%%)." % [DB.item_name(inst["id"]), int(float(inst["dur"]))])
+	var gun := String(Items.def(id).get("tipo", "")) == "arma_fogo"
+	if count("fita") <= 0 or (gun and count("sucata") <= 0):
+		message.emit("Você precisa de fita adesiva%s." % (" e 1 sucata" if gun else ""))
+		return
+	spend("fita")
+	if gun:
+		take_item("sucata")
+	var base := 45.0 if bench else 30.0
+	inst["dur"] = minf(100.0, float(inst["dur"]) + base + 3.0 * float(level("mecanica")))
+	add_xp("mecanica", 5.0 if bench else 3.0)
+	message.emit("Consertado: %s (%d%%)." % [DB.item_name(id), int(float(inst["dur"]))])
 
 
 # ---------------------------------------------------------------- habilidades

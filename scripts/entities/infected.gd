@@ -110,7 +110,7 @@ func _pick_target(aggro: float) -> Player:
 			continue
 		var off := p.net_pos - position
 		var d := Vector2(off.x, off.y * 2.0).length()
-		var sight := aggro * p.data.visibility(p.sprinting, p.sneaking)
+		var sight := aggro * p.data.visibility(p.sprinting, p.sneaking) * world.sight_factor(p)
 		if p == _target and _chase_t > 0.0:
 			sight *= 1.6
 		if d < sight and d < best_d:

@@ -39,6 +39,8 @@ var filter_bar: PixelBar
 var filter_val: Label
 var air_label: Label
 var air_val: Label
+var clock_val: Label
+var weather_val: Label
 var edge_val: Label
 var slots := {}
 var effects_box: VBoxContainer
@@ -276,6 +278,14 @@ func _build_air_panel() -> void:
 	ecol.add_child(_label("BORDA", S, UITheme.MUTED))
 	edge_val = _label("--", S, UITheme.TEXT)
 	ecol.add_child(edge_val)
+	row.add_child(_vsep())
+	# hora e clima
+	var ccol := _vbox(2)
+	row.add_child(ccol)
+	clock_val = _label("08:00", S, UITheme.TEXT)
+	ccol.add_child(clock_val)
+	weather_val = _label("CÉU LIMPO", S, UITheme.MUTED)
+	ccol.add_child(weather_val)
 
 
 func _vsep() -> ColorRect:
@@ -840,6 +850,12 @@ func _process(delta: float) -> void:
 	var edge_tiles := World.RADIUS - Game.world.tile_pos(p.position).length()
 	edge_val.text = "%d TILES" % int(edge_tiles)
 	edge_val.add_theme_color_override("font_color", UITheme.DANGER if edge_tiles < 12.0 else UITheme.TEXT)
+	var w := Game.world
+	var dk := w.darkness()
+	clock_val.text = "%s · %s" % [w.clock_text(), "NOITE" if dk >= 0.99 else ("DIA" if dk <= 0.0 else "CREPÚSCULO")]
+	var wt := str(w.weather.get("tipo", "limpo"))
+	weather_val.text = "%s · VENTO %d%%" % [String(World.WEATHER_NAMES.get(wt, wt)).to_upper(), int(float(w.weather.get("vento", 0.2)) * 100.0)]
+	weather_val.add_theme_color_override("font_color", UITheme.WARN if wt in ["tempestade", "neblina"] else UITheme.MUTED)
 
 	_update_equipment(d)
 	_update_effects(d, spore)
@@ -1279,6 +1295,20 @@ func _crafting(box: VBoxContainer, d: SurvivorData) -> void:
 
 
 # ------------------------------------------------------------------ ações da grade
+## Texto da opção de conserto (vazio se não dá para consertar aqui).
+func _repair_label(d: SurvivorData, inst: Dictionary) -> String:
+	if not inst.has("dur") or float(inst["dur"]) >= 100.0 or d.count("fita") <= 0:
+		return ""
+	var bench := Game.world.station_near(_player().position, "mesa_reparo")
+	var id: String = inst["id"]
+	if SurvivorData.needs_bench(id) and not bench:
+		return ""
+	if String(Items.def(id).get("tipo", "")) == "arma_fogo":
+		return "Consertar na mesa (fita + sucata)" if d.count("sucata") > 0 else ""
+	return "Consertar na mesa (fita)" if bench else "Consertar (fita)"
+
+
+
 ## Botão direito num item: opções conforme onde ele está.
 func slot_menu(sl: InvSlot) -> void:
 	var p := _player()
@@ -1289,8 +1319,9 @@ func slot_menu(sl: InvSlot) -> void:
 	match sl.side:
 		"equip":
 			var u0 := int(inst.get("u", 0))
-			if inst.has("dur") and float(inst["dur"]) < 100.0 and d.count("fita") > 0:
-				opts.append(["Consertar (fita)", func() -> void: p.act("repair", [u0])])
+			var rl := _repair_label(d, inst)
+			if rl != "":
+				opts.append([rl, func() -> void: p.act("repair", [u0])])
 			var c0 := sl.cont
 			opts.append(["Tirar", func() -> void: p.act("unwear", [c0])])
 		"loot":
@@ -1310,8 +1341,9 @@ func slot_menu(sl: InvSlot) -> void:
 			var verb := _verb_for(d, inst)
 			if verb != "":
 				opts.append([verb, func() -> void: p.act("use_item", [u])])
-			if inst.has("dur") and float(inst["dur"]) < 100.0 and d.count("fita") > 0:
-				opts.append(["Consertar (fita)", func() -> void: p.act("repair", [u])])
+			var rl := _repair_label(d, inst)
+			if rl != "":
+				opts.append([rl, func() -> void: p.act("repair", [u])])
 			if looting:
 				var key2 := Game.world.key_of(loot_node)
 				opts.append(["Guardar" + (" (%d)" % n2 if n2 > 1 else ""), func() -> void: p.act("store", [key2, u, n2])])
@@ -1918,29 +1950,125 @@ func _trait_rows(parent: VBoxContainer, positive: bool) -> void:
 
 
 ## Janela de construção (B). Será redesenhada depois; por enquanto lista as estruturas.
+var build_tab := "fundacao"
+
+
+## Janela de construção: abas Fundação / Utilidades / Decoração, cartões com prévia, custo,
+## requisitos e ferramentas; demolição e o resumo da rede de energia mais próxima.
 func _win_build(p: Player) -> void:
 	var box := window_box
 	_clear(box)
 	var d := p.data
-	_lbl(box, "Escolha uma estrutura e clique no mapa. Materiais em baús e sacos a até 2 tiles também contam. Esc/botão direito cancela.", UITheme.MUTED)
-	var top := _row(box)
-	_btn(top, "Modo demolição [X] (devolve 50%)", func() -> void:
+	var tabs := _hbox(8)
+	box.add_child(tabs)
+	for t: Array in DB.BUILD_TABS:
+		var tid: String = t[0]
+		var b := _btn(tabs, t[1], func() -> void:
+			build_tab = tid
+			_rebuild_window())
+		b.toggle_mode = true
+		b.button_pressed = build_tab == tid
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tabs.add_child(sp)
+	_btn(tabs, "Demolir [X]", func() -> void:
 		p.demolish = true
 		p.build_kind = ""
 		close_window())
+	var hint := {"fundacao": "Pisos ocupam a célula; paredes, janelas e portas ficam nas BORDAS (aponte para o lado do quadrado).",
+		"utilidades": "Objetos de base. Geradores, eólicos e baterias a até %d tiles formam uma rede que alimenta o que estiver perto." % int(World.GRID_LINK),
+		"decoracao": "Móveis e iluminação. Luzes gastam energia da rede e só acendem no escuro."}
+	_lbl(box, String(hint.get(build_tab, "")) + " Materiais em baús e sacos a até 2 tiles também contam. Botão direito/Esc cancela.", UITheme.MUTED)
+	var info := _power_summary(p)
+	if info != "":
+		_lbl(box, info, UITheme.ACCENT)
+	var sc := ScrollContainer.new()
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.custom_minimum_size = Vector2(980, 520)
+	box.add_child(sc)
+	var g := GridContainer.new()
+	g.columns = 3
+	g.add_theme_constant_override("h_separation", 8)
+	g.add_theme_constant_override("v_separation", 8)
+	g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sc.add_child(g)
 	for k: String in DB.BUILDS:
 		var def: Dictionary = DB.BUILDS[k]
-		var row := _row(box)
-		var meets := d.meets(def["req"])
-		row.add_child(UITheme.icon_rect("martelo", UITheme.WARN if meets else NO_COLOR, 40))
-		var tools2: Array = def.get("ferramentas", [])
-		var has_tools := d.missing_tools(tools2) == ""
-		_lbl(row, "%s — %s\nCusto: %s · Exige: %s · Ferramentas: %s" % [def["nome"], def["desc"], DB.cost_text(def["custo"]),
-			DB.req_text(def["req"]), DB.tools_text(tools2)], UITheme.TEXT if meets and has_tools else NO_COLOR)
-		_btn(row, "Construir", func() -> void:
-			p.build_kind = k
-			p.demolish = false
-			close_window(), meets)
+		if String(def.get("aba", "")) != build_tab:
+			continue
+		g.add_child(_build_card(p, d, k, def))
+
+
+func _build_card(p: Player, d: SurvivorData, k: String, def: Dictionary) -> Control:
+	var card := _panel("card", 8, Vector4(10, 8, 10, 8))
+	card.mouse_filter = Control.MOUSE_FILTER_PASS
+	card.custom_minimum_size = Vector2(318, 0)
+	var row := _hbox(10)
+	card.add_child(row)
+	var thumb := TextureRect.new()
+	thumb.custom_minimum_size = Vector2(72, 72)
+	thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	thumb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var tex := GenArt.frame_texture(k, 0, 0)
+	if def.has("chao"):
+		# piso: o próprio ladrilho do chão
+		var at := AtlasTexture.new()
+		at.atlas = load(GenCatalog.GROUND_PATH)
+		at.region = Rect2(int(def["chao"]) * World.TILE_W, 0, World.TILE_W, World.TILE_H)
+		tex = at
+	if tex == null:
+		thumb.texture = UITheme.icon("martelo")
+		thumb.self_modulate = UITheme.WARN
+	else:
+		thumb.texture = tex
+	row.add_child(thumb)
+	var col := _vbox(4)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(col)
+	var tools2: Array = def.get("ferramentas", [])
+	var meets := d.meets(def["req"])
+	var ok := meets and d.missing_tools(tools2) == "" and _afford_local(def["custo"])
+	col.add_child(_label(String(def["nome"]).to_upper(), S, UITheme.TEXT if ok else NO_COLOR))
+	var extra := ""
+	if def.has("gera"):
+		extra = " · gera até %d W" % int(def["gera"]) if k != "eolico" else ""
+	elif def.has("consome"):
+		extra = " · consome %d W" % int(def["consome"])
+	elif def.has("capacidade"):
+		extra = " · guarda %d kJ" % int(float(def["capacidade"]) / 1000.0)
+	var desc := String(def.get("desc", ""))
+	if " W" in desc or "kJ" in desc:
+		extra = ""
+	_lbl(col, desc + extra, UITheme.MUTED)
+	var req := "" if (def["req"] as Dictionary).is_empty() else " · exige " + DB.req_text(def["req"])
+	var tl := "" if tools2.is_empty() else " · " + DB.tools_text(tools2)
+	_lbl(col, DB.cost_text(def["custo"]) + req + tl, UITheme.TEXT if ok else UITheme.DANGER)
+	var b := _btn(col, "Construir", func() -> void:
+		p.build_kind = k
+		p.demolish = false
+		close_window(), meets)
+	b.size_flags_horizontal = Control.SIZE_SHRINK_END
+	return card
+
+
+## Resumo da rede de energia mais próxima do jogador.
+func _power_summary(p: Player) -> String:
+	var best: Structure = null
+	var best_d := 1e9
+	for n in get_tree().get_nodes_in_group("power"):
+		var st := n as Structure
+		var dd := st.position.distance_to(p.position)
+		if dd < best_d and not st.grid.is_empty():
+			best_d = dd
+			best = st
+	if best == null or best_d > World.GRID_LINK * World.HALF_W * 2.0:
+		return ""
+	var gr := best.grid
+	var t := "REDE PRÓXIMA: produção %d W · consumo %d W" % [int(gr.get("gp", 0)), int(gr.get("gc", 0))]
+	if int(gr.get("gb", -1)) >= 0:
+		t += " · baterias %d%%" % int(gr["gb"])
+	return t
 
 
 func _tab_implants(d: SurvivorData) -> void:

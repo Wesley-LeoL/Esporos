@@ -1,10 +1,17 @@
 class_name Structure
 extends StaticBody2D
-## Estrutura sólida: prédios do pacote (edificio), paredes, portas, gerador, purificador,
-## torre e selagem de ar. As construções usam os sprites de assets/art/generated/structures.
+## Objeto de uma célula: prédios do mapa (edificio) e as construções da aba Utilidades e
+## Decoração (gerador, eólico, baterias, purificador, torre, selagem, bancada, mesa de reparos,
+## fogareiro, coletor, canteiro, cama, luzes e móveis). A energia ("powered") é decidida pelo
+## anfitrião na rede de energia (World._power_step) e chega aos clientes pelo estado extra.
 
-const CONSUMERS := ["purificador", "torre", "vedacao"]
-const SPRITES := ["parede", "porta", "gerador", "purificador", "torre", "vedacao", "canteiro", "fogareiro"]
+## Objetos com [E].
+const INTERACTIVE := ["gerador", "purificador", "vedacao", "torre", "canteiro", "fogareiro", "eolico", "bateria_casa",
+	"coletor", "cama", "bancada", "mesa_reparo", "luminaria", "poste", "letreiro"]
+## Objetos com quadro "ligado" na coluna 0 e "desligado" na 1.
+const ON_OFF := ["gerador", "purificador", "vedacao", "bateria_casa", "luminaria", "poste", "letreiro"]
+const MAX_MODS := 5
+const COLLECTOR_MAX := 8
 
 var kind := "parede"
 var cell := Vector2i.ZERO
@@ -27,6 +34,18 @@ var dead := false
 var _crop_t := 0.0
 ## Fator de Agricultura de quem plantou.
 var _agri_k := 1.0
+
+## Eólico: módulos do mastro e quanto o vento chega aqui. Banco de baterias: carga (W·s).
+## Coletor: água acumulada. Rede: produção, consumo e bateria (resumo para os avisos).
+var mods := 1
+var aberto := 1.0
+var charge := 0.0
+var water := 0
+var output := 0.0
+var demand := 0.0
+var grid := {}
+var _light: PointLight2D
+var _rain_t := 0.0
 
 var _shape: CollisionPolygon2D
 var _power_t := 0.0
@@ -54,22 +73,34 @@ func _ready() -> void:
 	match kind:
 		"gerador":
 			add_to_group("generators")
-			add_to_group("interactable")
 			if eternal:
 				fuel = 100.0
 		"purificador":
 			add_to_group("purifiers")
-			add_to_group("interactable")
 		"vedacao":
 			add_to_group("seals")
-			add_to_group("interactable")
 		"torre":
 			add_to_group("turrets")
-			add_to_group("interactable")
-		"porta", "canteiro", "fogareiro":
-			add_to_group("interactable")
-	if kind == "fogareiro":
-		add_to_group("stoves")
+	if kind in INTERACTIVE:
+		add_to_group("interactable")
+	if kind != "edificio":
+		add_to_group("station_" + kind)
+	var def: Dictionary = DB.BUILDS.get(kind, {})
+	if kind == "gerador" or def.has("gera") or def.has("consome") or def.has("capacidade"):
+		add_to_group("power")
+	if def.get("andavel", false):
+		_shape.disabled = true
+	if def.has("luz"):
+		add_to_group("lights")
+		_light = PointLight2D.new()
+		_light.texture = World.light_texture()
+		_light.color = def["luz"][0]
+		_light.texture_scale = float(def["luz"][1])
+		_light.position = Vector2(0, -20)
+		_light.enabled = false
+		add_child(_light)
+	if eternal and kind == "gerador":
+		powered = true
 	_apply_open()
 	_refresh_power()
 
@@ -169,14 +200,52 @@ func _apply_open() -> void:
 	_shape.set_deferred("disabled", open)
 
 
+## Luzes acendem quando têm energia e está escuro.
 func _refresh_power() -> void:
-	var old := powered
-	if kind == "gerador":
-		powered = fuel > 0.0
-	elif kind in CONSUMERS:
-		powered = world != null and world.is_powered(position)
-	if old != powered:
-		queue_redraw()
+	if _light != null and world != null:
+		var dk := world.darkness()
+		_light.enabled = powered and dk > 0.05
+		_light.energy = 1.5 * dk
+	queue_redraw()
+
+
+## Estado extra replicado (energia, módulos, carga, água, canteiro, resumo da rede).
+func state_extra() -> Dictionary:
+	var d := {"pw": powered, "gr": grid}
+	match kind:
+		"eolico":
+			d["mods"] = mods
+			d["aberto"] = aberto
+		"bateria_casa":
+			d["carga"] = charge
+		"coletor":
+			d["agua"] = water
+		"canteiro":
+			d.merge(crop_state(), true)
+	return d
+
+
+func apply_extra(d: Dictionary) -> void:
+	if d.has("pw"):
+		powered = bool(d["pw"])
+	if d.has("gr"):
+		grid = d["gr"]
+	mods = int(d.get("mods", mods))
+	aberto = float(d.get("aberto", aberto))
+	charge = float(d.get("carga", charge))
+	water = int(d.get("agua", water))
+	if kind == "canteiro" and d.has("crop"):
+		apply_crop(d)
+	_refresh_power()
+
+
+func _grid_text() -> String:
+	if grid.is_empty():
+		return ""
+	var t := " · rede %d/%d W" % [int(grid.get("gp", 0)), int(grid.get("gc", 0))]
+	if int(grid.get("gb", -1)) >= 0:
+		t += " · baterias %d%%" % int(grid["gb"])
+	return t
 
 
 func prompt() -> String:
@@ -185,12 +254,25 @@ func prompt() -> String:
 			return "[E] %s a porta" % ("Fechar" if open else "Abrir")
 		"gerador":
 			if eternal:
-				return "Gerador do abrigo (combustível infinito)"
-			return "[E] Abastecer gerador (combustível %d%%)" % int(fuel)
-		"purificador", "torre", "vedacao":
-			return "%s: %s" % [DB.BUILDS[kind]["nome"], "funcionando" if powered else "sem energia"]
+				return "Gerador do abrigo (250 W, sem combustível)" + _grid_text()
+			return "[E] Abastecer gerador (combustível %d%%)%s" % [int(fuel), _grid_text()]
+		"purificador", "torre", "vedacao", "luminaria", "poste", "letreiro":
+			return "%s: %s%s" % [DB.BUILDS[kind]["nome"], "ligado" if powered else "sem energia", _grid_text()]
 		"fogareiro":
 			return "Fogareiro: cozinhe pela aba Inventário (precisa de panela)"
+		"bancada":
+			return "Bancada: receitas técnicas ficam disponíveis por perto (aba Inventário)"
+		"mesa_reparo":
+			return "Mesa de reparos: conserte pelo menu do item (botão direito)"
+		"eolico":
+			var w := "[E] Subir o mastro (%d/%d módulos)" % [mods, MAX_MODS] if mods < MAX_MODS else "Eólico no topo (%d módulos)" % mods
+			return "%s · vento aqui %d%%%s" % [w, int(aberto * 100.0), _grid_text()]
+		"bateria_casa":
+			return "Banco de baterias: %d%%%s" % [int(charge / float(DB.BUILDS["bateria_casa"]["capacidade"]) * 100.0), _grid_text()]
+		"coletor":
+			return "[E] Recolher água da chuva (%d)" % water if water > 0 else "Coletor de chuva: vazio"
+		"cama":
+			return "[E] Descansar"
 		"canteiro":
 			if dead:
 				return "[E] Limpar canteiro (a plantação morreu)"
@@ -304,8 +386,37 @@ func interact(player: Player) -> void:
 		"canteiro":
 			_interact_planter(player)
 			return
-		"fogareiro":
+		"fogareiro", "bancada", "mesa_reparo", "bateria_casa", "luminaria", "poste", "letreiro", "purificador", "torre", "vedacao":
 			Game.tell(player.peer, prompt() + ".")
+			return
+		"eolico":
+			if mods >= MAX_MODS:
+				Game.tell(player.peer, "O mastro já está no máximo.")
+				return
+			var cost := {"metal": 2, "sucata": 2}
+			if not world.afford_near(player, cost):
+				Game.tell(player.peer, "Cada módulo do mastro custa 2 metais e 2 sucatas.")
+				return
+			world.pay_near(player, cost)
+			mods += 1
+			player.data.add_xp("metalurgia", 4.0)
+			Game.tell(player.peer, "Mastro mais alto: %d módulos." % mods)
+			world.structure_changed(self)
+			return
+		"coletor":
+			if water <= 0:
+				Game.tell(player.peer, "Vazio. Ele enche quando chove.")
+				return
+			player.data.give("agua_suja", water)
+			Game.tell(player.peer, "Você recolheu %d garrafas de água da chuva (contaminada: ferva)." % water)
+			water = 0
+			world.structure_changed(self)
+			return
+		"cama":
+			var d := player.data
+			d.stamina = d.max_stamina()
+			d.blood = minf(100.0, d.blood + 5.0)
+			Game.tell(player.peer, "Você descansou. Sobreviventes novos da equipe acordam numa cama.")
 			return
 		"porta":
 			open = not open
@@ -361,14 +472,17 @@ func _physics_process(delta: float) -> void:
 			if int(grow) != before_g or dead != was_dead:
 				world.structure_changed(self)
 				queue_redraw()
-	if server and kind == "gerador" and not eternal and fuel > 0.0:
-		var before := int(fuel)
-		fuel = maxf(0.0, fuel - 0.12 * delta)
-		if int(fuel) != before:
-			world.structure_changed(self)
-		if fuel <= 0.0:
-			Game.say_all("Um gerador ficou sem combustível!")
-			_refresh_power()
+	if server and (kind == "coletor" or kind == "canteiro") and world.is_raining():
+		_rain_t -= delta
+		if _rain_t <= 0.0:
+			_rain_t = 25.0
+			if kind == "coletor" and water < COLLECTOR_MAX:
+				water += 1
+				world.structure_changed(self)
+			elif kind == "canteiro" and crop != "" and not dead:
+				# a chuva rega
+				water_until = maxf(water_until, Game.play_time + 30.0)
+				world.structure_changed(self)
 	_power_t -= delta
 	if _power_t <= 0.0:
 		_power_t = 0.5
@@ -408,16 +522,16 @@ func _draw() -> void:
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
 		draw_arc(Vector2.ZERO, World.SEAL_RADIUS, 0.0, TAU, 64, Color(0.32, 0.9, 1.0, 0.3), 1.5)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if not kind in SPRITES:
+	if kind == "edificio" or not GenCatalog.SHEETS.has(kind):
 		return
 	var row := 0
 	var col := 0
 	match kind:
-		"parede":
-			col = posmod(cell.x * 7 + cell.y * 13, 2)
-		"porta":
-			col = 1 if open else 0
-		"gerador", "purificador", "vedacao":
+		"eolico":
+			col = clampi(mods, 1, MAX_MODS) - 1
+		"coletor":
+			col = 0 if water > 0 else 1
+		_ when kind in ON_OFF:
 			col = 0 if powered else 1
 		"canteiro":
 			if dead:

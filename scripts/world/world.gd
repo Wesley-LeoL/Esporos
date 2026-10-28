@@ -27,7 +27,19 @@ const POWER_RADIUS_PX := 525.0
 const PURIFY_RADIUS_PX := 150.0
 const N_VILLAGES := 16
 
-enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA }
+enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA, PISO_MADEIRA, PISO_CONCRETO }
+
+## Clima: [peso do sorteio, vento mínimo, vento máximo].
+const WEATHERS := {"limpo": [35, 0.15, 0.4], "nublado": [25, 0.3, 0.6], "chuva": [20, 0.4, 0.7],
+	"tempestade": [8, 0.8, 1.0], "neblina": [12, 0.0, 0.2]}
+const WEATHER_NAMES := {"limpo": "Céu limpo", "nublado": "Nublado", "chuva": "Chuva", "tempestade": "Tempestade",
+	"neblina": "Névoa de esporos"}
+## Duração de um dia em segundos de jogo (1 hora do jogo = 1 minuto).
+const DAY_SECONDS := 1440.0
+## Distância (em tiles) que liga construções de energia na mesma rede.
+const GRID_LINK := 10.0
+## Prioridade de quem recebe energia quando falta.
+const POWER_PRIORITY := ["vedacao", "purificador", "torre", "poste", "luminaria", "letreiro"]
 
 # Prédios e objetos do pacote FreeSample (peso de sorteio dos prédios).
 const BUILDINGS: Array = [["BuildingBlock1", 15], ["BuildingBlock2", 15], ["BuildingBlock18", 20],
@@ -69,8 +81,20 @@ var planned_buildings := {}
 var container_data: Array[Dictionary] = []
 ## Nós das caixas carregadas (id -> LootContainer).
 var container_nodes := {}
-## Construções fixas (abrigo) e dos jogadores: célula -> {"kind", "fuel", "open", "eternal"}.
+## Construções fixas (abrigo) e dos jogadores: célula -> {"kind", "fuel", "open", "eternal", ...}.
 var built := {}
+## Paredes de borda: Vector3i(x, y, d) -> {"kind", "open"}. Nós carregados em wall_nodes.
+var walls := {}
+var wall_nodes := {}
+## Células de prédios do mapa (não dá para pôr parede encostada nelas).
+var building_cells := {}
+## Clima atual (o anfitrião sorteia e manda para todos).
+var weather := {"tipo": "limpo", "vento": 0.3}
+var _weather_until := 240.0
+var canvas_mod: CanvasModulate
+var _sky_t := 0.0
+var _power_t := 1.0
+var _rain_t := 0.0
 ## Baús construídos: célula -> lista de itens. Nós carregados em 'chests'.
 var chest_data := {}
 var chests := {}
@@ -130,6 +154,8 @@ func generate(new_seed: int) -> void:
 	spawner.spawn_function = _spawn_entity
 	ghost = BuildGhost.new()
 	add_child(ghost)
+	canvas_mod = CanvasModulate.new()
+	add_child(canvas_mod)
 	_place_villages()
 	_connect_villages()
 	_decorate_villages()
@@ -369,6 +395,7 @@ func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i, town := "") -
 	for i in fp.x:
 		for j in fp.y:
 			occupied[c + Vector2i(i, j)] = true
+			building_cells[c + Vector2i(i, j)] = true
 
 
 func _make_building(e: Dictionary) -> Structure:
@@ -521,17 +548,81 @@ func _make_structure(c: Vector2i, d: Dictionary) -> Structure:
 	s.eternal = bool(d.get("eternal", false))
 	s.fuel = float(d.get("fuel", 0.0))
 	s.open = bool(d.get("open", false))
-	if s.kind == "canteiro":
-		s.crop = str(d.get("crop", ""))
-		s.grow = float(d.get("grow", 0.0))
-		s.water_until = float(d.get("water_until", 0.0))
-		s.crop_last = float(d.get("crop_last", Game.play_time))
-		s.dead = bool(d.get("dead", false))
-		s._agri_k = float(d.get("agri", 1.0))
+	s.apply_extra(d)
 	s.position = ground.map_to_local(c)
 	entities.add_child(s)
 	structures[c] = s
 	return s
+
+
+static var _light_tex: Texture2D
+
+
+## Textura radial das luzes (lanterna, luminárias, postes).
+static func light_texture() -> Texture2D:
+	if _light_tex == null:
+		var g := GradientTexture2D.new()
+		g.fill = GradientTexture2D.FILL_RADIAL
+		g.fill_from = Vector2(0.5, 0.5)
+		g.fill_to = Vector2(1.0, 0.5)
+		g.width = 256
+		g.height = 256
+		var grad := Gradient.new()
+		grad.set_color(0, Color(1, 1, 1, 1))
+		grad.set_color(1, Color(1, 1, 1, 0))
+		g.gradient = grad
+		_light_tex = g
+	return _light_tex
+
+
+## Meio da borda (x, y, d) em coordenadas do mundo.
+func edge_pos(k: Vector3i) -> Vector2:
+	return ground.map_to_local(Vector2i(k.x, k.y)) + WallEdge.edge_offset(k.z)
+
+
+func _make_wall(k: Vector3i) -> WallEdge:
+	var w := WallEdge.new()
+	w.kind = str(walls[k]["kind"])
+	w.cell = Vector2i(k.x, k.y)
+	w.dir = k.z
+	w.open = bool(walls[k].get("open", false))
+	w.world = self
+	w.position = edge_pos(k)
+	entities.add_child(w)
+	wall_nodes[k] = w
+	return w
+
+
+## Borda mais próxima do mouse (para construir e demolir paredes).
+func mouse_edge() -> Vector3i:
+	var t := tile_pos(get_global_mouse_position())
+	var c := Vector2i(floori(t.x), floori(t.y))
+	var f := t - Vector2(c)
+	var opts := [[f.x, Vector3i(c.x - 1, c.y, 0)], [1.0 - f.x, Vector3i(c.x, c.y, 0)],
+		[f.y, Vector3i(c.x, c.y - 1, 1)], [1.0 - f.y, Vector3i(c.x, c.y, 1)]]
+	var best: Array = opts[0]
+	for o in opts:
+		if float(o[0]) < float(best[0]):
+			best = o
+	_edge_dist = float(best[0])
+	return best[1]
+
+
+var _edge_dist := 1.0
+
+
+## Alvo do modo demolição sob o mouse: [x, y, d] de uma parede (quando o mouse está perto da
+## borda) ou [x, y] de uma célula.
+func demolish_target() -> Array:
+	var k := mouse_edge()
+	if walls.has(k) and _edge_dist < 0.3:
+		return [k.x, k.y, k.z]
+	var c := mouse_cell()
+	return [c.x, c.y]
+
+
+func has_demolishable(c: Vector2i) -> bool:
+	return structures.has(c) or chests.has(c) or build_layer.get_cell_source_id(c) != -1
 
 
 func _make_chest(c: Vector2i) -> LootContainer:
@@ -682,6 +773,9 @@ func _load_chunk(ch: Vector2i) -> void:
 	for c: Vector2i in chest_data:
 		if chunk_of(c) == ch:
 			nodes.append(_make_chest(c))
+	for k: Vector3i in walls:
+		if chunk_of(Vector2i(k.x, k.y)) == ch:
+			nodes.append(_make_wall(k))
 	loaded[ch] = {"nodes": nodes, "art": holder}
 
 
@@ -707,10 +801,14 @@ func _unload_chunk(ch: Vector2i) -> void:
 			if built.has(st.cell):
 				built[st.cell]["fuel"] = st.fuel
 				built[st.cell]["open"] = st.open
-				if st.kind == "canteiro":
-					built[st.cell].merge(st.crop_state(), true)
+				built[st.cell].merge(st.state_extra(), true)
 			_free_structure_node(st)
 			continue
+		if node is WallEdge:
+			var we := node as WallEdge
+			if walls.has(we.key()):
+				walls[we.key()]["open"] = we.open
+			wall_nodes.erase(we.key())
 		if node is LootContainer:
 			var lc := node as LootContainer
 			if lc.chest:
@@ -742,6 +840,14 @@ func edge_ratio(world_pos: Vector2) -> float:
 func spore_at(world_pos: Vector2) -> float:
 	var tp := tile_pos(world_pos)
 	var s := 0.08 + 1.4 * smoothstep(RADIUS * 0.55, RADIUS, tp.length())
+	# a chuva lava o ar; a névoa de esporos piora tudo
+	match str(weather.get("tipo", "")):
+		"chuva":
+			s *= 0.85
+		"tempestade":
+			s *= 0.8
+		"neblina":
+			s += 0.12
 	s += spore_noise.get_noise_2d(tp.x * 0.6, tp.y * 0.6) * 0.04
 	# vilas que caíram viram zonas mortas tomadas por esporos
 	for v in villages:
@@ -815,6 +921,17 @@ func nearest_infected_dist(pos: Vector2) -> float:
 		var off := (n as Node2D).position - pos
 		best = minf(best, Vector2(off.x, off.y * 2.0).length())
 	return best
+
+
+## Onde um sobrevivente novo acorda: numa cama da equipe, se houver; senão, no abrigo.
+func spawn_pos() -> Vector2:
+	var beds: Array = []
+	for c in built:
+		if built[c]["kind"] == "cama":
+			beds.append(c)
+	if beds.is_empty():
+		return shelter_pos()
+	return ground.map_to_local(beds[Game.rng.randi() % beds.size()]) + Vector2(0, 14)
 
 
 func shelter_pos() -> Vector2:
@@ -965,6 +1082,9 @@ func key_of(node: Node) -> String:
 	if node is Structure:
 		var c := (node as Structure).cell
 		return "s:%d,%d" % [c.x, c.y]
+	if node is WallEdge:
+		var k := (node as WallEdge).key()
+		return "w:%d,%d,%d" % [k.x, k.y, k.z]
 	return "n:" + String(node.name)
 
 
@@ -982,6 +1102,11 @@ func node_of(key: String) -> Node:
 			return structures.get(cell) if kind == "s:" else chests.get(cell)
 		"n:":
 			return net_root.get_node_or_null(NodePath(rest))
+		"w:":
+			var xyz := rest.split(",")
+			if xyz.size() < 3:
+				return null
+			return wall_nodes.get(Vector3i(int(xyz[0]), int(xyz[1]), int(xyz[2])))
 	return null
 
 
@@ -1188,7 +1313,7 @@ func _container_items(key: String, items: Array) -> void:
 
 ## Servidor: estado de uma estrutura (combustível, porta) mudou.
 func structure_changed(st: Structure) -> void:
-	var extra := st.crop_state() if st.kind == "canteiro" else {}
+	var extra := st.state_extra()
 	if built.has(st.cell):
 		built[st.cell]["fuel"] = st.fuel
 		built[st.cell]["open"] = st.open
@@ -1207,12 +1332,29 @@ func _structure_state(x: int, y: int, fuel: float, open: bool, extra: Dictionary
 	if st != null:
 		st.apply_state(fuel, open)
 		if not extra.is_empty():
-			st.apply_crop(extra)
+			st.apply_extra(extra)
+
+
+## Servidor: porta ou portão de borda abriu/fechou.
+func wall_changed(w: WallEdge) -> void:
+	if walls.has(w.key()):
+		walls[w.key()]["open"] = w.open
+	_wall_state.rpc(w.cell.x, w.cell.y, w.dir, w.open)
+
+
+@rpc("authority", "reliable")
+func _wall_state(x: int, y: int, d: int, open: bool) -> void:
+	var k := Vector3i(x, y, d)
+	if walls.has(k):
+		walls[k]["open"] = open
+	var w: WallEdge = wall_nodes.get(k)
+	if w != null:
+		w.set_open(open)
 
 
 ## Há uma construção desse tipo perto (cozinhar no fogareiro)?
 func station_near(pos: Vector2, kind: String) -> bool:
-	for n in get_tree().get_nodes_in_group("stoves" if kind == "fogareiro" else kind):
+	for n in get_tree().get_nodes_in_group("station_" + kind):
 		var off := (n as Node2D).position - pos
 		if Vector2(off.x, off.y * 2.0).length() < 110.0:
 			return true
@@ -1239,36 +1381,60 @@ func mouse_cell() -> Vector2i:
 	return ground.local_to_map(ground.to_local(get_global_mouse_position()))
 
 
-func can_place_at(kind: String, c: Vector2i, p: Player = null) -> bool:
-	if Vector2(c).length() > RADIUS - 3.0:
+## Tipo de uma construção: piso, parede, porta, objeto ou bau.
+static func build_type(kind: String) -> String:
+	return String(DB.BUILDS.get(kind, {}).get("tipo", "objeto"))
+
+
+static func is_edge_kind(kind: String) -> bool:
+	return build_type(kind) in ["parede", "porta"]
+
+
+func _in_reach(p: Player, pos: Vector2) -> bool:
+	var ppos := p.position if p.is_local() else p.net_pos
+	var off := pos - ppos
+	return Vector2(off.x, off.y * 2.0).length() <= 275.0
+
+
+## Dá para construir? 'd' = borda (0/1) para paredes e portas; -1 para o resto.
+func can_place_at(kind: String, c: Vector2i, p: Player = null, d := -1) -> bool:
+	if Vector2(c).length() > RADIUS - 3.0 or not DB.BUILDS.has(kind):
 		return false
-	if kind == "piso":
-		if build_layer.get_cell_source_id(c) != -1:
+	var t := build_type(kind)
+	if t in ["parede", "porta"]:
+		if d < 0:
 			return false
-	elif occupied.has(c):
+		var k := Vector3i(c.x, c.y, d)
+		if walls.has(k):
+			return false
+		var other := c + (Vector2i(1, 0) if d == 0 else Vector2i(0, 1))
+		if building_cells.has(c) or building_cells.has(other):
+			return false
+		return p == null or _in_reach(p, edge_pos(k))
+	if t == "piso":
+		if int(terrain_deltas.get(c, -1)) == int(DB.BUILDS[kind]["chao"]) or building_cells.has(c):
+			return false
+		return p == null or _in_reach(p, ground.map_to_local(c))
+	if occupied.has(c):
 		return false
 	if p != null:
-		var ppos := p.position if p.is_local() else p.net_pos
-		var off := ground.map_to_local(c) - ppos
-		var d := Vector2(off.x, off.y * 2.0).length()
-		if d > 275.0:
+		if not _in_reach(p, ground.map_to_local(c)):
 			return false
-		if kind != "piso" and d < 30.0:
-			return false
-		for other in alive_players():
-			var opos := other.position if other.is_local() else other.net_pos
-			var o2 := ground.map_to_local(c) - opos
-			if kind != "piso" and Vector2(o2.x, o2.y * 2.0).length() < 30.0:
-				return false
+		if not DB.BUILDS[kind].get("andavel", false):
+			for other_p in alive_players():
+				var opos := other_p.position if other_p.is_local() else other_p.net_pos
+				var o2 := ground.map_to_local(c) - opos
+				if Vector2(o2.x, o2.y * 2.0).length() < 30.0:
+					return false
 	return true
 
 
 ## Servidor: valida e constrói; todos os peers recebem a construção.
-func try_place(kind: String, c: Vector2i, p: Player) -> bool:
+func try_place(kind: String, c: Vector2i, p: Player, d := -1) -> bool:
 	if not DB.BUILDS.has(kind):
 		return false
 	var def: Dictionary = DB.BUILDS[kind]
-	if not can_place_at(kind, c, p):
+	if not can_place_at(kind, c, p, d):
 		Game.tell(p.peer, "Não dá para construir aqui.")
 		return false
 	if not p.data.meets(def["req"]):
@@ -1283,28 +1449,53 @@ func try_place(kind: String, c: Vector2i, p: Player) -> bool:
 		return false
 	pay_near(p, def["custo"])
 	make_noise(ground.map_to_local(c), 240.0)
-	_build_done.rpc(kind, c.x, c.y)
+	var extra := {}
+	if kind == "eolico":
+		extra = {"mods": 1, "aberto": _openness(c)}
+	_build_done.rpc(kind, c.x, c.y, d, extra)
 	p.data.add_xp_map(def["xp"])
 	Game.tell(p.peer, "Construído: %s." % def["nome"])
 	return true
 
 
+## Quanto o vento chega num lugar (prédios e construções ao redor atrapalham): 0,35 a 1.
+func _openness(c: Vector2i) -> float:
+	var n := 0
+	for dx in range(-4, 5):
+		for dy in range(-4, 5):
+			if building_cells.has(c + Vector2i(dx, dy)):
+				n += 1
+	return clampf(1.0 - 0.025 * float(n), 0.35, 1.0)
+
+
 @rpc("authority", "call_local", "reliable")
-func _build_done(kind: String, x: int, y: int) -> void:
+func _build_done(kind: String, x: int, y: int, d: int, extra: Dictionary) -> void:
 	var c := Vector2i(x, y)
-	if kind == "bau":
+	var t := build_type(kind)
+	if t in ["parede", "porta"]:
+		var k := Vector3i(x, y, d)
+		if not walls.has(k):
+			walls[k] = {"kind": kind, "open": false}
+			if is_loaded(c):
+				_track(c, _make_wall(k))
+	elif t == "bau":
 		if not chest_data.has(c):
 			chest_data[c] = []
 			occupied[c] = true
 			if is_loaded(c):
 				_track(c, _make_chest(c))
-	elif kind == "piso":
-		terrain_deltas[c] = T.PISO
+	elif t == "piso":
+		var tt := int(DB.BUILDS[kind]["chao"])
+		terrain_deltas[c] = tt
 		if is_loaded(c):
-			build_layer.set_cell(c, 0, _gtile(T.PISO, c))
+			build_layer.set_cell(c, 0, _gtile(tt, c))
 	elif not built.has(c):
 		built[c] = {"kind": kind, "fuel": 0.0, "open": false, "eternal": false}
-		occupied[c] = true
+		built[c].merge(extra, true)
+		if not DB.BUILDS[kind].get("andavel", false):
+			occupied[c] = true
+		else:
+			occupied[c] = true
 		if is_loaded(c):
 			_track(c, _make_structure(c, built[c]))
 
@@ -1317,7 +1508,22 @@ func _track(c: Vector2i, node: Node) -> void:
 
 
 ## Servidor: valida e demole; devolve materiais ao jogador.
-func try_demolish(c: Vector2i, p: Player) -> bool:
+func try_demolish(c: Vector2i, p: Player, d := -1) -> bool:
+	if d >= 0:
+		var k := Vector3i(c.x, c.y, d)
+		if not walls.has(k):
+			return false
+		if not _in_reach(p, edge_pos(k)):
+			Game.tell(p.peer, "Longe demais.")
+			return false
+		var cost: Dictionary = DB.BUILDS[walls[k]["kind"]]["custo"]
+		for item in cost:
+			var back := floori(float(cost[item]) / 2.0)
+			if back > 0:
+				p.data.give(item, back)
+		_wall_removed.rpc(k.x, k.y, k.z)
+		Game.tell(p.peer, "Parede desmontada (50% dos materiais).")
+		return true
 	var ppos := p.position if p.is_local() else p.net_pos
 	var off := ground.map_to_local(c) - ppos
 	if Vector2(off.x, off.y * 2.0).length() > 275.0:
@@ -1358,10 +1564,24 @@ func try_demolish(c: Vector2i, p: Player) -> bool:
 		return true
 	if build_layer.get_cell_source_id(c) != -1:
 		_demolish_done.rpc(c.x, c.y, true)
-		p.data.give("sucata", 1)
+		var kind_back := "sucata"
+		for bk in DB.BUILDS:
+			if int(DB.BUILDS[bk].get("chao", -1)) == int(terrain_deltas.get(c, -2)):
+				kind_back = (DB.BUILDS[bk]["custo"] as Dictionary).keys()[0]
+		p.data.give(kind_back, 1)
 		Game.tell(p.peer, "Piso removido.")
 		return true
 	return false
+
+
+@rpc("authority", "call_local", "reliable")
+func _wall_removed(x: int, y: int, d: int) -> void:
+	var k := Vector3i(x, y, d)
+	walls.erase(k)
+	var w: WallEdge = wall_nodes.get(k)
+	if w != null:
+		wall_nodes.erase(k)
+		w.queue_free()
 
 
 ## Todos os peers: aplica uma demolição nos dados e, se o chunk estiver carregado, nos nós.
@@ -1567,6 +1787,257 @@ func caravan_arrived(c: Caravan) -> void:
 	var p := nearest_player(c.position, 1400.0)
 	if p != null:
 		Game.tell(p.peer, "Uma caravana chegou a %s." % dest.nome)
+
+
+# ======================================================================= tempo e clima
+## Hora do dia (0-24). O jogo começa às 8h.
+func hour() -> float:
+	return fmod(8.0 + Game.play_time / (DAY_SECONDS / 24.0), 24.0)
+
+
+## 0 = dia claro, 1 = noite fechada (com transição no anoitecer e no amanhecer).
+func darkness() -> float:
+	var h := hour()
+	if h >= 7.0 and h < 18.0:
+		return 0.0
+	if h >= 18.0 and h < 20.0:
+		return (h - 18.0) / 2.0
+	if h >= 5.0 and h < 7.0:
+		return 1.0 - (h - 5.0) / 2.0
+	return 1.0
+
+
+func is_raining() -> bool:
+	return str(weather.get("tipo", "")) in ["chuva", "tempestade"]
+
+
+func clock_text() -> String:
+	var h := hour()
+	return "%02d:%02d" % [int(h), int(fmod(h, 1.0) * 60.0)]
+
+
+## Escurece o mundo conforme a hora e o clima (as luzes aparecem por cima).
+func _update_sky() -> void:
+	var dk := darkness()
+	var c := Color.WHITE.lerp(Color(0.24, 0.26, 0.42), dk * 0.92)
+	match str(weather.get("tipo", "")):
+		"nublado":
+			c = c.darkened(0.08)
+		"chuva":
+			c = c.darkened(0.16)
+		"tempestade":
+			c = c.darkened(0.28)
+		"neblina":
+			c = c.lerp(Color(0.62, 0.72, 0.58), 0.3)
+	canvas_mod.color = c
+
+
+## Multiplicador da distância em que os infectados enxergam um jogador (escuridão e clima).
+var _sight_cache := {}
+
+
+func sight_factor(p: Player) -> float:
+	var ce: Array = _sight_cache.get(p.peer, [-1.0, 1.0])
+	if Game.play_time - float(ce[0]) < 0.5:
+		return float(ce[1])
+	var v := _sight_factor(p)
+	_sight_cache[p.peer] = [Game.play_time, v]
+	return v
+
+
+func _sight_factor(p: Player) -> float:
+	var k := 1.0
+	var pos := p.position if p.is_local() else p.net_pos
+	var dk := darkness()
+	if dk > 0.0 and not (p.data != null and p.data.lantern_on()) and not lit_at(pos):
+		k *= 1.0 - 0.4 * dk
+	match str(weather.get("tipo", "")):
+		"neblina":
+			k *= 0.6
+		"tempestade":
+			k *= 0.75
+		"chuva":
+			k *= 0.9
+	return k
+
+
+## Multiplicador do barulho (a chuva abafa os passos).
+func noise_factor() -> float:
+	match str(weather.get("tipo", "")):
+		"chuva":
+			return 0.75
+		"tempestade":
+			return 0.55
+	return 1.0
+
+
+## Há uma luz ligada perto (luminárias, postes, letreiros)?
+func lit_at(pos: Vector2) -> bool:
+	for n in get_tree().get_nodes_in_group("lights"):
+		var st := n as Structure
+		if st.powered:
+			var off := pos - st.position
+			if Vector2(off.x, off.y * 2.0).length() < 110.0 * float(DB.BUILDS[st.kind]["luz"][1]):
+				return true
+	return false
+
+
+## Servidor: troca o clima de tempos em tempos.
+func _weather_step() -> void:
+	if Game.play_time < _weather_until:
+		return
+	var total := 0.0
+	for k in WEATHERS:
+		total += float(WEATHERS[k][0])
+	var r := rng.randf() * total
+	var pick := "limpo"
+	for k in WEATHERS:
+		r -= float(WEATHERS[k][0])
+		if r <= 0.0:
+			pick = k
+			break
+	var w: Array = WEATHERS[pick]
+	_weather_until = Game.play_time + rng.randf_range(180.0, 420.0)
+	_set_weather.rpc(pick, snappedf(rng.randf_range(float(w[1]), float(w[2])), 0.01))
+
+
+@rpc("authority", "call_local", "reliable")
+func _set_weather(tipo: String, vento: float) -> void:
+	var was := str(weather.get("tipo", ""))
+	weather = {"tipo": tipo, "vento": vento}
+	if tipo != was and Game.hud != null:
+		Game.say("Clima: %s · vento %d%%." % [WEATHER_NAMES.get(tipo, tipo), int(vento * 100.0)])
+	_update_sky()
+
+
+# ======================================================================= energia
+## Servidor: redes de energia. Construções a até GRID_LINK tiles umas das outras formam uma
+## rede: geradores (eólico de graça; combustão só queima o que falta) abastecem os
+## consumidores por prioridade; a sobra carrega os bancos de baterias, que cobrem a falta.
+func _power_step(dt: float) -> void:
+	var nodes: Array = get_tree().get_nodes_in_group("power")
+	if nodes.is_empty():
+		return
+	# agrupa por proximidade (busca em largura)
+	var seen := {}
+	for start in nodes:
+		if seen.has(start):
+			continue
+		var grid: Array = [start]
+		seen[start] = true
+		var i := 0
+		while i < grid.size():
+			var a: Structure = grid[i]
+			for b in nodes:
+				if not seen.has(b) and Vector2(a.cell - (b as Structure).cell).length() <= GRID_LINK:
+					seen[b] = true
+					grid.append(b)
+			i += 1
+		_power_grid(grid, dt)
+
+
+func _power_grid(grid: Array, dt: float) -> void:
+	var dk := darkness()
+	var free := 0.0
+	var gens: Array = []
+	var gen_cap := 0.0
+	var bats: Array = []
+	var bat_store := 0.0
+	var bat_room := 0.0
+	var consumers: Array = []
+	var demand := 0.0
+	for n in grid:
+		var st := n as Structure
+		var def: Dictionary = DB.BUILDS.get(st.kind, {})
+		match st.kind:
+			"gerador":
+				if st.eternal:
+					free += 250.0
+				elif st.fuel > 0.0:
+					gens.append(st)
+					gen_cap += float(def["gera"])
+			"eolico":
+				st.output = float(def["gera"]) * float(st.mods) * clampf(0.15 + float(weather.get("vento", 0.3)), 0.0, 1.15) * st.aberto
+				free += st.output
+			"bateria_casa":
+				bats.append(st)
+				bat_store += st.charge
+				bat_room += float(def["capacidade"]) - st.charge
+			_:
+				var need := float(def.get("consome", 0.0))
+				if def.has("luz") and dk < 0.15:
+					need = 0.0  # luzes só acendem com o escuro
+				st.demand = need
+				if need > 0.0:
+					consumers.append(st)
+					demand += need
+	consumers.sort_custom(func(a: Structure, b: Structure) -> bool:
+		return POWER_PRIORITY.find(a.kind) < POWER_PRIORITY.find(b.kind))
+	var rem := demand
+	var from_free := minf(free, rem)
+	rem -= from_free
+	var from_gen := minf(gen_cap, rem)
+	rem -= from_gen
+	var from_bat := minf(bat_store / dt, rem)
+	rem -= from_bat
+	var budget := demand - rem
+	var changed: Array = []
+	for st: Structure in consumers:
+		var on := budget >= st.demand - 0.01
+		if on:
+			budget -= st.demand
+		if st.powered != on:
+			st.powered = on
+			changed.append(st)
+	for n in grid:
+		var st2 := n as Structure
+		if st2.demand <= 0.0 and not st2.kind in ["gerador", "eolico", "bateria_casa"] and st2.powered:
+			st2.powered = false
+			changed.append(st2)
+	# geradores a combustão: queimam proporcional ao que entregaram
+	for g: Structure in gens:
+		var share := from_gen * float(DB.BUILDS["gerador"]["gera"]) / maxf(gen_cap, 1.0)
+		var before := int(g.fuel)
+		g.fuel = maxf(0.0, g.fuel - 0.12 * share / 100.0 * dt * 1.0)
+		var running := share > 0.5
+		if g.powered != running or int(g.fuel) != before:
+			g.powered = running
+			changed.append(g)
+	# baterias: descarregam o que cobriram, carregam com a sobra do que é de graça
+	var surplus := (free - from_free) * dt
+	var drain := from_bat * dt
+	for b: Structure in bats:
+		var cap := float(DB.BUILDS["bateria_casa"]["capacidade"])
+		var before_pct := int(b.charge / cap * 100.0)
+		if drain > 0.0:
+			var take := minf(drain, b.charge)
+			b.charge -= take
+			drain -= take
+		if surplus > 0.0:
+			var put := minf(surplus, cap - b.charge)
+			b.charge += put
+			surplus -= put
+		b.powered = b.charge > 1.0
+		if int(b.charge / cap * 100.0) != before_pct:
+			changed.append(b)
+	for n in grid:
+		var st3 := n as Structure
+		if st3.kind == "eolico" and st3.powered != (st3.output > 0.5):
+			st3.powered = st3.output > 0.5
+			changed.append(st3)
+	# resumo da rede para os avisos (produção possível, consumo, bateria)
+	var cap_total := 0.0
+	for b2: Structure in bats:
+		cap_total += float(DB.BUILDS["bateria_casa"]["capacidade"])
+	var info := {"gp": int(free + gen_cap), "gc": int(demand), "gb": int((bat_store / cap_total) * 100.0) if cap_total > 0.0 else -1}
+	for n in grid:
+		var st4 := n as Structure
+		if st4.grid != info:
+			st4.grid = info
+			if not st4 in changed:
+				changed.append(st4)
+	for st5 in changed:
+		structure_changed(st5)
 
 
 # ======================================================================= vilas vivas (fase 7)
@@ -1838,8 +2309,17 @@ func _process(delta: float) -> void:
 	if _chunk_t <= 0.0:
 		_chunk_t = 0.25
 		update_chunks(0 if loaded.is_empty() else 3)
+	_sky_t -= delta
+	if _sky_t <= 0.0:
+		_sky_t = 0.25
+		_update_sky()
 	if not Net.is_server() or players.is_empty():
 		return
+	_weather_step()
+	_power_t -= delta
+	if _power_t <= 0.0:
+		_power_t = 1.0
+		_power_step(1.0)
 	_spawn_t -= delta
 	if _spawn_t <= 0.0:
 		_spawn_t = 1.2
@@ -1898,7 +2378,7 @@ func create_survivor(p: Player, spec: Dictionary) -> void:
 	var data := SurvivorData.from_spec(spec, Game.rng)
 	_attach_data(p, data)
 	p.pending = false
-	p.teleport(shelter_pos())
+	p.teleport(spawn_pos())
 	Game.tell(p.peer, "Novo sobrevivente: %s. Você acorda no Abrigo Alfa." % data.nome)
 	if p.peer != Net.my_id():
 		Game.say_all("%s chegou ao abrigo." % data.nome)
@@ -1916,8 +2396,7 @@ func world_deltas() -> Dictionary:
 		if node != null:
 			b["fuel"] = node.fuel
 			b["open"] = node.open
-			if node.kind == "canteiro":
-				b.merge(node.crop_state(), true)
+			b.merge(node.state_extra(), true)
 		var sd := b.duplicate()
 		sd.erase("eternal")
 		sd["cell"] = [c.x, c.y]
@@ -1938,8 +2417,13 @@ func world_deltas() -> Dictionary:
 	var ch: Array = []
 	for c: Vector2i in chest_data:
 		ch.append([c.x, c.y, chest_data[c].duplicate(true)])
+	var wl: Array = []
+	for k: Vector3i in walls:
+		var wn: WallEdge = wall_nodes.get(k)
+		wl.append([k.x, k.y, k.z, walls[k]["kind"], wn.open if wn != null else bool(walls[k].get("open", false))])
 	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
-		"containers": cont, "chests": ch, "villages": vil}
+		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "weather": weather.duplicate(),
+		"weather_until": _weather_until}
 
 
 ## Save completo (servidor): alterações + entidades persistentes + sobreviventes por nome.
@@ -2007,6 +2491,12 @@ func apply_deltas(save: Dictionary) -> void:
 		var cc := Vector2i(int(cd[0]), int(cd[1]))
 		chest_data[cc] = Items.sanitize(cd[2])
 		occupied[cc] = true
+	for wd in save.get("walls", []):
+		if DB.BUILDS.has(str(wd[3])) and is_edge_kind(str(wd[3])):
+			walls[Vector3i(int(wd[0]), int(wd[1]), int(wd[2]))] = {"kind": str(wd[3]), "open": bool(wd[4])}
+	if save.has("weather"):
+		weather = save["weather"]
+		_weather_until = float(save.get("weather_until", _weather_until))
 	for vd in save.get("villages", []):
 		var vid := int(vd["id"])
 		if vid < villages.size():

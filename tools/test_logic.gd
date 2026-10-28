@@ -63,6 +63,15 @@ func _initialize() -> void:
 	d.repair(tu)
 	check(float(d.find(tu)[1]["dur"]) >= 70.0, "fita conserta (+30)")
 	check(float(d.first_of("fita")["carga"]) == 80.0, "fita gasta 1 uso")
+	# arma de fogo só na mesa de reparos (fita + sucata)
+	d.give("pistola")
+	d.give("sucata")
+	var pu := int(d.first_of("pistola")["u"])
+	d.find(pu)[1]["dur"] = 30.0
+	d.repair(pu)
+	check(float(d.find(pu)[1]["dur"]) == 30.0, "pistola não conserta fora da mesa")
+	d.repair(pu, true)
+	check(float(d.find(pu)[1]["dur"]) >= 75.0, "pistola conserta na mesa (+45)")
 
 	# apodrecimento
 	game.play_time = 0.0

@@ -164,6 +164,18 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
   - *Picape blindada:* 2,4x a velocidade a pé, 4 lugares (motorista + 3), porta-malas de 60 L, gasta combustível (galões), barulhenta (520 px), atropela forte.
   - *Moto elétrica:* 3,2x, só o piloto, porta-malas de 8 L, gasta baterias, quase silenciosa (240 px), atropela fraco.
   - Ficam abandonados na beira das estradas, trancados, com pouca energia e desgastados. Ligação direta exige Mecânica 2 (pode dar choque); consertar pede martelo, chave de fenda, 1 metal e 2 sucatas. Atropelar desgasta; abaixo de 30% de estado o veículo perde velocidade e a 0% não anda. Quem dirige controla o movimento (como a pé); passageiros acompanham. O porta-malas abre na janela de saque e os veículos vão para o save.
+- **Construção estilo The Sims:** o piso ocupa a célula do losango; paredes, meia parede, parede com janela, porta e portão ficam nas **bordas** da célula (aponte o mouse para o lado do quadrado). As antigas paredes e portas em bloco saíram do jogo. A janela de construção [B] tem 3 abas:
+  - *Fundação:* pisos (metal, madeira, concreto), paredes, janelas, portas e portões.
+  - *Utilidades:* bancada de fabricação (receitas técnicas exigem estar perto dela), mesa de reparos, fogareiro, gerador a combustão, gerador eólico, banco de baterias, purificador, torre, selagem de ar, coletor de chuva, canteiro, baú e cama.
+  - *Decoração:* luminária de chão, poste de luz, letreiro neon, mesa, cadeira, sofá, tapete, vaso e estante.
+- **Energia por produção e consumo:** construções de energia a até 10 tiles umas das outras formam uma rede. O eólico gera 22 W por módulo do mastro (1 a 5; [E] sobe um módulo por 2 metais + 2 sucatas) vezes o vento; prédios e construções por perto atrapalham o vento. O gerador a combustão (100 W) só queima o combustível que falta na rede. Os bancos de baterias guardam a sobra e cobrem a falta. Quando falta energia, a prioridade é selagem, purificador, torre e depois as luzes. As luzes só gastam à noite.
+- **Mesa de reparos:** armas de fogo (fita + 1 sucata), mochilas e coldres só se consertam nela. Nela, todo conserto rende +45% (em vez de +30% com fita em qualquer lugar).
+- **Dia, noite e clima:** um dia dura 24 minutos (1 hora do jogo = 1 minuto). À noite o mundo escurece; luzes acesas, a lanterna e os postes iluminam. No escuro, os infectados enxergam até 40% mais perto, exceto quem está com lanterna ou sob luz. Os climas são:
+  - *Céu limpo* e *nublado*;
+  - *Chuva:* abafa os passos (75%), rega os canteiros e enche os coletores;
+  - *Tempestade:* vento forte (bom para os eólicos), passos a 55% e visão menor;
+  - *Névoa de esporos:* +0,12 de esporos e visão a 60%.
+  O clima muda a cada 3 a 7 minutos. O HUD mostra a hora e o clima.
 
 ## Estado da implementação
 
@@ -177,3 +189,4 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 6 | Ações com tempo (barra, interrupção por movimento ou dano) e medicina cooperativa (curativos e cirurgias em aliados) | **feito** |
 | 7 | Mundo em chunks (raio 150), vilas vivas com NPCs, prosperidade, reputação, comércio, pedidos de socorro e zonas mortas | **feito** |
 | 8 | Agricultura (canteiro, sementes, rega, colheita), culinária (fogareiro, receitas, água fervida) e veículos (picape blindada e moto elétrica) | **feito** |
+| 9 | Construção em bordas (estilo The Sims) com 3 abas, utilidades e decoração, rede de energia (eólico, combustão, baterias), mesa de reparos, dia/noite, clima e iluminação | **feito** |

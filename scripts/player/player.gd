@@ -59,6 +59,9 @@ var demolish := false
 var nearby: Node = null
 var camera: Camera2D
 var spores: CPUParticles2D
+var rain: CPUParticles2D
+var lamp: PointLight2D
+var _sky_t := 0.0
 var respawn_t := -1.0
 var _anim_t := 0.0
 var _attack_anim := 0.0
@@ -115,6 +118,38 @@ func _ready() -> void:
 		spores.color = Color(0.55, 0.9, 0.35, 0.5)
 		spores.z_index = 40
 		add_child(spores)
+		rain = CPUParticles2D.new()
+		rain.amount = 260
+		rain.lifetime = 0.7
+		rain.preprocess = 1.0
+		rain.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+		rain.emission_rect_extents = Vector2(620, 40)
+		rain.position = Vector2(80, -360)
+		rain.direction = Vector2(-0.25, 1)
+		rain.spread = 3.0
+		rain.gravity = Vector2.ZERO
+		rain.initial_velocity_min = 900.0
+		rain.initial_velocity_max = 1100.0
+		var gt := GradientTexture2D.new()
+		gt.width = 2
+		gt.height = 14
+		gt.fill_from = Vector2(0, 0)
+		gt.fill_to = Vector2(0, 1)
+		var gr := Gradient.new()
+		gr.set_color(0, Color(0.7, 0.8, 1.0, 0.0))
+		gr.set_color(1, Color(0.75, 0.85, 1.0, 0.55))
+		gt.gradient = gr
+		rain.texture = gt
+		rain.z_index = 45
+		rain.emitting = false
+		add_child(rain)
+	lamp = PointLight2D.new()
+	lamp.texture = World.light_texture()
+	lamp.texture_scale = 1.6
+	lamp.color = Color(1.0, 0.95, 0.8)
+	lamp.position = Vector2(0, -16)
+	lamp.enabled = false
+	add_child(lamp)
 
 
 ## Sincronizadores: um do dono (movimento) e um do servidor (aparência e estado).
@@ -208,6 +243,13 @@ func _local_control(delta: float) -> void:
 		act("attack", [aim, aim_angle])
 	if spores != null and world != null:
 		spores.modulate.a = clampf(world.spore_at(position) * 1.6, 0.15, 1.0)
+		_sky_t -= delta
+		if _sky_t <= 0.0:
+			_sky_t = 0.5
+			var wt := str(world.weather.get("tipo", ""))
+			rain.emitting = wt in ["chuva", "tempestade"]
+			rain.amount = 420 if wt == "tempestade" else 260
+			rain.direction = Vector2(-0.6 if wt == "tempestade" else -0.25, 1)
 
 
 ## Sobrecarga: o comando chega atrasado (~0,3 s), desvia e às vezes o corpo dá espasmos.
@@ -244,7 +286,7 @@ func _server_tick(delta: float) -> void:
 			_step_t -= delta
 			if _step_t <= 0.0:
 				_step_t = 0.5
-				world.make_noise(pos, data.step_noise(sprinting, sneaking))
+				world.make_noise(pos, data.step_noise(sprinting, sneaking) * world.noise_factor())
 				if sneaking and world.nearest_infected_dist(pos) < 360.0:
 					data.add_xp("furtividade", 0.3)
 		if not data.alive:
@@ -394,7 +436,7 @@ func _run_act(action: String, args: Array) -> void:
 			if not part.is_empty():
 				world.drop_items(position if is_local() else net_pos, [part])
 		"repair":
-			data.repair(int(args[0]))
+			data.repair(int(args[0]), world.station_near(position if is_local() else net_pos, "mesa_reparo"))
 		"unwear":
 			data.unwear(str(args[0]))
 		"take":
@@ -434,9 +476,9 @@ func _run_act(action: String, args: Array) -> void:
 		"interact":
 			world.interact(self, str(args[0]))
 		"build":
-			world.try_place(str(args[0]), Vector2i(int(args[1]), int(args[2])), self)
+			world.try_place(str(args[0]), Vector2i(int(args[1]), int(args[2])), self, int(args[3]) if args.size() > 3 else -1)
 		"demolish":
-			world.try_demolish(Vector2i(int(args[0]), int(args[1])), self)
+			world.try_demolish(Vector2i(int(args[0]), int(args[1])), self, int(args[2]) if args.size() > 2 else -1)
 		"attack":
 			_server_attack(int(args[0]), float(args[1]) if args.size() > 1 else float(int(args[0])) * PI / 4.0)
 		"reload":
@@ -471,7 +513,7 @@ func _station_ok(recipe: String) -> bool:
 	var st := String(DB.CRAFTS[recipe].get("estacao", ""))
 	if st == "" or world.station_near(position if is_local() else net_pos, st):
 		return true
-	Game.tell(peer, "Precisa estar perto de um %s." % String(DB.BUILDS[st]["nome"]).to_lower())
+	Game.tell(peer, "Precisa estar perto de: %s." % String(DB.BUILDS[st]["nome"]).to_lower())
 	return false
 
 
@@ -840,27 +882,46 @@ func _unhandled_input(event: InputEvent) -> void:
 			build_kind = ""
 			demolish = false
 		elif mb.button_index == MOUSE_BUTTON_LEFT:
-			var cell := world.mouse_cell()
 			if build_kind != "":
-				act("build", [build_kind, cell.x, cell.y])
+				act("build", _build_args())
 			elif demolish:
-				act("demolish", [cell.x, cell.y])
+				act("demolish", world.demolish_target())
 
 
 func _process(_delta: float) -> void:
+	if lamp != null and world != null:
+		var dk := world.darkness()
+		lamp.enabled = alive and (look & 8) != 0 and dk > 0.05
+		lamp.energy = 1.1 * dk
 	if not is_local():
 		return
 	if not alive:
 		world.ghost.hide_ghost()
 		return
 	if build_kind != "":
-		var cell := world.mouse_cell()
-		world.ghost.show_at(build_kind, world.ground.map_to_local(cell), world.can_place_at(build_kind, cell, self))
+		var a := _build_args()
+		var c := Vector2i(int(a[1]), int(a[2]))
+		var d := int(a[3])
+		var pos := world.edge_pos(Vector3i(c.x, c.y, d)) if d >= 0 else world.ground.map_to_local(c)
+		world.ghost.show_at(build_kind, pos, world.can_place_at(build_kind, c, self, d), d)
 	elif demolish:
-		var cell2 := world.mouse_cell()
-		world.ghost.show_at("demolir", world.ground.map_to_local(cell2), world.structures.has(cell2) or world.chests.has(cell2) or world.build_layer.get_cell_source_id(cell2) != -1)
+		var t := world.demolish_target()
+		if t.size() == 3:
+			world.ghost.show_at("demolir", world.edge_pos(Vector3i(t[0], t[1], t[2])), true, int(t[2]))
+		else:
+			var c2 := Vector2i(t[0], t[1])
+			world.ghost.show_at("demolir", world.ground.map_to_local(c2), world.has_demolishable(c2))
 	else:
 		world.ghost.hide_ghost()
+
+
+## [tipo, x, y, borda] da construção sob o mouse (borda -1 para o que ocupa a célula).
+func _build_args() -> Array:
+	if World.is_edge_kind(build_kind):
+		var k := world.mouse_edge()
+		return [build_kind, k.x, k.y, k.z]
+	var c := world.mouse_cell()
+	return [build_kind, c.x, c.y, -1]
 
 
 func _update_nearby() -> void:

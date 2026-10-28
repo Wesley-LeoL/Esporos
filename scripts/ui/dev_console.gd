@@ -539,8 +539,8 @@ func _cmd_kit(d: SurvivorData, which: String) -> void:
 		"kit_build":
 			# muito material: o que não couber fica num saco no chão
 			d.wear(Items.make("mochila_militar")[0])
-			items = {"martelo": 1, "chave_fenda": 1, "alicate": 1, "serra": 1, "pregos": 60, "fios": 10,
-				"sucata_eletronica": 6, "metal": 24, "sucata": 24, "madeira": 24, "combustivel": 3, "filtro": 2, "bateria": 3}
+			items = {"martelo": 1, "chave_fenda": 1, "alicate": 1, "serra": 1, "pregos": 160, "fios": 14,
+				"sucata_eletronica": 6, "metal": 40, "sucata": 40, "madeira": 60, "combustivel": 3, "filtro": 2, "bateria": 3}
 			for s in ["carpintaria", "metalurgia", "eletronica"]:
 				d.skills[s]["lv"] = maxi(d.level(s), 5)
 		"kit_cyber":

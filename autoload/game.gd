@@ -179,7 +179,16 @@ func debug_command(cmd: String) -> void:
 		"place":
 			var base := world.ground.local_to_map(world.ground.to_local(p.position))
 			var target := base + Vector2i(int(a[1]), int(a[2]))
-			p.act("build", [a[0], target.x, target.y])
+			p.act("build", [a[0], target.x, target.y, int(a[3]) if a.size() > 3 else -1])
+		"demo":
+			var base2 := world.ground.local_to_map(world.ground.to_local(p.position))
+			var t2 := base2 + Vector2i(int(a[0]), int(a[1]))
+			p.act("demolish", [t2.x, t2.y] + ([int(a[2])] if a.size() > 2 else []))
+		"door":
+			var b3 := world.ground.local_to_map(world.ground.to_local(p.position))
+			world.interact(p, "w:%d,%d,%d" % [b3.x + int(a[0]), b3.y + int(a[1]), int(a[2])])
+		"walls":
+			print("[walls] ", world.walls)
 		"tpb":
 			# teleporta para a frente do maior prédio próximo (teste de ordenação de profundidade)
 			var best: Structure = null
@@ -304,6 +313,9 @@ func debug_command(cmd: String) -> void:
 				get_tree().get_nodes_in_group("vehicles").size(), str(world.built.values().map(func(b): return b["kind"]))])
 		"window":
 			hud.open_window(arg)
+		"buildtab":
+			hud.build_tab = arg
+			hud._rebuild_window()
 		"ctxfirst":
 			# abre o menu de contexto do primeiro item do inventário (testes)
 			for n in hud.find_children("*", "InvSlot", true, false):
@@ -316,6 +328,20 @@ func debug_command(cmd: String) -> void:
 				world.structures.size(), world.container_nodes.size(), get_tree().get_nodes_in_group("infected").size()])
 		"clock":
 			play_time += float(arg)
+		"power":
+			for n in get_tree().get_nodes_in_group("power"):
+				var st := n as Structure
+				print("[power] %s pw=%s out=%.1f dem=%.1f mods=%d aberto=%.2f carga=%.0f grid=%s light=%s" % [st.kind, st.powered,
+					st.output, st.demand, st.mods, st.aberto, st.charge, st.grid, st._light.enabled if st._light != null else "-"])
+		"hour":
+			# vai até a hora pedida (0-24)
+			var h := world.hour()
+			play_time += fposmod(float(arg) - h, 24.0) * World.DAY_SECONDS / 24.0
+			world._update_sky()
+		"weather":
+			var wa := arg.split(",")
+			world._set_weather.rpc(wa[0], float(wa[1]) if wa.size() > 1 else 0.5)
+			world._weather_until = play_time + 9999.0
 		"take_all_near":
 			p._update_nearby()
 			if p.nearby != null:

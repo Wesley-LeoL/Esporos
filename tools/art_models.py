@@ -338,6 +338,141 @@ def stove(on):
     return P
 
 
+# ====================================================================== construção nova
+WALL_H = 0.95
+
+
+def edge_wall(name, d, open_=False):
+    """Parede numa borda da célula, centrada no meio da borda. d=0: borda x+ (a laje corre em y);
+    d=1: borda y+ (corre em x)."""
+    def slab(hx, hy, hz, mat, pos, **kw):
+        # (hx, hy) dados para d=1 (corre em x); para d=0 troca os eixos
+        if d == 0:
+            hx, hy = hy, hx
+            pos = (pos[1], pos[0], pos[2])
+        return Part("box", (hx, hy, hz), mat, pos, **kw)
+    t = 0.05
+    P = []
+    if name == "parede_madeira":
+        P.append(slab(0.5, t, WALL_H / 2, "wood", (0, 0, WALL_H / 2), pattern=pat_planks(0.12, 2)))
+        P.append(slab(0.5, t + 0.01, 0.03, "rust", (0, 0, WALL_H - 0.03)))
+    elif name == "parede_metal":
+        P.append(slab(0.5, t, WALL_H / 2, "steel", (0, 0, WALL_H / 2),
+                      pattern=combine(pat_seams(0.25, (1, 1, 0)), pat_seams(0.32, (0, 0, 1)), pat_noise(13, 1, 0.04))))
+        P.append(slab(0.5, t + 0.01, 0.03, "slate", (0, 0, WALL_H - 0.03)))
+        P.append(slab(0.5, t + 0.012, 0.02, "mustard", (0, 0, 0.12), pattern=pat_hazard(0.05)))
+    elif name == "meia_parede":
+        P.append(slab(0.5, t + 0.02, 0.18, "slate", (0, 0, 0.18), pattern=combine(pat_seams(0.2, (1, 1, 0)), pat_noise(17, 1, 0.05))))
+        P.append(slab(0.5, t + 0.03, 0.02, "grey", (0, 0, 0.37)))
+    elif name == "janela":
+        P.append(slab(0.5, t, 0.17, "wood", (0, 0, 0.17), pattern=pat_planks(0.12, 2)))
+        P.append(slab(0.5, t, 0.12, "wood", (0, 0, WALL_H - 0.12), pattern=pat_planks(0.12, 2)))
+        P.append(slab(0.06, t, WALL_H / 2, "wood", (0.44, 0, WALL_H / 2)))
+        P.append(slab(0.06, t, WALL_H / 2, "wood", (-0.44, 0, WALL_H / 2)))
+        P.append(slab(0.38, 0.015, 0.22, "glow_dim", (0, 0, 0.56)))
+        P.append(slab(0.01, 0.02, 0.22, "dark", (0, 0, 0.56)))
+    elif name in ("porta", "portao"):
+        mat = "wood" if name == "porta" else "steel"
+        P.append(slab(0.07, t + 0.01, WALL_H / 2, "slate", (0.43, 0, WALL_H / 2)))
+        P.append(slab(0.07, t + 0.01, WALL_H / 2, "slate", (-0.43, 0, WALL_H / 2)))
+        P.append(slab(0.5, t + 0.01, 0.05, "slate", (0, 0, WALL_H - 0.05)))
+        if not open_:
+            pat = pat_planks(0.09, 0) if name == "porta" else combine(pat_seams(0.09, (1, 1, 0)), pat_seams(0.2, (0, 0, 1)))
+            P.append(slab(0.36, t * 0.6, (WALL_H - 0.12) / 2, mat, (0, 0, (WALL_H - 0.12) / 2), pattern=pat))
+            P.append(slab(0.02, t, 0.03, "glow_amber", (0.26, 0, 0.42)))
+        else:
+            # folha aberta, encostada na lateral (perpendicular à parede)
+            q = Part("box", (0.02, 0.30, (WALL_H - 0.12) / 2), mat, (-0.36, 0.30, (WALL_H - 0.12) / 2))
+            if d == 0:
+                q = Part("box", (0.30, 0.02, (WALL_H - 0.12) / 2), mat, (0.30, -0.36, (WALL_H - 0.12) / 2))
+            P.append(q)
+    return P
+
+
+def wind_turbine(h):
+    """Gerador eólico num mastro de 'h' módulos."""
+    top = 0.25 + 0.42 * h
+    P = [Part("box", (0.22, 0.22, 0.05), "slate", (0, 0, 0.05), pattern=pat_hazard(0.05))]
+    for i in range(h):
+        z = 0.10 + 0.42 * i
+        P.append(Part("cyl", (0.05, 0.21), "steel", (0, 0, z + 0.21), pattern=pat_seams(0.14, (0, 0, 1))))
+        P.append(Part("box", (0.07, 0.07, 0.015), "mustard", (0, 0, z + 0.41)))
+    P.append(Part("box", (0.16, 0.07, 0.07), "grey", (0, 0, top)))
+    P.append(Part("cyl", (0.04, 0.03), "glow_red", (-0.12, 0, top + 0.08)))
+    for ang in (0, 120, 240):
+        P.append(Part("box", (0.012, 0.035, 0.30), "bone", (0.17, 0, top), rot_x(ang) @ rot_z(0)))
+    P.append(Part("cyl", (0.05, 0.04), "dark", (0.17, 0, top), rot_y(90)))
+    return P
+
+
+def object_model(name, on=True):
+    """Objetos de uma célula (utilidades e decoração). 'on' = ligado/cheio."""
+    if name == "bancada":
+        return [Part("box", (0.42, 0.26, 0.03), "wood", (0, 0, 0.42), pattern=pat_planks(0.1, 0)),
+                Part("box", (0.03, 0.03, 0.20), "steel", (0.36, 0.20, 0.20)), Part("box", (0.03, 0.03, 0.20), "steel", (-0.36, 0.20, 0.20)),
+                Part("box", (0.03, 0.03, 0.20), "steel", (0.36, -0.20, 0.20)), Part("box", (0.03, 0.03, 0.20), "steel", (-0.36, -0.20, 0.20)),
+                Part("box", (0.40, 0.24, 0.02), "slate", (0, 0, 0.12)),
+                Part("box", (0.10, 0.06, 0.05), "red", (0.15, 0.08, 0.50)), Part("box", (0.06, 0.12, 0.03), "grey", (-0.15, -0.05, 0.48)),
+                Part("box", (0.40, 0.02, 0.18), "rust", (0, -0.25, 0.62), pattern=pat_seams(0.08, (1, 0, 0)))]
+    if name == "mesa_reparo":
+        return [Part("box", (0.42, 0.28, 0.04), "steel", (0, 0, 0.40), pattern=pat_seams(0.14, (1, 1, 0))),
+                Part("box", (0.38, 0.24, 0.18), "slate", (0, 0, 0.18), pattern=pat_seams(0.12, (1, 0, 0))),
+                Part("box", (0.08, 0.10, 0.06), "dark", (-0.25, 0.05, 0.50)), Part("cyl", (0.04, 0.10), "grey", (-0.25, 0.05, 0.62)),
+                Part("box", (0.16, 0.03, 0.02), "grey", (0.12, -0.05, 0.46)),
+                Part("box", (0.02, 0.05, 0.03), "glow_cyan", (0.43, 0.10, 0.30))]
+    if name == "bateria_casa":
+        g = "glow_green" if on else "glow_off"
+        return [Part("box", (0.26, 0.20, 0.38), "slate", (0, 0, 0.38), pattern=pat_seams(0.19, (0, 0, 1))),
+                Part("box", (0.265, 0.205, 0.04), "mustard", (0, 0, 0.70), pattern=pat_hazard(0.05)),
+                Part("box", (0.012, 0.12, 0.20), g, (0.27, 0, 0.36), pattern=pat_seams(0.05, (0, 0, 1)))]
+    if name == "coletor":
+        P = [Part("cyl", (0.26, 0.28), "teal", (0, 0, 0.28), pattern=pat_seams(0.14, (0, 0, 1))),
+             Part("cyl", (0.34, 0.03), "grey", (0, 0, 0.60)), Part("cyl", (0.08, 0.06), "steel", (0.26, 0, 0.08), rot_y(90))]
+        if on:
+            P.append(Part("cyl", (0.30, 0.01), "glow_cyan", (0, 0, 0.62)))
+        return P
+    if name == "cama":
+        return [Part("box", (0.44, 0.28, 0.10), "wood", (0, 0, 0.10)), Part("box", (0.42, 0.26, 0.06), "bone", (0, 0, 0.24)),
+                Part("box", (0.10, 0.20, 0.05), "bone", (-0.30, 0, 0.33)), Part("box", (0.26, 0.27, 0.04), "teal", (0.12, 0, 0.31)),
+                Part("box", (0.04, 0.30, 0.20), "wood", (-0.44, 0, 0.30))]
+    if name == "luminaria":
+        g = "glow_amber" if on else "glow_off"
+        return [Part("cyl", (0.12, 0.02), "dark", (0, 0, 0.02)), Part("cyl", (0.02, 0.40), "grey", (0, 0, 0.42)),
+                Part("cyl", (0.14, 0.08), "bone", (0, 0, 0.86)), Part("cyl", (0.10, 0.02), g, (0, 0, 0.78))]
+    if name == "poste":
+        g = "glow_white" if on else "glow_off"
+        return [Part("box", (0.08, 0.08, 0.04), "slate", (0, 0, 0.04)), Part("cyl", (0.03, 0.70), "steel", (0, 0, 0.74)),
+                Part("box", (0.20, 0.04, 0.03), "steel", (0.14, 0, 1.44)), Part("box", (0.10, 0.08, 0.03), "grey", (0.30, 0, 1.42)),
+                Part("box", (0.08, 0.06, 0.01), g, (0.30, 0, 1.38))]
+    if name == "letreiro":
+        g = "glow_magenta" if on else "glow_off"
+        return [Part("box", (0.03, 0.03, 0.30), "steel", (0, 0.22, 0.30)), Part("box", (0.03, 0.03, 0.30), "steel", (0, -0.22, 0.30)),
+                Part("box", (0.04, 0.32, 0.16), "dark", (0, 0, 0.72)), Part("box", (0.045, 0.28, 0.02), g, (0, 0, 0.80)),
+                Part("box", (0.045, 0.18, 0.02), "glow_cyan" if on else "glow_off", (0, 0, 0.66))]
+    if name == "mesa":
+        return [Part("box", (0.32, 0.22, 0.03), "wood", (0, 0, 0.36), pattern=pat_planks(0.1, 0))] + \
+               [Part("box", (0.025, 0.025, 0.17), "wood", (x, y, 0.17)) for x in (0.27, -0.27) for y in (0.17, -0.17)]
+    if name == "cadeira":
+        return [Part("box", (0.13, 0.13, 0.02), "wood", (0, 0, 0.22)), Part("box", (0.02, 0.13, 0.16), "wood", (-0.12, 0, 0.40))] + \
+               [Part("box", (0.02, 0.02, 0.10), "wood", (x, y, 0.10)) for x in (0.10, -0.10) for y in (0.10, -0.10)]
+    if name == "sofa":
+        return [Part("box", (0.20, 0.42, 0.10), "red", (0, 0, 0.16)), Part("box", (0.06, 0.42, 0.18), "red", (-0.16, 0, 0.30)),
+                Part("box", (0.20, 0.05, 0.13), "red", (0, 0.40, 0.22)), Part("box", (0.20, 0.05, 0.13), "red", (0, -0.40, 0.22)),
+                Part("box", (0.18, 0.40, 0.03), "dark", (0, 0, 0.04))]
+    if name == "tapete":
+        return [Part("box", (0.42, 0.30, 0.008), "teal", (0, 0, 0.008), pattern=pat_seams(0.1, (1, 1, 0))),
+                Part("box", (0.30, 0.18, 0.009), "mustard", (0, 0, 0.009))]
+    if name == "vaso":
+        return [Part("cyl", (0.12, 0.12), "rust", (0, 0, 0.12)), Part("ell", (0.16, 0.16, 0.20), "fungus", (0, 0, 0.40)),
+                Part("ell", (0.08, 0.08, 0.12), "olive", (0.06, 0.04, 0.58))]
+    if name == "estante":
+        P = [Part("box", (0.12, 0.40, 0.45), "wood", (0, 0, 0.45))]
+        for z, col in ((0.30, "red"), (0.58, "teal"), (0.84, "mustard")):
+            P.append(Part("box", (0.10, 0.30, 0.08), col, (0.04, 0, z)))
+        return P
+    return [Part("box", (0.3, 0.3, 0.3), "grey", (0, 0, 0.3))]
+
+
 # ====================================================================== ícones de itens
 def item_model(item):
     """Modelo pequeno de cada item (para os ícones do inventário). Unidades livres."""

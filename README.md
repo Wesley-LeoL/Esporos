@@ -39,7 +39,9 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **Estamina**: Shift corre; golpes cansam; fome e sobrecarga atrasam a recuperação.
 - **Perma-death com legado**: morte por infecção vira infectado de elite com inventário e implantes; morte física deixa cadáver que decompõe, atrai moscas/hordas e serve de baú.
 - **Mundo procedural por seed em chunks** (raio 150 tiles, 16 vilas): só os chunks perto dos jogadores existem como nós. Estradas, caravanas e **vilas vivas** com NPCs (comerciante, guardas, moradores), prosperidade, reputação, comércio e **pedidos de socorro** com prazo; vilas ignoradas caem e viram zonas mortas.
-- **Base-building**: pisos (TileMapLayer), paredes, portas, gerador, purificador, torre automatizada, selagem de ar.
+- **Construção estilo The Sims** ([B], 3 abas): pisos nas células e paredes, janelas e portas nas bordas; Utilidades (bancada, mesa de reparos, geradores a combustão e eólico com mastro de 1 a 5 módulos, baterias, purificador, torre, selagem, coletor de chuva, canteiro, baú, cama) e Decoração (luzes e móveis).
+- **Rede de energia** por produção e consumo, com prioridade e baterias.
+- **Dia/noite e clima**: chuva, tempestade, névoa de esporos e vento, que afetam a visão dos infectados, o barulho, os eólicos, a agricultura e a iluminação.
 - **Persistência de deltas**: só construções, terreno, caixas saqueadas, baús, cadáveres, elites, vilas e legado vão para o save (saves da versão anterior são convertidos).
 
 ## Console de testes (cheats)
