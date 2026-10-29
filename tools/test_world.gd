@@ -60,9 +60,19 @@ func _ready() -> void:
 	check(states.has("viva") and states.has("abandonada") and states.has("esporos"), "lugares vivos, abandonados e tomados por esporos")
 	var doors := {}
 	for k in w1.map_walls:
-		if String(w1.map_walls[k]["kind"]).ends_with("_porta"):
+		if String(w1.map_walls[k]["kind"]).ends_with("_porta") and int(w1.map_walls[k]["h"]) >= 0:
 			doors[int(w1.map_walls[k]["h"])] = true
 	check(w1.houses.size() > 60 and doors.size() == w1.houses.size(), "%d prédios exploráveis, todos com porta" % w1.houses.size())
+	var fenced := 0
+	for v in w1.villages:
+		if v.infested or w1.in_safe_zone(w1.ground.map_to_local(v.cell)):
+			fenced += 1
+	check(fenced == w1.villages.size() and not w1.villages[0].safe, "todas as %d vilas cercadas (sem Abrigo Alfa)" % fenced)
+	var gates := 0
+	for k in w1.map_walls:
+		if w1.map_walls[k]["kind"] == "w_muro_porta":
+			gates += 1
+	check(gates >= w1.villages.size(), "portões nas cercas (%d)" % gates)
 	w1.free()
 	w2.free()
 

@@ -51,7 +51,7 @@ const SAVE_VERSION := 7
 ## Versões de save que ainda carregam. Antes da 5 o mapa era outro (raio 64, sem chunks):
 ## desses saves só os sobreviventes e o legado são aproveitados (ver Game.read_save).
 const SAVE_COMPAT := [3, 4, 5, 6, 7]
-const VILLAGE_NAMES: Array[String] = ["Abrigo Alfa", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
+const VILLAGE_NAMES: Array[String] = ["Nova Esperança", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
 	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix", "Morro Azul",
 	"Forte Néon", "Cratera", "Porto Velho", "Colmeia", "Sétima Linha", "Refúgio Sul", "Barreira Leste"]
 
@@ -125,6 +125,8 @@ var map_walls_by_chunk := {}
 var house_open := {}
 ## Sombra do interior de cada prédio visto de fora (0 = sem sombra, 1 = escuro).
 var house_shade := {}
+## Prédio onde a equipe acorda (sorteado no primeiro sobrevivente; vai para o save).
+var team_house := -1
 ## Chão planejado que foge da regra da zona (praças, parques, lavouras, estacionamentos).
 var ground_cells := {}
 ## Lavouras: livres para andar, mas nada é posto em cima.
@@ -346,17 +348,6 @@ func _free_structure_node(s: Structure) -> void:
 		if structures.get(cell) == s:
 			structures.erase(cell)
 	s.queue_free()
-
-
-func _build_shelter(v: VillageData) -> void:
-	built[v.cell + Vector2i(2, -2)] = {"kind": "gerador", "fuel": 100.0, "open": false, "eternal": true}
-	built[v.cell + Vector2i(-1, -1)] = {"kind": "purificador", "fuel": 0.0, "open": false, "eternal": true}
-	built[v.cell + Vector2i(1, 1)] = {"kind": "vedacao", "fuel": 0.0, "open": false, "eternal": true}
-	for c in [v.cell + Vector2i(2, -2), v.cell + Vector2i(-1, -1), v.cell + Vector2i(1, 1)]:
-		occupied[c] = true
-	var starter := _add_container(v.cell + Vector2i(-2, 1), "comum", v.id)
-	container_data[starter]["items"] = Items.from_counts({"feijao": 3, "agua_limpa": 3, "bandagem": 2, "sucata": 4, "madeira": 4,
-		"metal": 2, "fita": 1, "faca": 1, "martelo": 1, "pregos": 16}, null, 0.0)
 
 
 func _free_cell(c: Vector2i) -> bool:
@@ -688,8 +679,20 @@ func spore_at(world_pos: Vector2) -> float:
 	return maxf(0.0, s)
 
 
+## Dentro da cerca de uma vila viva (infectados não entram nem escolhem quem está lá).
 func in_safe_zone(world_pos: Vector2) -> bool:
-	return Vector2(world_pos.x, world_pos.y * 2.0).length() < SAFE_RADIUS_PX
+	var t := tile_pos(world_pos)
+	for pl in places:
+		if not pl.has("cerca"):
+			continue
+		var vid: int = pl["vid"]
+		if vid >= 0 and villages[vid].infested:
+			continue
+		var c: Vector2i = pl["cell"]
+		var R := float(pl["cerca"]) + 1.0
+		if absf(t.x - c.x - 0.5) <= R and absf(t.y - c.y - 0.5) <= R:
+			return true
+	return false
 
 
 func is_powered(world_pos: Vector2) -> bool:
@@ -747,19 +750,71 @@ func nearest_infected_dist(pos: Vector2) -> float:
 	return best
 
 
-## Onde um sobrevivente novo acorda: numa cama da equipe, se houver; senão, no abrigo.
-func spawn_pos() -> Vector2:
+## Onde um sobrevivente novo acorda: numa cama da equipe, se houver; senão, no prédio da
+## equipe (sorteado na primeira vez) ou, se 'fresh', num prédio novo sorteado.
+func spawn_pos(fresh := false) -> Vector2:
 	var beds: Array = []
 	for c in built:
 		if built[c]["kind"] == "cama":
 			beds.append(c)
-	if beds.is_empty():
-		return shelter_pos()
-	return ground.map_to_local(beds[Game.rng.randi() % beds.size()]) + Vector2(0, 14)
+	if not beds.is_empty():
+		return ground.map_to_local(beds[Game.rng.randi() % beds.size()]) + Vector2(0, 14)
+	if fresh or team_house < 0 or not houses.has(team_house):
+		team_house = random_spawn_house()
+	return house_spawn_pos(team_house)
+
+
+## Prédio sorteado para acordar: vivo ou abandonado, longe da borda e dos esporos.
+func random_spawn_house() -> int:
+	var ids: Array = houses.keys()
+	for attempt in 200:
+		var id: int = ids[Game.rng.randi() % ids.size()]
+		var hd: Dictionary = houses[id]
+		var r: Rect2i = hd["rect"]
+		if hd["estado"] == "esporos" or spore_level_cell(r.get_center()) > 0.3 or r.size.x * r.size.y < 9:
+			continue
+		var near_dead := false
+		for dz in dead_zones:
+			if Vector2(r.get_center()).distance_to(dz[0]) < float(dz[1]) + 12.0:
+				near_dead = true
+		if not near_dead:
+			return id
+	return ids[0] if not ids.is_empty() else -1
+
+
+## Uma célula livre dentro do prédio (centro, se der).
+func house_spawn_pos(id: int) -> Vector2:
+	if id < 0 or not houses.has(id):
+		return ground.map_to_local(Vector2i.ZERO)
+	var r: Rect2i = houses[id]["rect"]
+	var best := r.get_center()
+	var bd := 1e9
+	for x in range(r.position.x, r.end.x):
+		for y in range(r.position.y, r.end.y):
+			var c := Vector2i(x, y)
+			if occupied.has(c):
+				continue
+			var d := Vector2(c - r.get_center()).length()
+			if d < bd:
+				bd = d
+				best = c
+	return ground.map_to_local(best) + Vector2(0, 6)
+
+
+## Nome do lugar mais perto de uma célula (para as mensagens).
+func place_name(c: Vector2i) -> String:
+	var best := ""
+	var bd := 1e9
+	for pl in places:
+		var d := Vector2(c - pl["cell"]).length()
+		if d < bd and d < float(pl["r"]) + 6.0:
+			bd = d
+			best = pl["nome"]
+	return best
 
 
 func shelter_pos() -> Vector2:
-	return ground.map_to_local(Vector2i.ZERO) + Vector2(Game.rng.randf_range(-20, 20), Game.rng.randf_range(4, 14))
+	return spawn_pos()
 
 
 ## Servidor: cria o personagem de um jogador (sobrevivente salvo pelo nome ou um novo).
@@ -2252,6 +2307,7 @@ func on_player_died(p: Player) -> void:
 	else:
 		p.show_death_ui.rpc_id(p.peer, info)
 	p.respawn_t = 5.0
+	p.has_died_before = true
 	Game.survivor_cache.erase(p.nome)
 	Game.save_game()
 
@@ -2266,10 +2322,18 @@ func create_survivor(p: Player, spec: Dictionary) -> void:
 	var data := SurvivorData.from_spec(spec, Game.rng)
 	_attach_data(p, data)
 	p.pending = false
-	p.teleport(spawn_pos())
-	Game.tell(p.peer, "Novo sobrevivente: %s. Você acorda no Abrigo Alfa." % data.nome)
+	# o primeiro acorda num prédio sorteado; quem chega depois, no mesmo prédio da equipe;
+	# depois de uma morte (sem cama), num prédio novo
+	var fresh := p.has_died_before
+	p.teleport(spawn_pos(fresh))
+	var where := "num prédio abandonado"
+	if houses.has(team_house):
+		var hd: Dictionary = houses[team_house]
+		var pn := place_name((hd["rect"] as Rect2i).get_center())
+		where = "%s%s" % ["numa vila" if hd["estado"] == "viva" else "num prédio abandonado", (" perto de " + pn) if pn != "" else ""]
+	Game.tell(p.peer, "Novo sobrevivente: %s. Você acorda %s." % [data.nome, where])
 	if p.peer != Net.my_id():
-		Game.say_all("%s chegou ao abrigo." % data.nome)
+		Game.say_all("%s chegou." % data.nome)
 
 
 # ======================================================================= persistência (deltas)
@@ -2315,7 +2379,7 @@ func world_deltas() -> Dictionary:
 		if (wn2.open if wn2 != null else bool(map_walls[k2].get("open", false))):
 			doors.append([k2.x, k2.y, k2.z])
 	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
-		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "map_doors": doors, "weather": weather.duplicate(),
+		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "map_doors": doors, "team_house": team_house, "weather": weather.duplicate(),
 		"weather_until": _weather_until}
 
 
@@ -2396,6 +2460,7 @@ func apply_deltas(save: Dictionary) -> void:
 			var wn3: WallEdge = wall_nodes.get(kd)
 			if wn3 != null:
 				wn3.set_open(true)
+	team_house = int(save.get("team_house", -1))
 	if save.has("weather"):
 		weather = save["weather"]
 		_weather_until = float(save.get("weather_until", _weather_until))

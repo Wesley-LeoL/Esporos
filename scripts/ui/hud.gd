@@ -96,6 +96,19 @@ var _map_save_t := 10.0
 var _map_file := ""
 ## Botão na tela para o status do veículo (aparece dentro de um veículo).
 var veh_button: Button
+var air_panel: PanelContainer
+## Barra rápida (5 espaços na direita).
+var hotbar_root: VBoxContainer
+var hot_slots: Array[HotSlot] = []
+## Modo construção: faixa embaixo com as abas, moldura na tela e HUD normal escondida.
+var build_mode := false
+var build_bar: PanelContainer
+var build_tabs_row: HBoxContainer
+var build_items: HBoxContainer
+var build_info: Label
+var build_frame: Control
+var _build_t := 0.0
+var _build_key := ""
 var busy_panel: PanelContainer
 var busy_text: Label
 var busy_bar: PixelBar
@@ -124,10 +137,11 @@ func _ready() -> void:
 
 	_build_screen_fx()
 	_build_air_panel()
-	_build_hints()
 	_build_vitals()
 	_build_log()
 	_build_equipment()
+	_build_hotbar()
+	_build_build_bar()
 	_build_prompt()
 	_build_banner()
 	_build_busy()
@@ -242,6 +256,7 @@ func _build_screen_fx() -> void:
 func _build_air_panel() -> void:
 	var p := _panel()
 	ui.add_child(p)
+	air_panel = p
 	p.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 16)
 	var row := _hbox(14)
 	p.add_child(row)
@@ -315,7 +330,7 @@ func _build_hints() -> void:
 
 func _build_vitals() -> void:
 	vitals_panel = _panel()
-	vitals_panel.custom_minimum_size = Vector2(600, 0)
+	vitals_panel.custom_minimum_size = Vector2(380, 0)
 	ui.add_child(vitals_panel)
 	vitals_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 16)
 	vitals_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
@@ -335,20 +350,17 @@ func _build_vitals() -> void:
 	for def in VITALS:
 		var row := _hbox(12)
 		col.add_child(row)
-		row.add_child(UITheme.icon_rect(def[1], def[3], 32))
-		var lbl := _label(def[2], S, UITheme.MUTED)
-		lbl.custom_minimum_size.x = 150
-		lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		row.add_child(lbl)
+		var ic := UITheme.icon_rect(def[1], def[3], 32)
+		ic.tooltip_text = String(def[2]).capitalize()
+		ic.mouse_filter = Control.MOUSE_FILTER_PASS
+		row.add_child(ic)
 		var bar := PixelBar.new(def[3], 16, def[4])
-		bar.custom_minimum_size = Vector2(250, 22)
+		bar.custom_minimum_size = Vector2(300, 22)
 		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		row.add_child(bar)
+		# só ícone e barra (o valor fica num rótulo fora da tela, usado pelos testes)
 		var val := _label("100%", L, UITheme.TEXT)
-		val.custom_minimum_size.x = 100
-		val.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		row.add_child(val)
 		bars[def[0]] = [bar, val]
 
 
@@ -536,6 +548,8 @@ func _build_death() -> void:
 
 ## info: {nome, causa, tipo ("infeccao" ou "fisica"), tempo}
 func show_death(info: Dictionary) -> void:
+	if build_mode:
+		set_build_mode(false)
 	close_menu()
 	var fate := "Seu corpo se reergue como um infectado de elite, com tudo o que você carregava."
 	if str(info.get("tipo", "")) != "infeccao":
@@ -782,10 +796,16 @@ func _input(event: InputEvent) -> void:
 	elif event.is_action_pressed("map"):
 		_toggle_tab(TAB_MAP)
 	elif event.is_action_pressed("build_menu"):
-		if window_kind == "build":
-			close_window()
-		else:
-			open_window("build")
+		set_build_mode(not build_mode)
+	elif event.is_action_pressed("cancel") and build_mode:
+		set_build_mode(false)
+	elif build_mode and event.is_action_pressed("demolish"):
+		p.demolish = not p.demolish
+		p.build_kind = ""
+		_build_key = ""
+		_update_build_bar(p)
+	elif not blocks_input() and not build_mode and _hot_key(event) >= 0:
+		hot_use(_hot_key(event))
 	elif event.is_action_pressed("vehicle_status"):
 		var v := Game.world.vehicle_of(p.peer)
 		if window_kind == "vehicle":
@@ -938,10 +958,299 @@ func _process(delta: float) -> void:
 	_map_tick(delta, p)
 	# botão de status do veículo
 	var inside := Game.world.vehicle_of(p.peer)
-	veh_button.visible = inside != null and not blocks_input()
+	veh_button.visible = inside != null and not blocks_input() and not build_mode
 	if veh_button.visible:
 		veh_button.reset_size()
 		veh_button.position = Vector2((ui.size.x - veh_button.size.x) / 2.0, ui.size.y - veh_button.size.y - 120.0).round()
+	_update_hotbar(d)
+	if build_mode:
+		for wdg in _play_widgets():
+			wdg.visible = false
+		prompt_panel.visible = false
+		_build_t -= delta
+		if _build_t <= 0.0:
+			_build_t = 0.4
+			_update_build_bar(p)
+
+
+# ------------------------------------------------------------------ barra rápida
+func _build_hotbar() -> void:
+	hotbar_root = _vbox(8)
+	ui.add_child(hotbar_root)
+	for i in 5:
+		var hs := HotSlot.new()
+		hs.hud = self
+		hs.index = i
+		hotbar_root.add_child(hs)
+		hot_slots.append(hs)
+	hotbar_root.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT, Control.PRESET_MODE_MINSIZE, 16)
+	hotbar_root.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	hotbar_root.grow_vertical = Control.GROW_DIRECTION_BOTH
+
+
+func _update_hotbar(d: SurvivorData) -> void:
+	for i in hot_slots.size():
+		var id: String = d.hotbar[i] if i < d.hotbar.size() else ""
+		hot_slots[i].show_item(id, d.count(id) if id != "" else 0)
+
+
+func _hot_key(event: InputEvent) -> int:
+	for i in 5:
+		if event.is_action_pressed("hot_%d" % (i + 1)):
+			return i
+	return -1
+
+
+## Põe (ou tira, com id "") um tipo de item no espaço i da barra rápida.
+func hot_set(i: int, id: String) -> void:
+	var p := _player()
+	if p == null or p.data == null:
+		return
+	p.data.hotbar[i] = id
+	p.act("hotbar", [i, id])
+
+
+## Usa o item do espaço i: come, bebe, empunha, aplica curativo...
+func hot_use(i: int) -> void:
+	var p := _player()
+	if p == null or p.data == null:
+		return
+	var d := p.data
+	var id: String = d.hotbar[i]
+	if id == "":
+		return
+	var inst := d.first_of(id)
+	if inst.is_empty():
+		Game.say("Sem %s no inventário." % DB.item_name(id).to_lower())
+		return
+	match id:
+		"bandagem", "gaze":
+			var l := _worst_limb(d, func(limb: Dictionary) -> bool:
+				return int(limb["wound"]) > 0 and not limb["bandaged"])
+			if l == "":
+				Game.say("Nenhum ferimento para enfaixar.")
+			else:
+				p.act("treat", [l, "enfaixar", 0])
+			return
+		"antisseptico", "alcool":
+			var l2 := _worst_limb(d, func(limb: Dictionary) -> bool:
+				return int(limb["wound"]) > 0 and not limb["disinfected"])
+			if l2 == "":
+				Game.say("Nenhum ferimento para desinfetar.")
+			else:
+				p.act("treat", [l2, "desinfetar", 0])
+			return
+		"kit_sutura":
+			var l3 := _worst_limb(d, func(limb: Dictionary) -> bool:
+				return int(limb["wound"]) == 2)
+			if l3 == "":
+				Game.say("Nenhum ferimento profundo.")
+			else:
+				p.act("treat", [l3, "suturar", 0])
+			return
+		"antibiotico":
+			p.act("treat", ["torso", "antibiotico", 0])
+			return
+	if _verb_for(d, inst) == "":
+		Game.say("%s não tem uso rápido." % DB.item_name(id))
+		return
+	p.act("use_item", [int(inst["u"])])
+
+
+## Membro mais ferido que atende à condição ("" = nenhum).
+func _worst_limb(d: SurvivorData, ok: Callable) -> String:
+	var best := ""
+	var worst := 1e9
+	for l in SurvivorData.LIMBS:
+		var limb: Dictionary = d.limbs[l]
+		if ok.call(limb) and float(limb["hp"]) - float(limb["bleed"]) * 10.0 < worst:
+			worst = float(limb["hp"]) - float(limb["bleed"]) * 10.0
+			best = l
+	return best
+
+
+# ------------------------------------------------------------------ modo construção
+func _play_widgets() -> Array:
+	return [air_panel, vitals_panel, equip_box, effects_box, hotbar_root, log_box]
+
+
+func _build_build_bar() -> void:
+	# moldura da tela
+	build_frame = Control.new()
+	build_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	build_frame.visible = false
+	ui.add_child(build_frame)
+	build_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for side in 4:
+		var r := ColorRect.new()
+		r.color = Color(UITheme.WARN, 0.85)
+		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		build_frame.add_child(r)
+		match side:
+			0:
+				r.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+				r.offset_bottom = 8
+			1:
+				r.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+				r.offset_top = -8
+			2:
+				r.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+				r.offset_right = 8
+			_:
+				r.set_anchors_and_offsets_preset(Control.PRESET_RIGHT_WIDE)
+				r.offset_left = -8
+	var tag := _panel("panel_warn", 12, Vector4(18, 6, 18, 8))
+	build_frame.add_child(tag)
+	var trow := _hbox(10)
+	tag.add_child(trow)
+	trow.add_child(UITheme.icon_rect("martelo", UITheme.WARN, 28))
+	trow.add_child(_label("MODO CONSTRUÇÃO · B ou ESC sai · X demolir · botão direito solta o item", S, UITheme.WARN))
+	tag.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 20)
+	tag.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	# faixa de baixo: abas em cima, uma linha de construções
+	build_bar = _panel("panel", 12, Vector4(16, 10, 16, 10))
+	build_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	build_bar.visible = false
+	ui.add_child(build_bar)
+	build_bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE, Control.PRESET_MODE_MINSIZE, 16)
+	build_bar.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	var col := _vbox(8)
+	build_bar.add_child(col)
+	build_tabs_row = _hbox(8)
+	col.add_child(build_tabs_row)
+	var sc := ScrollContainer.new()
+	sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.custom_minimum_size = Vector2(0, 150)
+	col.add_child(sc)
+	build_items = _hbox(8)
+	sc.add_child(build_items)
+	build_info = _label("", S, UITheme.MUTED)
+	col.add_child(build_info)
+
+
+## Entra ou sai do modo construção: faixa embaixo, moldura, HUD normal escondida e a câmera
+## desliza para o personagem ficar no alto da tela.
+func set_build_mode(on: bool) -> void:
+	var p := _player()
+	if p == null or p.data == null or (on and (p.is_dead() or p.pending)):
+		return
+	if on:
+		if menu_root.visible:
+			close_menu()
+		if window_kind != "":
+			close_window()
+	build_mode = on
+	build_bar.visible = on
+	build_frame.visible = on
+	if not on:
+		p.build_kind = ""
+		p.demolish = false
+		_build_key = ""
+		for wdg in _play_widgets():
+			wdg.visible = true
+	else:
+		_fill_build_bar(p)
+		_update_build_bar(p)
+	if p.camera != null:
+		var tw := create_tween()
+		tw.tween_property(p.camera, "offset", Vector2(0, 150) if on else Vector2.ZERO, 0.35).set_trans(Tween.TRANS_SINE)
+
+
+func _fill_build_bar(p: Player) -> void:
+	_clear(build_tabs_row)
+	for t: Array in DB.BUILD_TABS:
+		var tid: String = t[0]
+		var b := _btn(build_tabs_row, t[1], func() -> void:
+			build_tab = tid
+			_fill_build_bar(_player())
+			_update_build_bar(_player()))
+		b.toggle_mode = true
+		b.button_pressed = build_tab == tid
+	var sp := Control.new()
+	sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	build_tabs_row.add_child(sp)
+	_btn(build_tabs_row, "Demolir [X]", func() -> void:
+		var pl := _player()
+		pl.demolish = not pl.demolish
+		pl.build_kind = ""
+		_build_key = ""
+		_update_build_bar(pl))
+	_btn(build_tabs_row, "Sair [B]", func() -> void: set_build_mode(false))
+	_clear(build_items)
+	for k: String in DB.BUILDS:
+		var def: Dictionary = DB.BUILDS[k]
+		if String(def.get("aba", "")) != build_tab:
+			continue
+		var card := Button.new()
+		card.custom_minimum_size = Vector2(118, 140)
+		card.toggle_mode = true
+		card.set_meta("kind", k)
+		card.tooltip_text = "%s\n%s\nCusto: %s%s" % [def["nome"], def.get("desc", ""), DB.cost_text(def["custo"]),
+			"" if (def["req"] as Dictionary).is_empty() else "\nExige: " + DB.req_text(def["req"])]
+		card.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		var v := _vbox(2)
+		v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.set_anchors_preset(Control.PRESET_FULL_RECT)
+		card.add_child(v)
+		var th := TextureRect.new()
+		th.custom_minimum_size = Vector2(0, 84)
+		th.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		th.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		th.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		th.texture = _build_thumb(k, def)
+		v.add_child(th)
+		var nl := _label(String(def["nome"]).to_upper(), S, UITheme.TEXT)
+		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		nl.custom_minimum_size = Vector2(108, 0)
+		nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		v.add_child(nl)
+		card.pressed.connect(func() -> void:
+			var pl := _player()
+			pl.build_kind = k
+			pl.demolish = false
+			_build_key = k
+			_update_build_bar(pl))
+		build_items.add_child(card)
+
+
+func _build_thumb(k: String, def: Dictionary) -> Texture2D:
+	if def.has("chao"):
+		var at := AtlasTexture.new()
+		at.atlas = load(GenCatalog.GROUND_PATH)
+		at.region = Rect2(int(def["chao"]) * World.TILE_W, 0, World.TILE_W, World.TILE_H)
+		return at
+	var tex := GenArt.frame_texture(k, 0, 0)
+	return tex if tex != null else UITheme.icon("martelo")
+
+
+## Destaque do item escolhido, cores de "dá para construir" e a linha de informação.
+func _update_build_bar(p: Player) -> void:
+	var d := p.data
+	for c in build_items.get_children():
+		var b := c as Button
+		var k: String = b.get_meta("kind")
+		var def: Dictionary = DB.BUILDS[k]
+		var ok := d.meets(def["req"]) and d.missing_tools(def.get("ferramentas", [])) == "" and _afford_local(def["custo"])
+		b.button_pressed = p.build_kind == k
+		b.modulate = Color.WHITE if ok else Color(1.0, 0.6, 0.65, 0.75)
+	var txt := ""
+	if p.demolish:
+		txt = "DEMOLIR: clique numa construção (devolve metade dos materiais)."
+	elif p.build_kind != "" and DB.BUILDS.has(p.build_kind):
+		var def2: Dictionary = DB.BUILDS[p.build_kind]
+		var tl: Array = def2.get("ferramentas", [])
+		txt = "%s · custo %s%s%s · clique no mapa para colocar" % [String(def2["nome"]).to_upper(), DB.cost_text(def2["custo"]),
+			"" if (def2["req"] as Dictionary).is_empty() else " · exige " + DB.req_text(def2["req"]),
+			"" if tl.is_empty() else " · " + DB.tools_text(tl)]
+	else:
+		txt = "Escolha uma construção. Materiais em baús e sacos a até 2 tiles também contam."
+	var pw := _power_summary(p)
+	if pw != "":
+		txt += "   |   " + pw
+	if not msgs.is_empty():
+		txt += "   |   " + String(msgs[-1]["text"])
+	build_info.text = txt
 
 
 ## Sobrecarga sináptica: a interface treme, pisca e muda de cor (GDD 4: distorções de HUD).

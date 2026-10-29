@@ -180,6 +180,12 @@ func debug_command(cmd: String) -> void:
 			var base := world.ground.local_to_map(world.ground.to_local(p.position))
 			var target := base + Vector2i(int(a[1]), int(a[2]))
 			p.act("build", [a[0], target.x, target.y, int(a[3]) if a.size() > 3 else -1])
+		"buildmode":
+			hud.set_build_mode(arg != "0")
+		"hot":
+			hud.hot_set(int(a[0]), a[1])
+		"hotuse":
+			hud.hot_use(int(arg))
 		"tpplace":
 			# vai ao lugar n do tipo/estado pedido: tpplace:esporos,0 · tpplace:abandonada,1 · tpplace:aldeia,0
 			var found := 0
@@ -362,6 +368,8 @@ func debug_command(cmd: String) -> void:
 		"buildtab":
 			hud.build_tab = arg
 			hud._rebuild_window()
+			if hud.build_mode:
+				hud._fill_build_bar(p)
 		"ctxfirst":
 			# abre o menu de contexto do primeiro item do inventário (testes)
 			for n in hud.find_children("*", "InvSlot", true, false):

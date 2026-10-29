@@ -54,6 +54,9 @@ func generate() -> void:
 			_hamlet_core(pl)
 	_connect_places()
 	for pl in w.places:
+		if pl.has("cerca"):
+			_fence(pl)
+	for pl in w.places:
 		_populate(pl)
 	_countryside()
 	_vehicles()
@@ -61,10 +64,8 @@ func generate() -> void:
 
 # ------------------------------------------------------------------ lugares
 func _places() -> void:
-	var center := {"cell": Vector2i.ZERO, "tipo": "cidade", "estado": "viva", "r": 15, "nome": World.VILLAGE_NAMES[0], "vid": 0}
-	w.places.append(center)
 	var specs: Array = []
-	for e in ["viva", "viva", "abandonada", "abandonada", "esporos"]:
+	for e in ["viva", "viva", "viva", "abandonada", "abandonada", "esporos"]:
 		specs.append(["cidade", e])
 	for i in 13:
 		specs.append(["aldeia", "viva"])
@@ -76,7 +77,7 @@ func _places() -> void:
 		var tipo: String = sp[0]
 		var estado: String = sp[1]
 		var r := rng.randi_range(12, 14) if tipo == "cidade" else rng.randi_range(7, 9)
-		var dmin := 30.0
+		var dmin := 12.0
 		var dmax := World.RADIUS * 0.7
 		if estado == "abandonada":
 			dmax = World.RADIUS * 0.82
@@ -97,18 +98,14 @@ func _places() -> void:
 			var pl := {"cell": c, "tipo": tipo, "estado": estado, "r": r, "nome": "", "vid": -1}
 			w.places.append(pl)
 			break
-	# vilas vivas (a 0 é o Abrigo Alfa, no centro)
-	var v0 := VillageData.new()
-	v0.setup(0, World.VILLAGE_NAMES[0], Vector2i.ZERO, true, rng)
-	w.villages.append(v0)
+	# vilas vivas (cercadas, com NPCs)
 	for pl in w.places:
-		if pl["vid"] == 0:
-			continue
 		if pl["estado"] == "viva" and w.villages.size() < World.N_VILLAGES:
 			var vd := VillageData.new()
 			vd.setup(w.villages.size(), World.VILLAGE_NAMES[w.villages.size()], pl["cell"], false, rng)
 			pl["vid"] = vd.id
 			pl["nome"] = vd.nome
+			pl["cerca"] = int(pl["r"]) + 2
 			w.villages.append(vd)
 		else:
 			if pl["estado"] == "viva":
@@ -128,6 +125,27 @@ func _places() -> void:
 				bi = j
 		w.villages[i].links.append(bi)
 		w.villages[bi].links.append(i)
+
+
+## Cerca de chapas em volta da vila viva (quadrado de meio-lado "cerca"), com portões onde
+## as estradas passam. Infectados não atravessam; jogadores e NPCs usam os portões.
+func _fence(pl: Dictionary) -> void:
+	var c: Vector2i = pl["cell"]
+	var R: int = pl["cerca"]
+	for i in range(-R, R + 1):
+		var edges := [Vector3i(c.x + i, c.y - R - 1, 1), Vector3i(c.x + i, c.y + R, 1),
+			Vector3i(c.x - R - 1, c.y + i, 0), Vector3i(c.x + R, c.y + i, 0)]
+		for k: Vector3i in edges:
+			var a := Vector2i(k.x, k.y)
+			var b := a + (Vector2i(1, 0) if k.z == 0 else Vector2i(0, 1))
+			if Vector2(a).length() > World.RADIUS - 3.0:
+				continue
+			var gate := w.road_cells.has(a) or w.road_cells.has(b)
+			w.map_walls[k] = {"kind": "w_muro_porta" if gate else "w_muro_parede", "open": false, "h": -1}
+			var ch := World.chunk_of(a)
+			if not w.map_walls_by_chunk.has(ch):
+				w.map_walls_by_chunk[ch] = []
+			w.map_walls_by_chunk[ch].append(k)
 
 
 # ------------------------------------------------------------------ ruas
@@ -238,8 +256,6 @@ func _populate(pl: Dictionary) -> void:
 	var estado: String = pl["estado"]
 	var vid: int = pl["vid"]
 	var town: bool = pl["tipo"] == "cidade"
-	if vid == 0:
-		w._build_shelter(w.villages[0])
 	var tries := 40 if town else 40
 	var want := rng.randi_range(4, 7)
 	var made := 0
@@ -267,7 +283,7 @@ func _populate(pl: Dictionary) -> void:
 	# objetos da praça e do entorno
 	match estado:
 		"viva":
-			if vid != 0:
+			if true:
 				_scatter(c, 1, 3, 4, _group("vila"))
 				for k in 6:
 					var e: Vector2i = c + [Vector2i(-3, -3), Vector2i(3, -3), Vector2i(-3, 3), Vector2i(3, 3), Vector2i(-3, 0), Vector2i(3, 2)][k]
@@ -277,8 +293,7 @@ func _populate(pl: Dictionary) -> void:
 					var cc := c + Vector2i(rng.randi_range(-2, 2), rng.randi_range(-2, 2))
 					if w._free_cell(cc):
 						w._add_container(cc, ["comum", "medico", "tecnico"][rng.randi() % 3], vid)
-			else:
-				_scatter(c, 2, 3, 4, _group("abrigo"))
+			_scatter(c, 2, r, 3, _group("abrigo"))
 		"abandonada":
 			_scatter(c, 0, r, rng.randi_range(5, 9), ["carro_queimado", "tambores", "pneus", "entulho", "entulho", "cacamba", "barreira"])
 		"esporos":

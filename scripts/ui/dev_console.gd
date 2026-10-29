@@ -448,8 +448,8 @@ func _cmd_tp(w: World, p: Player, args: PackedStringArray) -> void:
 	elif args.size() >= 1:
 		match _norm(args[0]):
 			"abrigo", "base", "casa":
-				dest = w.ground.map_to_local(Vector2i.ZERO) + Vector2(0, 10)
-				label = "Abrigo Alfa"
+				dest = w.spawn_pos()
+				label = "prédio da equipe"
 			"borda":
 				var dir := w.tile_pos(p.position if p.is_local() else p.net_pos)
 				if dir.length() < 1.0:

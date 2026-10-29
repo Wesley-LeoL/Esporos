@@ -39,6 +39,8 @@ var bags := {"bolsos": [], "mochila": [], "coldre": []}
 var equip := {"mascara": {}, "mochila": {}, "coldre": {}}
 ## Id único ("u") da arma na mão (ela continua guardada em algum recipiente).
 var hand_u: int = 0
+## Barra rápida: 5 tipos de item (o item continua no inventário). "" = espaço vazio.
+var hotbar: Array = ["", "", "", "", ""]
 var _next_u: int = 1
 var suppress_t: float = 0.0
 var tainted_t: float = 0.0
@@ -1357,7 +1359,7 @@ func to_dict() -> Dictionary:
 		"implants": implants.duplicate(true), "suppress_t": suppress_t, "tainted_t": tainted_t,
 		"antibiotic_t": antibiotic_t, "battery": battery, "heat": heat, "time_alive": time_alive,
 		"forca": forca, "resist": resist, "traits": traits.duplicate(), "stamina": stamina, "synaptic": synaptic,
-		"pain_t": pain_t, "light_u": light_u, "well_fed_t": well_fed_t}
+		"pain_t": pain_t, "light_u": light_u, "well_fed_t": well_fed_t, "hotbar": hotbar.duplicate()}
 
 
 static func from_dict(src: Dictionary) -> SurvivorData:
@@ -1399,6 +1401,9 @@ static func from_dict(src: Dictionary) -> SurvivorData:
 	d.pain_t = float(src.get("pain_t", 0.0))
 	d.light_u = int(src.get("light_u", 0))
 	d.well_fed_t = float(src.get("well_fed_t", 0.0))
+	var hb: Array = src.get("hotbar", [])
+	for i in mini(5, hb.size()):
+		d.hotbar[i] = str(hb[i]) if DB.ITEMS.has(str(hb[i])) else ""
 	if src.has("bags"):
 		var sb: Dictionary = src["bags"]
 		for c in d.bags:

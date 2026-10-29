@@ -8,7 +8,7 @@ Abra a pasta no Godot 4.7+ (versão padrão, não .NET) e aperte F5. O projeto j
 **Controles:** `WASD` mover · `Espaço`/clique atacar · `E` interagir · `Tab` ou `I` menu · `X` demolir · `F5` salvar · `Esc` cancelar · `F1` ou `` ` `` console de testes.
 
 ## Controles
-WASD move · Shift corre · C agacha · Espaço/clique ataca (armas de fogo miram no mouse) · R recarrega · E interage (caixas, NPCs, veículos; dentro do veículo, sai) · Tab abre o terminal (inventário, corpo, habilidades, implantes, mapa) · I inventário · M mapa · B construção · V status do veículo (dentro dele) · X demolição · F5 salva · F1 console.
+WASD move · Shift corre · C agacha · Espaço/clique ataca (armas de fogo miram no mouse) · R recarrega · E interage (caixas, NPCs, veículos; dentro do veículo, sai) · Tab abre o terminal (inventário, corpo, habilidades, implantes, mapa) · I inventário · M mapa · B modo construção · V status do veículo (dentro dele) · X demolição · 1 a 5 barra rápida · F5 salva · F1 console.
 
 **Inventário em grade:** botão direito abre as opções do item; arrastar com o botão esquerdo reorganiza ou move entre bolsos, mochila, coldre e o recipiente aberto; dois cliques passam o item entre o recipiente e o inventário; "Organizar" ordena por tipo. Caixas, baús, sacos, cadáveres e porta-malas abrem a grade deles ao lado da sua.
 
@@ -38,6 +38,8 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **12 habilidades por uso** (Luta, Pontaria, Atletismo, Furtividade, Mecânica, Eletrônica, Carpintaria, Metalurgia, Medicina, Cibernética, Agricultura, Culinária) e manuais; "parede de conhecimento" para construções e cirurgias.
 - **Estamina**: Shift corre; golpes cansam; fome e sobrecarga atrasam a recuperação.
 - **Perma-death com legado**: morte por infecção vira infectado de elite com inventário e implantes; morte física deixa cadáver que decompõe, atrai moscas/hordas e serve de baú.
+- **Começo aleatório**: o primeiro sobrevivente acorda dentro de um prédio sorteado (vivo ou abandonado, longe dos esporos); quem entra depois acorda no mesmo prédio; depois de morrer, numa cama da equipe ou num prédio novo. As 16 vilas vivas são cercadas (portões nas estradas, infectados não entram) e têm NPCs.
+- **HUD enxuta**: vitais só com ícone e barra, sem a faixa de comandos; **barra rápida** de 5 espaços na direita (arraste itens do inventário; teclas 1 a 5 ou clique usam: empunhar, comer, beber, enfaixar...). **Modo construção** [B]: faixa embaixo com as abas, moldura na tela, câmera deslocada e HUD escondida.
 - **Cidades pequenas e aldeias** ligadas por estradas no meio do campo, cada uma viva, abandonada ou tomada por esporos. **Prédios exploráveis**: piso, paredes nas bordas com portas e janelas, cômodos com móveis e caixas de saque. Ao entrar (ou passar logo atrás), o telhado some e as paredes da frente descem, como no The Sims.
 - **Mundo procedural por seed em chunks** (raio 150 tiles, 16 vilas): só os chunks perto dos jogadores existem como nós. Estradas, caravanas e **vilas vivas** com NPCs (comerciante, guardas, moradores), prosperidade, reputação, comércio e **pedidos de socorro** com prazo; vilas ignoradas caem e viram zonas mortas.
 - **Construção estilo The Sims** ([B], 3 abas): pisos nas células e paredes, janelas e portas nas bordas; Utilidades (bancada, mesa de reparos, geradores a combustão e eólico com mastro de 1 a 5 módulos, baterias, purificador, torre, selagem, coletor de chuva, canteiro, baú, cama) e Decoração (luzes e móveis).

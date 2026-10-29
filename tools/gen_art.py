@@ -234,7 +234,7 @@ def gen_city_props():
 
 def gen_town():
     for mat in gtown.MATERIALS:
-        for var in gtown.VARIANTS:
+        for var in (gtown.FENCE_VARIANTS if mat == "muro" else gtown.VARIANTS):
             crop_sheet("w_%s_%s" % (mat, var), "town/walls", gtown.wall_sheet_rows(mat, var, R), "%s %s" % (mat, var))
     os.makedirs(os.path.join(OUT, "town", "roofs"), exist_ok=True)
     roofs = {}

@@ -129,6 +129,8 @@ const SHEETS := {
 	"w_madeira_porta": {"path": "res://assets/art/generated/town/walls/w_madeira_porta.png", "fw": 76, "fh": 71, "ox": 38, "oy": 59, "cols": 4, "rows": 2},
 	"w_madeira_quebrada": {"path": "res://assets/art/generated/town/walls/w_madeira_quebrada.png", "fw": 46, "fh": 46, "ox": 23, "oy": 34, "cols": 2, "rows": 2},
 	"w_madeira_vitrine": {"path": "res://assets/art/generated/town/walls/w_madeira_vitrine.png", "fw": 46, "fh": 71, "ox": 23, "oy": 59, "cols": 2, "rows": 2},
+	"w_muro_parede": {"path": "res://assets/art/generated/town/walls/w_muro_parede.png", "fw": 46, "fh": 77, "ox": 23, "oy": 65, "cols": 2, "rows": 2},
+	"w_muro_porta": {"path": "res://assets/art/generated/town/walls/w_muro_porta.png", "fw": 94, "fh": 77, "ox": 47, "oy": 65, "cols": 4, "rows": 2},
 	"w_reboco_esporos": {"path": "res://assets/art/generated/town/walls/w_reboco_esporos.png", "fw": 48, "fh": 70, "ox": 24, "oy": 58, "cols": 2, "rows": 2},
 	"w_reboco_janela": {"path": "res://assets/art/generated/town/walls/w_reboco_janela.png", "fw": 46, "fh": 71, "ox": 23, "oy": 59, "cols": 2, "rows": 2},
 	"w_reboco_janela_q": {"path": "res://assets/art/generated/town/walls/w_reboco_janela_q.png", "fw": 46, "fh": 71, "ox": 23, "oy": 59, "cols": 2, "rows": 2},

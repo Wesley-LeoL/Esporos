@@ -13,7 +13,7 @@ enum Facing { E, SE, S, SW, W, NW, N, NE }
 const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
-const ACTIONS := ["use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
+const ACTIONS := ["hotbar", "use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
 	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy", "vehicle", "reorder", "sort_inv",
 	"loot_order", "sort_loot"]
 ## Ações que levam tempo (barra de progresso; mover-se ou levar dano interrompe).
@@ -54,6 +54,8 @@ var busy_total := 0.0
 var attack_cd := 0.0
 var attack_flash := 0.0
 var hurt_flash := 0.0
+## Servidor: este jogador já morreu nesta sessão (o próximo sobrevivente acorda noutro prédio).
+var has_died_before := false
 var build_kind := ""
 var demolish := false
 var nearby: Node = null
@@ -226,7 +228,8 @@ func _local_control(delta: float) -> void:
 	net_pos = position
 	attack_cd = maxf(0.0, attack_cd - delta)
 	_update_nearby()
-	if build_kind == "" and not demolish and attack_cd <= 0.0 and Input.is_action_pressed("attack") \
+	var building_mode := Game.hud != null and Game.hud.build_mode
+	if build_kind == "" and not demolish and not building_mode and attack_cd <= 0.0 and Input.is_action_pressed("attack") \
 			and not console_open and not menu_open and veh == null:
 		attack_cd = 0.55
 		attack_seq += 1
@@ -475,6 +478,10 @@ func _run_act(action: String, args: Array) -> void:
 				pr._sync_t = 0.0
 		"interact":
 			world.interact(self, str(args[0]))
+		"hotbar":
+			var hi := int(args[0])
+			if hi >= 0 and hi < 5:
+				data.hotbar[hi] = str(args[1]) if DB.ITEMS.has(str(args[1])) else ""
 		"build":
 			world.try_place(str(args[0]), Vector2i(int(args[1]), int(args[2])), self, int(args[3]) if args.size() > 3 else -1)
 		"demolish":

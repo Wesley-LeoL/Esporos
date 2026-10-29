@@ -15,7 +15,7 @@ import math
 
 import numpy as np
 
-from art_render import Part, combine, pat_planks, pat_seams, render, rot_x, rot_y, rot_z
+from art_render import Part, combine, pat_hazard, pat_planks, pat_seams, render, rot_x, rot_y, rot_z
 from gen_city import _h, pat_bricks, pat_chips, pat_corrugated, prop_model
 
 WALL_H = 0.95
@@ -29,7 +29,10 @@ MATERIALS = {
     "reboco": ("bone", lambda: pat_chips(7, 0.04), "rust", "wood"),
     "madeira": ("wood", lambda: pat_planks(0.12, 2), "rust", "wood"),
     "chapa": ("steel", lambda: combine(pat_corrugated(0.06), pat_chips(9, 0.02)), "slate", "steel"),
+    # cerca das vilas: chapas remendadas entre postes, arame no alto
+    "muro": ("rust", lambda: combine(pat_corrugated(0.05), pat_chips(13, 0.05)), "grey", "steel"),
 }
+FENCE_VARIANTS = ["parede", "porta"]
 VARIANTS = ["parede", "janela", "janela_q", "porta", "vitrine", "quebrada", "esporos"]
 
 
@@ -65,7 +68,30 @@ def clip_parts(parts, zmax):
     return out
 
 
+def fence_wall(variant, d, open_=False):
+    S = lambda *a, **k: _slab(d, *a, **k)
+    H = WALL_H * 1.05
+    P = [S(0.04, 0.05, H / 2, "grey", (0.46, 0, H / 2)), S(0.04, 0.05, H / 2, "grey", (-0.46, 0, H / 2)),
+         S(0.5, 0.008, 0.01, "dark", (0, 0, H + 0.04)), S(0.5, 0.008, 0.01, "dark", (0, 0, H + 0.1))]
+    if variant == "parede":
+        P.append(S(0.22, 0.025, H * 0.45, "rust", (-0.22, 0, H * 0.45), pattern=combine(pat_corrugated(0.05), pat_chips(13, 0.06))))
+        P.append(S(0.22, 0.025, H * 0.48, "steel", (0.22, 0, H * 0.48), pattern=combine(pat_corrugated(0.05), pat_chips(17, 0.05))))
+        P.append(S(0.5, 0.03, 0.02, "wood", (0, 0, 0.32)))
+    else:
+        if not open_:
+            P.append(S(0.42, 0.02, H * 0.42, "steel", (0, 0, H * 0.44), pattern=pat_seams(0.14, (1, 1, 0))))
+            P.append(S(0.42, 0.022, 0.04, "mustard", (0, 0, H * 0.7), pattern=pat_hazard(0.06)))
+        else:
+            q = Part("box", (0.02, 0.36, H * 0.42), "steel", (-0.42, 0.36, H * 0.44))
+            if d == 0:
+                q = Part("box", (0.36, 0.02, H * 0.42), "steel", (0.36, -0.42, H * 0.44))
+            P.append(q)
+    return P
+
+
 def map_wall(material, variant, d, open_=False):
+    if material == "muro":
+        return fence_wall(variant, d, open_)
     ramp, pat, cap, leaf = MATERIALS[material]
     S = lambda *a, **k: _slab(d, *a, **k)
     P = []
