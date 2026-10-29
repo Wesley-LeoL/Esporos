@@ -121,8 +121,10 @@ var house_cells := {}
 ## Paredes dos prédios do mapa: Vector3i(x, y, d) -> {"kind", "open"}, e as chaves por chunk.
 var map_walls := {}
 var map_walls_by_chunk := {}
-## Prédios abertos agora (jogador local dentro ou logo atrás): id -> true.
+## Prédios abertos agora (jogador local dentro): id -> true.
 var house_open := {}
+## Sombra do interior de cada prédio visto de fora (0 = sem sombra, 1 = escuro).
+var house_shade := {}
 ## Chão planejado que foge da regra da zona (praças, parques, lavouras, estacionamentos).
 var ground_cells := {}
 ## Lavouras: livres para andar, mas nada é posto em cima.
@@ -409,6 +411,7 @@ func _make_wall(k: Vector3i, from_map := false) -> WallEdge:
 	w.kind = str(src["kind"])
 	w.map = from_map
 	w.house_id = int(src.get("h", -1))
+	w.partition = bool(src.get("p", false))
 	w.cell = Vector2i(k.x, k.y)
 	w.dir = k.z
 	w.open = bool(src.get("open", false))

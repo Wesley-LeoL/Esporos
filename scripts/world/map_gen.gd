@@ -395,7 +395,8 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 	elif estado == "abandonada" and rng.randf() < 0.3:
 		roof = ""
 	var id := w.houses.size()
-	w.houses[id] = {"rect": rect, "roof": roof, "tipo": tipo, "estado": estado}
+	# "windows": bordas por onde dá para espiar o interior (janelas, vitrines, buracos)
+	w.houses[id] = {"rect": rect, "roof": roof, "tipo": tipo, "estado": estado, "windows": []}
 	w._plan_add(rect.position, {"t": "h", "id": id, "cell": rect.position})
 	for x in rect.size.x:
 		for y in rect.size.y:
@@ -433,6 +434,7 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 					elif variant == "parede" and rng.randf() < 0.14:
 						variant = "quebrada"
 					if variant != "porta" and rng.randf() < 0.05:
+						w.houses[id]["windows"].append(k)
 						continue
 				"esporos":
 					if variant in ["janela", "vitrine"]:
@@ -441,6 +443,8 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 						variant = "esporos"
 					elif variant == "parede" and rng.randf() < 0.2:
 						variant = "quebrada"
+			if variant in ["janela", "janela_q", "vitrine", "quebrada"]:
+				w.houses[id]["windows"].append(k)
 			var wk := "w_%s_%s" % [mat, variant]
 			var open := variant == "porta" and estado != "viva" and rng.randf() < 0.5
 			_add_map_wall(k, wk, open)
@@ -452,7 +456,7 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 			var gap := rect.position.y + rng.randi_range(0, rect.size.y - 1)
 			for y in range(rect.position.y, rect.end.y):
 				if y != gap:
-					_add_map_wall(Vector3i(px, y, 0), "w_%s_parede" % mat, false)
+					_add_map_wall(Vector3i(px, y, 0), "w_%s_parede" % mat, false, true)
 			door_cells.append(Vector2i(px, gap))
 			door_cells.append(Vector2i(px + 1, gap))
 		else:
@@ -460,7 +464,7 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 			var gap2 := rect.position.x + rng.randi_range(0, rect.size.x - 1)
 			for x in range(rect.position.x, rect.end.x):
 				if x != gap2:
-					_add_map_wall(Vector3i(x, py, 1), "w_%s_parede" % mat, false)
+					_add_map_wall(Vector3i(x, py, 1), "w_%s_parede" % mat, false, true)
 			door_cells.append(Vector2i(gap2, py))
 			door_cells.append(Vector2i(gap2, py + 1))
 	# móveis encostados nas paredes; o caminho da porta fica livre
@@ -535,8 +539,8 @@ func _inside_cell(rect: Rect2i, side: int) -> Vector2i:
 	return Vector2i(rect.end.x - 1, rect.position.y + rect.size.y / 2)
 
 
-func _add_map_wall(k: Vector3i, kind: String, open: bool) -> void:
-	w.map_walls[k] = {"kind": kind, "open": open, "h": w.houses.size() - 1}
+func _add_map_wall(k: Vector3i, kind: String, open: bool, partition := false) -> void:
+	w.map_walls[k] = {"kind": kind, "open": open, "h": w.houses.size() - 1, "p": partition}
 	var ch := World.chunk_of(Vector2i(k.x, k.y))
 	if not w.map_walls_by_chunk.has(ch):
 		w.map_walls_by_chunk[ch] = []

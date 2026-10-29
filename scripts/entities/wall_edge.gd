@@ -17,6 +17,8 @@ var open := false
 var map := false
 ## Prédio do mapa a que a parede pertence (-1 = construída pelo jogador).
 var house_id := -1
+## Divisória interna (escurece com o interior quando o prédio é visto de fora).
+var partition := false
 var world: World
 var low := false
 var _shape: CollisionPolygon2D

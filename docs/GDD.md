@@ -158,7 +158,8 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
     - as casas maiores têm uma divisória com passagem;
     - os móveis ficam encostados nas paredes: cama, armário, sofá, TV, cozinha, prateleiras, balcão, macas etc.;
     - as caixas de saque ficam nos cômodos.
-  - *Corte estilo The Sims:* dentro de um prédio, ou logo atrás dele, o telhado some e as paredes entre o jogador e a câmera descem. As paredes que o jogador constrói seguem a mesma regra.
+  - *Corte estilo The Sims:* dentro de um prédio, o telhado some e as paredes entre o jogador e a câmera descem. As paredes que o jogador constrói seguem a mesma regra.
+  - *Visto de fora:* não dá para ver o interior. Prédios sem telhado (ruínas) mostram o interior em sombra. Colado numa janela, vitrine ou buraco na parede, o jogador espia: o telhado some e o interior aparece com pouca sombra, mas as paredes continuam inteiras. Logo atrás do prédio, o telhado fica translúcido sobre o interior escuro.
 - **Mundo maior:** raio de 150 tiles (antes 64) e 16 vilas. A geração planeja tudo em dados a partir da seed (igual em todos os peers); só os chunks de 16×16 células perto dos jogadores viram nós e tiles. O anfitrião carrega ao redor de todos os jogadores; cada cliente, ao redor de si. Caixas, construções, baús e pisos ficam em dados e valem com o chunk carregado ou não.
 - **Vilas vivas:** prosperidade (nível 0 a 3) aumenta a produção, o número de guardas e as ofertas do comerciante. NPCs (comerciante, guardas, moradores) aparecem quando alguém se aproxima; guardas atacam infectados perto da vila. [E] num NPC abre o painel da vila.
 - **Pedidos de socorro:** a vila pede comida, remédios, materiais ou peças eletrônicas, ou que se eliminem infectados por perto, com prazo de 6 minutos (aviso para todos e lista na aba Mundo). Atender sobe prosperidade, reputação e população e dá recompensa a quem entregou. Ignorar faz a vila perder moradores e acumular infestação, até cair.

@@ -189,6 +189,33 @@ func debug_command(cmd: String) -> void:
 						p.teleport(world.ground.map_to_local(pl["cell"] + Vector2i(2, 2)))
 						break
 					found += 1
+		"tpwindow":
+			# fica do lado de fora de uma janela do prédio mais perto
+			var pc3 := world.tile_pos(p.position)
+			var bh := -1
+			var bdd := 1e9
+			for hid in world.houses:
+				if world.houses[hid]["windows"].is_empty():
+					continue
+				var dd2 := Vector2(world.houses[hid]["rect"].get_center()).distance_to(pc3)
+				if dd2 < bdd:
+					bdd = dd2
+					bh = hid
+			if bh >= 0:
+				var kw: Vector3i = world.houses[bh]["windows"][0]
+				var c1 := Vector2i(kw.x, kw.y)
+				var c2 := c1 + (Vector2i(1, 0) if kw.z == 0 else Vector2i(0, 1))
+				var outc := c2 if world.houses[bh]["rect"].has_point(c1) else c1
+				p.teleport(world.ground.map_to_local(outc))
+		"houseinfo":
+			var pc2 := world.tile_pos(p.position)
+			for hid in world.houses:
+				var hr2: Rect2i = world.houses[hid]["rect"]
+				if Vector2(hr2.get_center()).distance_to(pc2) < 8.0:
+					print("[casa] ", hid, " ", world.houses[hid]["estado"], " ", world.houses[hid]["tipo"], " roof=", world.houses[hid]["roof"], " open=", world.house_open.get(hid))
+			for wn in world.wall_nodes.values():
+				if wn.low and wn.house_id >= 0:
+					print("[parede baixa] ", wn.kind, " casa ", wn.house_id)
 		"tphouse":
 			# entra no prédio n mais perto (n = 0, 1, ...); "out" = para fora, na frente da porta
 			var hl: Array = world.houses.keys()
