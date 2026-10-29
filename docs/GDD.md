@@ -149,7 +149,14 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 
 ### Mundo em chunks e vilas vivas (fase 7)
 
-- **Mundo maior:** raio de 150 tiles (antes 64), 16 vilas e ~440 ruínas. A geração planeja tudo em dados a partir da seed (igual em todos os peers); só os chunks de 16×16 células perto dos jogadores viram nós e tiles. O anfitrião carrega ao redor de todos os jogadores; cada cliente, ao redor de si. Caixas, construções, baús e pisos ficam em dados e valem com o chunk carregado ou não.
+- **Mapa coerente (substitui as ruínas soltas):**
+  - *Grade de ruas:* passo de 12 células, com rua de 2 pistas (faixa tracejada), calçada e quarteirão de 8x8. O quarteirão do Abrigo Alfa fica no centro.
+  - *Zonas por superquarteirão de 24x24:* centro (até ~40 células, com prédios altos, lojas com toldo e neon, praças e estacionamentos com carcaças), subúrbio (até ~76, com casas e sobrados de frente para a rua, quintais com árvores) e uma fatia industrial (galpões, fábricas, tanques). Depois vem o campo: grama, terra, bosques, fazendas com lavoura cercada, celeiro e silo, e casas em ruínas.
+  - *Estradas:* duas rodovias cruzam o mapa pelo centro, e estradas de terra ligam as vilas do campo. As caravanas seguem as ruas por um caminho calculado na malha viária.
+  - *Vilas:* as da cidade ocupam um quarteirão (praça cercada de barricadas); as do campo, uma clareira com casas em volta.
+  - *Esporos:* perto da borda, a grama fica contaminada e vira carpete de fungo, com cogumelos gigantes, casulos e árvores mortas.
+  - *Noite:* os postes de rua acendem.
+- **Mundo maior:** raio de 150 tiles (antes 64) e 16 vilas. A geração planeja tudo em dados a partir da seed (igual em todos os peers); só os chunks de 16×16 células perto dos jogadores viram nós e tiles. O anfitrião carrega ao redor de todos os jogadores; cada cliente, ao redor de si. Caixas, construções, baús e pisos ficam em dados e valem com o chunk carregado ou não.
 - **Vilas vivas:** prosperidade (nível 0 a 3) aumenta a produção, o número de guardas e as ofertas do comerciante. NPCs (comerciante, guardas, moradores) aparecem quando alguém se aproxima; guardas atacam infectados perto da vila. [E] num NPC abre o painel da vila.
 - **Pedidos de socorro:** a vila pede comida, remédios, materiais ou peças eletrônicas, ou que se eliminem infectados por perto, com prazo de 6 minutos (aviso para todos e lista na aba Mundo). Atender sobe prosperidade, reputação e população e dá recompensa a quem entregou. Ignorar faz a vila perder moradores e acumular infestação, até cair.
 - **Reputação:** doações e pedidos atendidos dão reputação da equipe com aquela vila; o comerciante troca itens da especialidade da vila por reputação.
@@ -189,4 +196,5 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 6 | Ações com tempo (barra, interrupção por movimento ou dano) e medicina cooperativa (curativos e cirurgias em aliados) | **feito** |
 | 7 | Mundo em chunks (raio 150), vilas vivas com NPCs, prosperidade, reputação, comércio, pedidos de socorro e zonas mortas | **feito** |
 | 8 | Agricultura (canteiro, sementes, rega, colheita), culinária (fogareiro, receitas, água fervida) e veículos (picape blindada e moto elétrica) | **feito** |
+| 10 | Padrão visual único (STYLE.md), arte própria no lugar do Town Sampler e do Neon District, mapa em cidade/subúrbio/campo | **feito** |
 | 9 | Construção em bordas (estilo The Sims) com 3 abas, utilidades e decoração, rede de energia (eólico, combustão, baterias), mesa de reparos, dia/noite, clima e iluminação | **feito** |

@@ -20,14 +20,15 @@ const CHUNK := 16
 ## Chunks carregados ao redor de quem olha (distância de xadrez) e distância para descarregar.
 const LOAD_R := 2
 const UNLOAD_R := 3
-const N_RUINS := 440
 const SAFE_RADIUS_PX := 325.0
 const SEAL_RADIUS := 190.0
 const POWER_RADIUS_PX := 525.0
 const PURIFY_RADIUS_PX := 150.0
 const N_VILLAGES := 16
 
-enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA, PISO_MADEIRA, PISO_CONCRETO }
+## Tipos de chão (colunas do atlas gerado; os índices vão para os saves).
+enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA, PISO_MADEIRA, PISO_CONCRETO,
+	GRAMA, GRAMA_SECA, CALCADA, FAIXA_X, FAIXA_Y, TERRA_BATIDA, ZEBRA_X, ZEBRA_Y, LAVOURA, GRAMA_ESPOROS }
 
 ## Clima: [peso do sorteio, vento mínimo, vento máximo].
 const WEATHERS := {"limpo": [35, 0.15, 0.4], "nublado": [25, 0.3, 0.6], "chuva": [20, 0.4, 0.7],
@@ -45,13 +46,11 @@ const POWER_PRIORITY := ["vedacao", "purificador", "torre", "poste", "luminaria"
 const BUILDINGS: Array = [["BuildingBlock1", 15], ["BuildingBlock2", 15], ["BuildingBlock18", 20],
 	["BuildingBlock19", 20], ["BuildingBlock24", 25], ["Building3", 5]]
 const PROPS: Array[String] = ["Advertising5", "Advertising6", "Advertising7", "SateliteDish2"]
-## Peso dos prédios do pacote FreeSample contra os do Town Sampler (ExtraCatalog).
-const FS_WEIGHT := 60.0
 ## Versão do save: muda quando a geração do mundo muda (saves antigos não batem com o mapa).
-const SAVE_VERSION := 5
+const SAVE_VERSION := 6
 ## Versões de save que ainda carregam. Antes da 5 o mapa era outro (raio 64, sem chunks):
 ## desses saves só os sobreviventes e o legado são aproveitados (ver Game.read_save).
-const SAVE_COMPAT := [3, 4, 5]
+const SAVE_COMPAT := [3, 4, 5, 6]
 const VILLAGE_NAMES: Array[String] = ["Abrigo Alfa", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
 	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix", "Morro Azul",
 	"Forte Néon", "Cratera", "Porto Velho", "Colmeia", "Sétima Linha", "Refúgio Sul", "Barreira Leste"]
@@ -111,9 +110,14 @@ var vehicle_spots: Array = []
 var terrain_deltas := {}
 var removed_cells := {}
 var road_cells := {}
-var road_blocks := {}
+## Zona de cada superquarteirão de 24x24 (MapGen): centro, suburbio, industria ou campo.
+var sb_zone := {}
+## Chão planejado que foge da regra da zona (praças, parques, lavouras, estacionamentos).
+var ground_cells := {}
+## Lavouras: livres para andar, mas nada é posto em cima.
+var field_cells := {}
+## Rotas das caravanas (calculadas quando a primeira caravana sai): "a>b" -> pontos.
 var routes := {}
-var _ground_art: Array[Dictionary] = []
 
 var _spawn_t := 2.0
 var _village_t := 6.0
@@ -156,12 +160,13 @@ func generate(new_seed: int) -> void:
 	add_child(ghost)
 	canvas_mod = CanvasModulate.new()
 	add_child(canvas_mod)
-	_place_villages()
-	_connect_villages()
-	_decorate_villages()
-	_scatter_ruins()
-	_flush_ground_art()
-	_decorate_roads()
+	var mg := MapGen.new(self)
+	mg.assign_zones()
+	mg.carve_grid()
+	mg.place_villages()
+	mg.connect_villages()
+	mg.decorate_villages()
+	mg.fill()
 
 
 func _build_tileset() -> TileSet:
@@ -194,21 +199,59 @@ func _terrain(c: Vector2i) -> int:
 	if d > RADIUS + 5.0:
 		return -1
 	if road_cells.has(c):
-		return T.ESTRADA
-	for v in villages:
-		if maxi(absi(c.x - v.cell.x), absi(c.y - v.cell.y)) <= 6:
-			return T.VILA
-	var t: int = T.CONC_A if noise.get_noise_2d(c.x * 3.1 + 40.0, c.y * 3.1) < 0.05 else T.CONC_B
-	var n := noise.get_noise_2d(c.x, c.y)
-	if n > 0.28:
-		t = T.TERRA
-	elif n < -0.3:
-		t = T.MANCHA
+		return int(road_cells[c])
+	var t: int
+	if ground_cells.has(c):
+		t = int(ground_cells[c])
+	else:
+		var n := noise.get_noise_2d(c.x, c.y)
+		match MapGen.zone_at(self, c):
+			"centro":
+				t = T.CALCADA if is_sidewalk(c) else (T.CONC_A if noise.get_noise_2d(c.x * 3.1 + 40.0, c.y * 3.1) < 0.1 else T.CONC_B)
+			"suburbio":
+				t = T.CALCADA if is_sidewalk(c) else (T.GRAMA_SECA if n > 0.3 else T.GRAMA)
+			"industria":
+				t = T.CALCADA if is_sidewalk(c) else (T.MANCHA if n > 0.15 else T.CONC_B)
+			_:
+				t = T.GRAMA
+				if n > 0.34:
+					t = T.TERRA
+				elif n > 0.24 or n < -0.25:
+					t = T.GRAMA_SECA
+	if t in [T.CALCADA, T.VILA, T.LAVOURA]:
+		return t
 	var edge := smoothstep(RADIUS * 0.55, RADIUS, d)
 	var sn := spore_noise.get_noise_2d(c.x * 1.7, c.y * 1.7) * 0.5 + 0.5
 	if d > RADIUS - 1.5 or sn < edge * 0.9:
-		t = T.ESPOROS
+		return T.ESPOROS
+	if sn < edge * 0.9 + 0.1 and t in [T.GRAMA, T.GRAMA_SECA, T.TERRA]:
+		return T.GRAMA_ESPOROS
 	return t
+
+
+## Calçada: célula fora da pista encostada numa rua asfaltada (nas zonas urbanas).
+func is_sidewalk(c: Vector2i) -> bool:
+	if road_cells.has(c) or not MapGen.zone_at(self, c) in MapGen.URBAN:
+		return false
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			var rt: int = road_cells.get(c + Vector2i(dx, dy), -1)
+			if rt >= 0 and rt != T.TERRA_BATIDA:
+				return true
+	return false
+
+
+## Esporos no centro de uma célula (para a geração escolher árvores mortas etc.).
+func spore_level_cell(c: Vector2i) -> float:
+	return 0.08 + 1.4 * smoothstep(RADIUS * 0.55, RADIUS, Vector2(c).length())
+
+
+## Vaga livre na pista para um veículo abandonado.
+func _free_road(c: Vector2i) -> bool:
+	if occupied.has(c):
+		return false
+	occupied[c] = true
+	return true
 
 
 static func chunk_of(c: Vector2i) -> Vector2i:
@@ -222,174 +265,8 @@ func _plan_add(c: Vector2i, e: Dictionary) -> void:
 	plan[ch].append(e)
 
 
-func _place_villages() -> void:
-	var v0 := VillageData.new()
-	v0.setup(0, VILLAGE_NAMES[0], Vector2i.ZERO, true, rng)
-	villages.append(v0)
-	var tries := 0
-	while villages.size() < N_VILLAGES and tries < 500:
-		tries += 1
-		var ang := rng.randf() * TAU
-		# vilas ficam fora da zona densa de esporos (que começa a ~55% do raio e mata perto da borda)
-		var dist := rng.randf_range(18.0, RADIUS * 0.72)
-		var c := Vector2i(roundi(cos(ang) * dist), roundi(sin(ang) * dist))
-		var ok := true
-		for v in villages:
-			if Vector2(v.cell - c).length() < 26.0:
-				ok = false
-		if not ok:
-			continue
-		var vd := VillageData.new()
-		vd.setup(villages.size(), VILLAGE_NAMES[villages.size()], c, false, rng)
-		villages.append(vd)
-
-
-func _connect_villages() -> void:
-	for i in range(1, villages.size()):
-		var best := 0
-		var best_d := 1e9
-		for j in i:
-			var d := Vector2(villages[i].cell - villages[j].cell).length()
-			if d < best_d:
-				best_d = d
-				best = j
-		_carve_road(villages[best], villages[i])
-
-
-func _carve_road(a: VillageData, b: VillageData) -> void:
-	var c := a.cell
-	var path: Array[Vector2i] = []
-	while c.x != b.cell.x:
-		c.x += signi(b.cell.x - c.x)
-		path.append(c)
-	while c.y != b.cell.y:
-		c.y += signi(b.cell.y - c.y)
-		path.append(c)
-	var pts := PackedVector2Array()
-	pts.append(ground.map_to_local(a.cell))
-	_mark_road_block(a.cell)
-	_mark_road_block(b.cell)
-	for p in path:
-		road_cells[p] = true
-		_mark_road_block(p)
-		pts.append(ground.map_to_local(p))
-	routes["%d>%d" % [a.id, b.id]] = pts
-	var rev := PackedVector2Array()
-	for i in range(pts.size() - 1, -1, -1):
-		rev.append(pts[i])
-	routes["%d>%d" % [b.id, a.id]] = rev
-	a.links.append(b.id)
-	b.links.append(a.id)
-
-
-## A arte de estrada tem 2x2 células: cada célula do caminho vira o bloco 2x2 que a contém.
-func _mark_road_block(c: Vector2i) -> void:
-	var origin := Vector2i(floori(c.x / 2.0) * 2, floori(c.y / 2.0) * 2)
-	if road_blocks.has(origin):
-		return
-	road_blocks[origin] = true
-	for dx in 2:
-		for dy in 2:
-			var cell := origin + Vector2i(dx, dy)
-			road_cells[cell] = true
-	_queue_ground_art("Road_Chunk5", rng.randi() % 4, origin, 1)
-
-
-## Enfileira um bloco de chão do pacote; _flush_ground_art() desenha em ordem de profundidade.
-func _queue_ground_art(art: String, v: int, cell: Vector2i, layer: int) -> void:
-	_ground_art.append({"art": art, "v": v, "cell": cell, "layer": layer})
-
-
-## Distribui a arte de chão planejada pelos chunks (o carregamento ordena em profundidade).
-func _flush_ground_art() -> void:
-	for e in _ground_art:
-		_plan_add(e["cell"], {"t": "g", "art": e["art"], "v": e["v"], "cell": e["cell"], "layer": e["layer"]})
-	_ground_art.clear()
-
-
-func _decorate_villages() -> void:
-	for v in villages:
-		# praça: 3x3 blocos de calçada de 4x4 células, mais calçadas menores ao redor
-		for i in 3:
-			for j in 3:
-				_queue_ground_art("Sidewalk_Tile1", rng.randi() % 4, v.cell + Vector2i(-6 + i * 4, -6 + j * 4), 0)
-		for k in 7:
-			var ring := Vector2i(rng.randi_range(-5, 4) * 2, rng.randi_range(-5, 4) * 2)
-			if maxi(absi(ring.x), absi(ring.y)) >= 8 and not road_cells.has(v.cell + ring):
-				_queue_ground_art("Sidewalk_Chunk2", rng.randi() % 4, v.cell + ring, 0)
-		if v.safe:
-			_build_shelter(v)
-			for i in 3:
-				_place_random_building(v.cell, 5, 8, "vila")
-			_scatter_props(v.cell, 3, 5, 5, _neon_group("abrigo"), "neon")
-		else:
-			for i in 6:
-				_place_random_building(v.cell, 3, 8, "vila")
-			_scatter_props(v.cell, 1, 6, 6, _neon_group("vila"), "neon")
-			_scatter_props(v.cell, 2, 6, 2, ["neon_vending_machine"], "town")
-			for i in 4:
-				var c2 := v.cell + Vector2i(rng.randi_range(-4, 4), rng.randi_range(-4, 4))
-				if _free_cell(c2):
-					var tables := ["comum", "medico", "tecnico"]
-					_add_container(c2, tables[rng.randi() % 3], v.id)
-		for i in 3:
-			var pc := v.cell + Vector2i(rng.randi_range(-6, 6), rng.randi_range(-6, 6))
-			if _free_cell(pc) and (not v.safe or maxi(absi(pc.x - v.cell.x), absi(pc.y - v.cell.y)) >= 3):
-				_add_prop(PROPS[rng.randi() % PROPS.size()], rng.randi() % 4, pc)
-
-
-## Sorteia um prédio: {"town": nome} (Town Sampler) ou {"art": nome} (FreeSample).
-## 'context' é "vila" ou "ruina" e escolhe os pesos do Town Sampler.
-func _pick_building(context: String) -> Dictionary:
-	var key := "peso_vila" if context == "vila" else "peso_ruina"
-	var total := FS_WEIGHT
-	for n in ExtraCatalog.BUILDINGS:
-		total += float(ExtraCatalog.BUILDINGS[n][key])
-	var r := rng.randf() * total
-	if r >= FS_WEIGHT:
-		r -= FS_WEIGHT
-		for n in ExtraCatalog.BUILDINGS:
-			r -= float(ExtraCatalog.BUILDINGS[n][key])
-			if r <= 0.0:
-				return {"town": n}
-	var t := rng.randf() * 100.0
-	for b in BUILDINGS:
-		t -= float(b[1])
-		if t <= 0.0:
-			return {"art": b[0]}
-	return {"art": BUILDINGS[0][0]}
-
-
-func _footprint_free(c: Vector2i, fp: Vector2i) -> bool:
-	for i in fp.x:
-		for j in fp.y:
-			if not _free_cell(c + Vector2i(i, j)):
-				return false
-	return true
-
-
-## Tenta colocar um prédio em um anel [rmin, rmax] (distância de xadrez) ao redor de center.
-func _place_random_building(center: Vector2i, rmin: int, rmax: int, context := "ruina") -> bool:
-	for attempt in 40:
-		var pick := _pick_building(context)
-		var v := rng.randi() % 4
-		var fp: Vector2i
-		if pick.has("town"):
-			var f: Array = ExtraCatalog.BUILDINGS[pick["town"]]["fp"]
-			fp = Vector2i(int(f[0]), int(f[1]))
-		else:
-			fp = ArtDB.footprint(pick["art"], v)
-		var c := center + Vector2i(rng.randi_range(-rmax, rmax), rng.randi_range(-rmax, rmax))
-		if maxi(absi(c.x - center.x), absi(c.y - center.y)) < rmin:
-			continue
-		if _footprint_free(c, fp):
-			_add_building(pick.get("art", ""), v, c, fp, pick.get("town", ""))
-			return true
-	return false
-
-
-func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i, town := "") -> void:
-	var e := {"t": "b", "art": art, "v": v, "cell": c, "fp": fp, "town": town}
+func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i) -> void:
+	var e := {"t": "b", "art": art, "v": v, "cell": c, "fp": fp}
 	_plan_add(c, e)
 	planned_buildings[c] = e
 	for i in fp.x:
@@ -401,7 +278,6 @@ func _add_building(art: String, v: int, c: Vector2i, fp: Vector2i, town := "") -
 func _make_building(e: Dictionary) -> Structure:
 	var s := Structure.new()
 	s.kind = "edificio"
-	s.town = e["town"]
 	s.cell = e["cell"]
 	s.world = self
 	s.art = e["art"]
@@ -418,7 +294,7 @@ func _make_building(e: Dictionary) -> Structure:
 	return s
 
 
-func _add_prop(art: String, v: int, c: Vector2i, source := "fs") -> void:
+func _add_prop(art: String, v: int, c: Vector2i, source := "gen") -> void:
 	_plan_add(c, {"t": "p", "art": art, "v": v, "cell": c, "source": source})
 	occupied[c] = true
 
@@ -431,67 +307,6 @@ func _make_prop(e: Dictionary) -> Node2D:
 	pr.position = ground.map_to_local(e["cell"])
 	entities.add_child(pr)
 	return pr
-
-
-## Objetos do Neon District por grupo (rua, vila, industria, abrigo, chao).
-func _neon_group(group: String) -> Array[String]:
-	var out: Array[String] = []
-	for id in ExtraCatalog.NEON:
-		if ExtraCatalog.NEON[id]["grupo"] == group:
-			out.append(id)
-	return out
-
-
-func _pick(list: Array):
-	return list[rng.randi() % list.size()]
-
-
-## Coloca 'count' objetos de 'list' em células livres no anel [rmin, rmax] ao redor de center.
-func _scatter_props(center: Vector2i, rmin: int, rmax: int, count: int, list: Array, source: String) -> void:
-	var placed := 0
-	for attempt in count * 8:
-		if placed >= count:
-			return
-		var c := center + Vector2i(rng.randi_range(-rmax, rmax), rng.randi_range(-rmax, rmax))
-		if maxi(absi(c.x - center.x), absi(c.y - center.y)) < rmin or not _free_cell(c):
-			continue
-		_add_prop(_pick(list), 0, c, source)
-		placed += 1
-
-
-## Mobiliário urbano ao longo das estradas: postes, frades, lixeiras e alto-falantes na
-## beira da pista e bueiros no próprio asfalto (planos, na camada do chão).
-func _decorate_roads() -> void:
-	var street := _neon_group("rua")
-	var lamps: Array[String] = ["neon_neon_lamp", "soviet_lamp_post"]
-	var covers := _neon_group("chao")
-	var blocks: Array = road_blocks.keys()
-	blocks.sort()
-	for origin: Vector2i in blocks:
-		if rng.randf() < 0.1 and not covers.is_empty():
-			_plan_add(origin, {"t": "cv", "art": _pick(covers), "cell": origin})
-		if rng.randf() > 0.55:
-			continue
-		# célula vizinha ao bloco, fora da pista
-		var side := [Vector2i(-1, rng.randi_range(0, 1)), Vector2i(2, rng.randi_range(0, 1)),
-			Vector2i(rng.randi_range(0, 1), -1), Vector2i(rng.randi_range(0, 1), 2)]
-		var c: Vector2i = origin + side[rng.randi() % 4]
-		if not _free_cell(c) or Vector2(c).length() < 4.0:
-			continue
-		if rng.randf() < 0.4:
-			_add_prop(_pick(lamps), 0, c, "town")
-		else:
-			_add_prop(_pick(street), 0, c, "neon")
-	# veículos abandonados na beira das estradas (gerador próprio: não muda o resto do mapa)
-	var vr := RandomNumberGenerator.new()
-	vr.seed = seed_value + 991
-	for origin: Vector2i in blocks:
-		if vr.randf() > 0.06 or Vector2(origin).length() < 6.0 or Vector2(origin).length() > RADIUS * 0.8:
-			continue
-		var c2: Vector2i = origin + [Vector2i(-1, 0), Vector2i(2, 1), Vector2i(0, -1), Vector2i(1, 2)][vr.randi() % 4]
-		if not _free_cell(c2):
-			continue
-		vehicle_spots.append({"kind": "moto" if vr.randf() < 0.3 else "picape", "cell": c2})
 
 
 ## Tira o nó de uma estrutura carregada (não mexe nos dados).
@@ -513,30 +328,8 @@ func _build_shelter(v: VillageData) -> void:
 		"metal": 2, "fita": 1, "faca": 1, "martelo": 1, "pregos": 16}, null, 0.0)
 
 
-func _scatter_ruins() -> void:
-	for i in N_RUINS:
-		var ang := rng.randf() * TAU
-		var dist := rng.randf_range(6.0, RADIUS - 8.0)
-		var c := Vector2i(roundi(cos(ang) * dist), roundi(sin(ang) * dist))
-		if Vector2(c).length() < 9.0 or not _free_cell(c):
-			continue
-		if rng.randf() < 0.65:
-			_place_random_building(c, 0, 3)
-		if rng.randf() < 0.75:
-			var cc2 := c + Vector2i(rng.randi_range(-3, 3), rng.randi_range(-3, 3))
-			if _free_cell(cc2):
-				var tables := ["comum", "comum", "medico", "tecnico"]
-				_add_container(cc2, tables[rng.randi() % 4], -1)
-		if rng.randf() < 0.3:
-			var pc := c + Vector2i(rng.randi_range(-3, 3), rng.randi_range(-3, 3))
-			if _free_cell(pc):
-				_add_prop(PROPS[rng.randi() % PROPS.size()], rng.randi() % 4, pc)
-		if rng.randf() < 0.55:
-			_scatter_props(c, 1, 4, rng.randi_range(1, 3), _neon_group("industria"), "neon")
-
-
 func _free_cell(c: Vector2i) -> bool:
-	return not occupied.has(c) and not road_cells.has(c) and Vector2(c).length() < RADIUS - 3.0
+	return not occupied.has(c) and not road_cells.has(c) and not field_cells.has(c) and Vector2(c).length() < RADIUS - 3.0
 
 
 ## Nó de uma construção (dados em 'built').
@@ -738,13 +531,10 @@ func _load_chunk(ch: Vector2i) -> void:
 				build_layer.set_cell(c, 0, _gtile(int(terrain_deltas[c]), c))
 	var entries: Array = plan.get(ch, [])
 	var art: Array = []
-	var covers: Array = []
 	for e in entries:
 		match String(e["t"]):
 			"g":
 				art.append(e)
-			"cv":
-				covers.append(e)
 			"b":
 				if not removed_cells.has(e["cell"]):
 					nodes.append(_make_building(e))
@@ -765,8 +555,6 @@ func _load_chunk(ch: Vector2i) -> void:
 		var sp := ArtDB.sprite(e["art"], e["v"], "top")
 		sp.position += ground.map_to_local(e["cell"]) + Vector2(0, -HALF_H)
 		holder.add_child(sp)
-	for e in covers:
-		_make_cover(holder, e)
 	for c: Vector2i in built:
 		if chunk_of(c) == ch:
 			nodes.append(_make_structure(c, built[c]))
@@ -777,18 +565,6 @@ func _load_chunk(ch: Vector2i) -> void:
 		if chunk_of(Vector2i(k.x, k.y)) == ch:
 			nodes.append(_make_wall(k))
 	loaded[ch] = {"nodes": nodes, "art": holder}
-
-
-func _make_cover(holder: Node2D, e: Dictionary) -> void:
-	var cover: String = e["art"]
-	var ne: Dictionary = ExtraCatalog.NEON[cover]
-	var sp := Sprite2D.new()
-	sp.texture = load(ExtraCatalog.NEON_DIR + cover + ".png")
-	var r: Array = ne["r"]
-	sp.region_enabled = true
-	sp.region_rect = Rect2(r[0], r[1], int(r[2]) - int(r[0]) + 1, int(r[3]) - int(r[1]) + 1)
-	sp.position = ground.map_to_local(e["cell"]) + Vector2(0, HALF_H)
-	holder.add_child(sp)
 
 
 func _unload_chunk(ch: Vector2i) -> void:
@@ -1064,7 +840,7 @@ func _spawn_entity(d: Dictionary) -> Node:
 			car.from_id = int(d["from"])
 			car.to_id = int(d["to"])
 			car.cargo = d.get("cargo", {})
-			car.path = routes.get("%d>%d" % [car.from_id, car.to_id], PackedVector2Array())
+			car.path = route(car.from_id, car.to_id)
 			car.position = car.path[0] if car.path.size() > 0 else Vector2.ZERO
 			car.setup_net()
 			node = car
@@ -1767,13 +1543,70 @@ func _try_spawn_caravan(v: VillageData) -> void:
 			best = other
 	if best == null:
 		return
-	var key := "%d>%d" % [v.id, best.id]
-	if not routes.has(key):
+	if route(v.id, best.id).is_empty():
 		return
 	var cargo := {"comida": 10.0, "sucata": 5.0, "medico": 2.0}
 	for k in cargo:
 		v.stock[k] = maxf(0.0, float(v.stock[k]) - float(cargo[k]))
 	spawn_net({"t": "car", "from": v.id, "to": best.id, "cargo": cargo})
+
+
+## Caminho das caravanas pelas ruas e estradas (busca em largura na malha viária),
+## calculado na primeira vez e guardado. Pontos no mundo, só nas curvas.
+func route(a_id: int, b_id: int) -> PackedVector2Array:
+	var key := "%d>%d" % [a_id, b_id]
+	if routes.has(key):
+		return routes[key]
+	var a := villages[a_id].cell
+	var b := villages[b_id].cell
+	var start := _nearest_road(a)
+	var goal := _nearest_road(b)
+	var prev := {start: start}
+	var queue: Array[Vector2i] = [start]
+	var qi := 0
+	var dirs := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
+	while qi < queue.size():
+		var c: Vector2i = queue[qi]
+		qi += 1
+		if c == goal:
+			break
+		for d: Vector2i in dirs:
+			var n := c + d
+			if road_cells.has(n) and not prev.has(n):
+				prev[n] = c
+				queue.append(n)
+	var pts := PackedVector2Array()
+	if not prev.has(goal):
+		routes[key] = pts
+		return pts
+	var cells: Array[Vector2i] = [b, goal]
+	var cur := goal
+	while cur != start:
+		cur = prev[cur]
+		cells.append(cur)
+	cells.append(a)
+	cells.reverse()
+	for i in cells.size():
+		if i == 0 or i == cells.size() - 1:
+			pts.append(ground.map_to_local(cells[i]))
+			continue
+		var d1 := cells[i] - cells[i - 1]
+		var d2 := cells[i + 1] - cells[i]
+		if d1 != d2:
+			pts.append(ground.map_to_local(cells[i]))
+	routes[key] = pts
+	return pts
+
+
+func _nearest_road(c: Vector2i) -> Vector2i:
+	for r in range(0, 30):
+		for dx in range(-r, r + 1):
+			for dy in [-r, r]:
+				if road_cells.has(c + Vector2i(dx, dy)):
+					return c + Vector2i(dx, dy)
+				if road_cells.has(c + Vector2i(dy, dx)):
+					return c + Vector2i(dy, dx)
+	return c
 
 
 func caravan_arrived(c: Caravan) -> void:

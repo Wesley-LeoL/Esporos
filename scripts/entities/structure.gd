@@ -13,7 +13,7 @@ const ON_OFF := ["gerador", "purificador", "vedacao", "bateria_casa", "luminaria
 const MAX_MODS := 5
 const COLLECTOR_MAX := 8
 
-var kind := "parede"
+var kind := "edificio"
 var cell := Vector2i.ZERO
 var world: World
 var powered := false
@@ -23,8 +23,6 @@ var eternal := false
 var art := ""
 var art_variant := 0
 var fp := Vector2i.ONE
-## Prédio do Town Sampler (nome no ExtraCatalog). Vazio = prédio do pacote FreeSample.
-var town := ""
 ## Canteiro (fase 8): cultura, progresso 0-100, regado até (relógio), última conta, morto.
 var crop := ""
 var grow := 0.0
@@ -53,10 +51,6 @@ var _cd := 0.0
 var _tracer := Vector2.ZERO
 var _tracer_t := 0.0
 var _aim := 1
-var _strips: Array[Sprite2D] = []
-var _frame_w := 0.0
-var _frame := 0
-var _anim_t := 0.0
 var _fade_rect := Rect2()
 var _fade_t := 0.0
 
@@ -125,10 +119,7 @@ func _setup_building() -> void:
 		Vector2(-hw * (w - d), -hh * (w + d)) * k, Vector2(hw * (w + d), hh * (w - d)) * k,
 		Vector2(hw * (w - d), hh * (w + d)) * k, Vector2(-hw * (w + d), hh * (d - w)) * k])
 	y_sort_enabled = true
-	if town != "":
-		_setup_town()
-	else:
-		ArtDB.add_building_strips(self, art, art_variant, fp)
+	ArtDB.add_building_strips(self, art, art_variant, fp)
 	for c in get_children():
 		if c is Sprite2D:
 			var sp := c as Sprite2D
@@ -137,40 +128,8 @@ func _setup_building() -> void:
 	set_process(true)
 
 
-## Prédio do Town Sampler: versão noturna; se houver tira de animação (janelas acendendo
-## e apagando), usa a tira e troca o quadro a cada FRAME_MS, com fase aleatória.
-func _setup_town() -> void:
-	var e: Dictionary = ExtraCatalog.BUILDINGS[town]
-	var folder := "anim" if e["anim"] else "night"
-	var tex: Texture2D = load("%sbuildings/%s/%s.png" % [ExtraCatalog.TOWN_DIR, folder, town])
-	_frame_w = float(e["w"])
-	var region := Rect2(0, 0, e["w"], e["h"])
-	_strips = ArtDB.add_strips(self, tex, region, Vector2(e["c"][0], e["c"][1]), fp)
-	if e["anim"]:
-		_frame = randi() % ExtraCatalog.ANIM_FRAMES
-		_anim_t = randf() * ExtraCatalog.FRAME_MS / 1000.0
-		_apply_frame(0)
-
-
-func _apply_frame(old: int) -> void:
-	var dx := (_frame - old) * _frame_w
-	for sp in _strips:
-		var r := sp.region_rect
-		r.position.x += dx
-		sp.region_rect = r
-
-
 func _process(delta: float) -> void:
 	_update_fade(delta)
-	if _strips.is_empty() or _frame_w <= 0.0:
-		return
-	_anim_t += delta
-	var step := ExtraCatalog.FRAME_MS / 1000.0
-	if _anim_t >= step:
-		_anim_t -= step
-		var old := _frame
-		_frame = (_frame + 1) % ExtraCatalog.ANIM_FRAMES
-		_apply_frame(old)
 
 
 ## Prédios ficam translúcidos quando o jogador está atrás deles (na área do desenho e

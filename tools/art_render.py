@@ -344,10 +344,10 @@ def pat_planks(step=0.08, axis=2):
 
 def pat_noise(seed=1, amount=1, density=0.12):
     def f(p, n):
-        h = np.floor(p * 37.0).astype(np.int64)
+        h = np.floor(p * 14.0).astype(np.int64)
         hv = (h[:, 0] * 73856093) ^ (h[:, 1] * 19349663) ^ (h[:, 2] * 83492791) ^ seed
         r = (hv % 1000) / 1000.0
-        return np.where(r < density, -amount, 0), None, None
+        return np.where(r < density * 0.6, -amount, 0), None, None
     return f
 
 

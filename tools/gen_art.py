@@ -110,8 +110,6 @@ def gen_characters():
 
 # ---------------------------------------------------------------- estruturas
 def gen_structures():
-    crop_sheet("parede", "structures", [[R(am.wall(0)), R(am.wall(1))]], "parede")
-    crop_sheet("porta", "structures", [[R(am.door(False)), R(am.door(True))]], "porta")
     crop_sheet("gerador", "structures", [[R(am.generator(True)), R(am.generator(False))]], "gerador")
     crop_sheet("purificador", "structures", [[R(am.purifier(True)), R(am.purifier(False))]], "purificador")
     crop_sheet("vedacao", "structures", [[R(am.seal(True)), R(am.seal(False))]], "selagem de ar")
@@ -197,127 +195,68 @@ def gen_icons():
 
 
 # ---------------------------------------------------------------- chão
-GROUND_TYPES = ["CONC_A", "CONC_B", "ESPOROS", "ESTRADA", "TERRA", "PISO", "MANCHA", "VILA", "PISO_MADEIRA", "PISO_CONCRETO"]
-TW, TH = 80, 40
+import gen_ground as gg  # noqa: E402
 
-
-def _hash(x, y, s):
-    h = (x * 374761393 + y * 668265263 + s * 2147483647) & 0xFFFFFFFF
-    h = (h ^ (h >> 13)) * 1274126177 & 0xFFFFFFFF
-    return (h ^ (h >> 16)) / 0xFFFFFFFF
-
-
-def _col(ramp, i):
-    return RAMP_RGB[ramp][i]
-
-
-def ground_tile(kind, var):
-    img = np.zeros((TH, TW, 4), dtype=np.uint8)
-    yy, xx = np.mgrid[0:TH, 0:TW]
-    d = np.abs(xx - (TW - 1) / 2.0) / (TW / 2.0) + np.abs(yy - (TH - 1) / 2.0) / (TH / 2.0)
-    mask = d <= 1.0
-    # coordenadas no losango (u,v em [0,1]) para padrões alinhados à grade
-    u = (xx / TW + yy / TH) - 0.5
-    v = (yy / TH - xx / TW) + 0.5
-    s = GROUND_TYPES.index(kind) * 10 + var
-    rnd = np.vectorize(lambda a, b: _hash(int(a), int(b), s))(xx, yy)
-    base = np.zeros((TH, TW, 3), dtype=np.uint8)
-
-    def fill(c):
-        base[:] = c
-
-    if kind in ("CONC_A", "CONC_B"):
-        ramp = "indigo"
-        fill(_col(ramp, 1 if kind == "CONC_A" else 2))
-        base[rnd > 0.86] = _col(ramp, 2 if kind == "CONC_A" else 3)
-        base[rnd < 0.05] = _col(ramp, 0)
-        if kind == "CONC_B":
-            seam = (np.abs(u - 0.5) < 0.012) | (np.abs(v - 0.5) < 0.012)
-            base[seam] = _col(ramp, 1)
-        # rachadura irregular (passeio aleatório), diferente em cada variação
-        if var > 0:
-            x, y = 14 + var * 17 + int(_hash(var, 3, s) * 10), 12 + int(_hash(var, 5, s) * 10)
-            for step in range(26 + var * 6):
-                if 0 <= x < TW and 0 <= y < TH:
-                    base[y, x] = _col(ramp, 0)
-                r = _hash(step, var, s + 11)
-                x += 1 if r < 0.55 else (0 if r < 0.8 else -1)
-                y += 1 if _hash(step, var, s + 13) < 0.35 else 0
-    elif kind == "ESPOROS":
-        fill(_col("fungus", 0))
-        blob = np.vectorize(lambda a, b: _hash(int(a) // 4, int(b) // 2, s + 7))(xx, yy)
-        blob2 = np.vectorize(lambda a, b: _hash((int(a) + 2) // 3, (int(b) + 1) // 2, s + 9))(xx, yy)
-        base[(blob > 0.55) | (blob2 > 0.8)] = _col("fungus", 1)
-        base[(blob > 0.88) & (rnd > 0.4)] = _col("fungus", 2)
-        base[rnd > 0.975] = _col("fungus", 2)
-        base[rnd > 0.994] = np.array(hex_rgb("#a6d65c"), dtype=np.uint8)
-    elif kind == "ESTRADA":
-        fill(np.array(hex_rgb("#2a2e39"), dtype=np.uint8))
-        base[rnd > 0.88] = np.array(hex_rgb("#383e4b"), dtype=np.uint8)
-        base[rnd < 0.04] = _col("dark", 1)
-    elif kind == "TERRA":
-        fill(_col("rust", 1))
-        blob = np.vectorize(lambda a, b: _hash(int(a) // 5, int(b) // 3, s + 3))(xx, yy)
-        base[blob > 0.55] = _col("rust", 0)
-        base[rnd > 0.9] = _col("rust", 2)
-        base[rnd > 0.975] = _col("rust", 3)
-    elif kind == "PISO":
-        fill(_col("steel", 2))
-        tread = ((xx + 2 * yy) % 8 == 0) & ((xx - 2 * yy) % 8 == 4)
-        base[tread] = _col("steel", 3)
-        edge_tl = (d > 0.90) & (yy < TH / 2)
-        edge_br = (d > 0.90) & (yy >= TH / 2)
-        base[edge_tl] = _col("steel", 4)
-        base[edge_br] = _col("steel", 0)
-        for (a, b) in ((40, 6), (68, 20), (40, 33), (12, 20)):
-            base[b, a] = _col("dark", 1)
-    elif kind == "MANCHA":
-        # chão oleoso contínuo (sem forma centralizada, para não repetir a cada célula)
-        fill(_col("dark", 2))
-        blob = np.vectorize(lambda a, b: _hash(int(a) // 5, int(b) // 3, s + 5))(xx, yy)
-        blob2 = np.vectorize(lambda a, b: _hash((int(a) + 3) // 4, (int(b) + 1) // 2, s + 6))(xx, yy)
-        base[(blob > 0.6) | (blob2 > 0.82)] = _col("indigo", 1)
-        base[(blob < 0.12) & (rnd > 0.5)] = _col("dark", 1)
-        base[rnd > 0.985] = _col("indigo", 2)
-    elif kind == "VILA":
-        # calçamento em placas alinhadas à grade (4x4 por célula), tons alternados
-        fill(_col("indigo", 2))
-        cell = (np.floor(u * 4) + np.floor(v * 4)) % 2 == 0
-        base[cell] = _col("indigo", 3)
-        joints = ((u * 4) % 1 < 0.05) | ((v * 4) % 1 < 0.05)
-        base[joints] = _col("indigo", 1)
-        base[(rnd > 0.95) & ~joints] = _col("slate", 3)
-        base[(rnd < 0.03) & ~joints] = _col("indigo", 1)
-    elif kind == "PISO_MADEIRA":
-        # tábuas ao longo de u, com juntas escalonadas
-        fill(_col("wood", 2))
-        board = np.floor(v * 6)
-        base[(board % 2) == 0] = _col("wood", 3)
-        base[(v * 6) % 1 < 0.08] = _col("wood", 0)
-        stag = ((u * 3 + board * 0.5) % 1) < 0.03
-        base[stag] = _col("wood", 1)
-        base[rnd > 0.97] = _col("wood", 1)
-    elif kind == "PISO_CONCRETO":
-        fill(_col("slate", 2))
-        base[rnd > 0.9] = _col("slate", 3)
-        base[rnd < 0.04] = _col("slate", 1)
-        seam = (u % 1 < 0.025) | (v % 1 < 0.025) | (np.abs(u - 0.5) < 0.012) | (np.abs(v - 0.5) < 0.012)
-        base[seam] = _col("slate", 1)
-    img[:, :, :3] = base
-    img[:, :, 3] = np.where(mask, 255, 0)
-    return img
+GROUND_TYPES = gg.GROUND_TYPES
 
 
 def gen_ground():
-    variants = 3
-    atlas = np.zeros((TH * variants, TW * len(GROUND_TYPES), 4), dtype=np.uint8)
-    for ti, k in enumerate(GROUND_TYPES):
-        for v in range(variants):
-            atlas[v * TH:(v + 1) * TH, ti * TW:(ti + 1) * TW] = ground_tile(k, v)
+    atlas = gg.atlas()
     os.makedirs(os.path.join(OUT, "world"), exist_ok=True)
     Image.fromarray(atlas).save(os.path.join(OUT, "world", "ground.png"), optimize=True)
-    previews.append(("chão (8 tipos x 3 variações)", atlas))
-    return variants
+    previews.append(("chão (%d tipos x %d variações)" % (len(GROUND_TYPES), gg.VARIANTS), atlas))
+    return gg.VARIANTS
+
+
+# ---------------------------------------------------------------- kit urbano (gen_city)
+import gen_city as gcity  # noqa: E402
+
+CITY_CATALOG = os.path.join(ROOT, "scripts", "art", "city_catalog.gd")
+
+
+def gen_city_props():
+    for name, meta in gcity.PROPS.items():
+        frames = [R(gcity.prop_model(name, f)) for f in range(meta["frames"])]
+        crop_sheet("c_" + name, "city/props", [frames], name)
+
+
+def gen_city_buildings():
+    os.makedirs(os.path.join(OUT, "city", "buildings"), exist_ok=True)
+    data = {}
+    for name in gcity.BUILDINGS:
+        sheet, views = gcity.render_building(name)
+        Image.fromarray(sheet).save(os.path.join(OUT, "city", "buildings", name + ".png"), optimize=True)
+        data[name] = views
+        previews.append((name, sheet))
+        print("prédio:", name)
+    L = ["# GERADO por tools/gen_art.py (tools/gen_city.py) - não edite à mão.",
+         "class_name CityCatalog",
+         "extends RefCounted",
+         "## Kit urbano/rural gerado no padrão do FreeSample.",
+         "## DATA: prédios em 4 vistas, no mesmo formato de ArtCatalog (r, b, t, fp) + caminho do PNG.",
+         "## BUILDINGS: zona(s) e peso do sorteio. PROPS: objetos (folha c_<nome> no GenCatalog),",
+         "## grupo, raio de colisão em px (0 = sem colisão) e quadros.",
+         "",
+         "const DATA := {"]
+    for name, views in data.items():
+        L.append('\t"%s": {"path": "res://assets/art/generated/city/buildings/%s.png", "v": [' % (name, name))
+        for v in views:
+            L.append('\t\t{"r": [%d, %d, %d, %d], "b": [%d, %d], "t": [%d, %d], "fp": [%d, %d]},'
+                     % tuple(v["r"] + v["b"] + v["t"] + v["fp"]))
+        L.append("\t]},")
+    L.append("}")
+    L.append("")
+    L.append("const BUILDINGS := {")
+    for name, b in gcity.BUILDINGS.items():
+        L.append('\t"%s": {"zona": [%s], "peso": %d},' % (name, ", ".join('"%s"' % z for z in b["zona"]), b["peso"]))
+    L.append("}")
+    L.append("")
+    L.append("const PROPS := {")
+    for name, m in gcity.PROPS.items():
+        L.append('\t"%s": {"grupo": "%s", "raio": %d, "frames": %d},' % (name, m["grupo"], m["raio"], m["frames"]))
+    L.append("}")
+    with open(CITY_CATALOG, "w", encoding="utf-8") as f:
+        f.write("\n".join(L) + "\n")
 
 
 # ---------------------------------------------------------------- catálogo e prévia
@@ -385,6 +324,9 @@ def main():
         gen_structures()
     if only is None or "props" in only:
         gen_props()
+    if only is None or "city" in only:
+        gen_city_props()
+        gen_city_buildings()
     icon_cols = gen_icons() if only is None or "icons" in only else 8
     gv = gen_ground() if only is None or "ground" in only else 3
     if only is None:

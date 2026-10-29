@@ -207,7 +207,7 @@ func debug_command(cmd: String) -> void:
 				p.teleport(front + Vector2(0, 14))
 		"tproad":
 			# teleporta para um trecho de estrada longe das vilas (teste do mobiliário urbano)
-			var blocks: Array = world.road_blocks.keys()
+			var blocks: Array = world.road_cells.keys()
 			blocks.sort()
 			var n := int(arg) if arg != "" else 0
 			var count := 0

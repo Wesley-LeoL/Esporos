@@ -10,16 +10,30 @@ static var _textures := {}
 static var _regions := {}
 
 
+## Entrada do catálogo: pacote FreeSample (ArtCatalog) ou kit gerado (CityCatalog).
+static func entry(art: String) -> Dictionary:
+	if ArtCatalog.DATA.has(art):
+		return ArtCatalog.DATA[art]
+	return CityCatalog.DATA.get(art, {})
+
+
+static func _path(art: String) -> String:
+	var e := entry(art)
+	if e.has("path"):
+		return e["path"]
+	return "%s%s/%s.png" % [BASE, e["dir"], art]
+
+
 static func has(art: String) -> bool:
-	return ArtCatalog.DATA.has(art)
+	return ArtCatalog.DATA.has(art) or CityCatalog.DATA.has(art)
 
 
 static func variants(art: String) -> int:
-	return (ArtCatalog.DATA[art]["v"] as Array).size()
+	return (entry(art)["v"] as Array).size()
 
 
 static func footprint(art: String, v: int) -> Vector2i:
-	var fp: Array = ArtCatalog.DATA[art]["v"][v]["fp"]
+	var fp: Array = entry(art)["v"][v]["fp"]
 	return Vector2i(int(fp[0]), int(fp[1]))
 
 
@@ -27,10 +41,9 @@ static func region(art: String, v: int) -> AtlasTexture:
 	var key := "%s:%d" % [art, v]
 	if _regions.has(key):
 		return _regions[key]
-	var entry: Dictionary = ArtCatalog.DATA[art]
 	if not _textures.has(art):
-		_textures[art] = load("%s%s/%s.png" % [BASE, entry["dir"], art])
-	var r: Array = entry["v"][v]["r"]
+		_textures[art] = load(_path(art))
+	var r: Array = entry(art)["v"][v]["r"]
 	var at := AtlasTexture.new()
 	at.atlas = _textures[art]
 	at.region = Rect2(r[0], r[1], r[2] - r[0] + 1, r[3] - r[1] + 1)
@@ -42,7 +55,7 @@ static func region(art: String, v: int) -> AtlasTexture:
 ##  "bottom": vértice inferior da base (prédios)   "top": vértice superior (chão)
 ##  "base": centro da base, perto da borda inferior (props soltos)
 static func sprite(art: String, v: int, anchor: String) -> Sprite2D:
-	var info: Dictionary = ArtCatalog.DATA[art]["v"][v]
+	var info: Dictionary = entry(art)["v"][v]
 	var r: Array = info["r"]
 	var sp := Sprite2D.new()
 	sp.texture = region(art, v)
@@ -64,11 +77,10 @@ static func sprite(art: String, v: int, anchor: String) -> Sprite2D:
 ## personagem diante de qualquer trecho de um prédio comprido é desenhado na frente dele.
 ## O nó 'parent' deve ter y_sort_enabled e estar no centro da pegada (fp em células).
 static func add_building_strips(parent: Node2D, art: String, v: int, fp: Vector2i, strip: int = 20) -> void:
-	var info: Dictionary = ArtCatalog.DATA[art]["v"][v]
+	var info: Dictionary = entry(art)["v"][v]
 	var r: Array = info["r"]
-	var entry: Dictionary = ArtCatalog.DATA[art]
 	if not _textures.has(art):
-		_textures[art] = load("%s%s/%s.png" % [BASE, entry["dir"], art])
+		_textures[art] = load(_path(art))
 	var region := Rect2(int(r[0]), int(r[1]), int(r[2]) - int(r[0]) + 1, int(r[3]) - int(r[1]) + 1)
 	# centro da base dentro da região = vértice inferior - deslocamento centro->vértice inferior
 	var w := float(fp.x)

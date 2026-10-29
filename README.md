@@ -38,6 +38,7 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **12 habilidades por uso** (Luta, Pontaria, Atletismo, Furtividade, Mecânica, Eletrônica, Carpintaria, Metalurgia, Medicina, Cibernética, Agricultura, Culinária) e manuais; "parede de conhecimento" para construções e cirurgias.
 - **Estamina**: Shift corre; golpes cansam; fome e sobrecarga atrasam a recuperação.
 - **Perma-death com legado**: morte por infecção vira infectado de elite com inventário e implantes; morte física deixa cadáver que decompõe, atrai moscas/hordas e serve de baú.
+- **Mapa coerente**: cidade em grade no centro (ruas com faixas e calçadas, quarteirões de prédios, praças e estacionamentos), subúrbio com casas e quintais, distrito industrial, campo com fazendas, bosques e ruínas, rodovias e estradas de terra até as vilas, e o mar de esporos na borda.
 - **Mundo procedural por seed em chunks** (raio 150 tiles, 16 vilas): só os chunks perto dos jogadores existem como nós. Estradas, caravanas e **vilas vivas** com NPCs (comerciante, guardas, moradores), prosperidade, reputação, comércio e **pedidos de socorro** com prazo; vilas ignoradas caem e viram zonas mortas.
 - **Construção estilo The Sims** ([B], 3 abas): pisos nas células e paredes, janelas e portas nas bordas; Utilidades (bancada, mesa de reparos, geradores a combustão e eólico com mastro de 1 a 5 módulos, baterias, purificador, torre, selagem, coletor de chuva, canteiro, baú, cama) e Decoração (luzes e móveis).
 - **Rede de energia** por produção e consumo, com prioridade e baterias.
@@ -48,13 +49,13 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 `F1` ou `` ` `` abre o terminal (pausa o jogo). Digite `ajuda`. Comandos: `dar <item> [qtd]`, `dano <membro|todos> <n>`, `spawn [normal|elite] [n]`, `tp <x> <y>` (ou `abrigo`, `vila <n>`, `borda`, `cadaver`, `elite`), `set` (patogeno, sangue, calorias, agua, bateria, filtro, calor, estamina), `skill`, `curar`, `restaurar`, `implante`, `god`, `matar`, `infectar`, `limpar`, `pos`, `salvar`. Códigos prontos: `kit`, `kit_medico`, `kit_build`, `kit_cyber`. Tab completa, ↑↓ navega no histórico.
 
 ## Arte
-Pacote FreeSample (prédios, ruas, calçadas, anúncios) mais a arte gerada no mesmo estilo para personagens, construções, caixas, chão e ícones. Prédios noturnos do *Town Sampler* e objetos de rua do *Neon District* completam a cidade. A interface (HUD, menu, título, tela de morte) é pixel art ciberpunk gerada por `tools/gen_ui.py`, com a fonte Jersey 10 (OFL). Detalhes e como regerar em [`assets/art/README.md`](assets/art/README.md).
+O pacote FreeSample define o padrão visual ([`assets/art/STYLE.md`](assets/art/STYLE.md)). Todo o resto é gerado por código no mesmo padrão: personagens, construções, caixas, 17 prédios em 4 vistas, 44 objetos de cenário, 20 tipos de chão e os ícones. A prancha com todas as texturas fica em [`docs/texturas.png`](docs/texturas.png). A interface (HUD, menu, título, tela de morte) é pixel art ciberpunk gerada por `tools/gen_ui.py`, com a fonte Jersey 10 (OFL). Detalhes e como regerar em [`assets/art/README.md`](assets/art/README.md).
 
 ## Estrutura
 ```
 autoload/   input_setup.gd (ações) · net.gd (sessão co-op, ENet, replicação) · game.gd (mensagens, save, legado, debug)
 scripts/data/      db.gd (itens, implantes, construções) · items.gd (instâncias e listas de itens) · survivor_data.gd (toda a lógica de sobrevivência)
-scripts/world/     world.gd (mundo, spawn, vilas, construção, morte) · village_data.gd
+scripts/world/     world.gd (mundo, spawn, vilas, construção, morte) · map_gen.gd (cidade, subúrbio, campo) · village_data.gd
 scripts/entities/  structure · infected · npc · vehicle · corpse · loot_container · caravan · build_ghost · shot_fx
 scripts/player/    player.gd
 scripts/ui/        hud.gd (layout) · ui_theme.gd (cores, fonte, tema) · pixel_bar.gd · scan_overlay.gd · dev_console.gd
