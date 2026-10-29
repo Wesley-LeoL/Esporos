@@ -108,15 +108,21 @@ func _draw() -> void:
 		if known.has(World.chunk_of(c)):
 			var p := to_map(Vector2(c) + Vector2(0.5, 0.5))
 			draw_rect(Rect2(p - Vector2(cell_px, cell_px * 0.5) * 0.5, Vector2(cell_px, cell_px * 0.5)), Color("#5a6470"))
-	# prédios descobertos
-	if zoom >= 1.5:
-		for c: Vector2i in w.planned_buildings:
-			if known.has(World.chunk_of(c)) and not w.removed_cells.has(c):
-				var e: Dictionary = w.planned_buildings[c]
-				var fp: Vector2i = e["fp"]
-				var b := Vector2(c)
-				draw_colored_polygon(PackedVector2Array([to_map(b), to_map(b + Vector2(fp.x, 0)), to_map(b + Vector2(fp)),
-					to_map(b + Vector2(0, fp.y))]), Color("#34404c"))
+	# prédios descobertos (cor pelo estado do lugar)
+	for id in w.houses:
+		var hd: Dictionary = w.houses[id]
+		var hr: Rect2i = hd["rect"]
+		if not known.has(World.chunk_of(hr.position)):
+			continue
+		var hcol := Color("#4a5866")
+		if hd["estado"] == "abandonada":
+			hcol = Color("#5a4a40")
+		elif hd["estado"] == "esporos":
+			hcol = Color("#6a2c58")
+		var b := Vector2(hr.position)
+		var fp := Vector2(hr.size)
+		draw_colored_polygon(PackedVector2Array([to_map(b), to_map(b + Vector2(fp.x, 0)), to_map(b + fp),
+			to_map(b + Vector2(0, fp.y))]), hcol)
 	# caixas (cor pelo tipo; apagadas se já vazias)
 	if zoom >= 2.0:
 		for cd in w.container_data:

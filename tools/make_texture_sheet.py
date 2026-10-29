@@ -139,22 +139,26 @@ def main():
         for v in range(gen_ground.VARIANTS):
             ground.append(("%s %d" % (t.lower(), v + 1), atlas.crop((i * 80, v * 40, i * 80 + 80, v * 40 + 40))))
     sh.section("2. Chão (20 tipos x 3 variações)", ground)
-    # prédios
-    bld = []
-    for p in sorted(glob.glob(os.path.join(ART, "generated", "city", "buildings", "*.png"))):
-        name = os.path.splitext(os.path.basename(p))[0]
-        v = views(p)
-        bld.append((name, v[0]))
-        if len(v) > 1:
-            bld.append((name + " (girado)", v[1]))
-    sh.section("3. Prédios gerados (4 vistas cada; 2 mostradas)", bld, scale=1)
+    # prédios exploráveis: paredes (cheia e baixa) e telhados
+    walls = []
+    for name in sorted(cat):
+        if name.startswith("w_"):
+            fr = frames(os.path.join(ROOT, cat[name]["path"].replace("res://", "")), cat[name]["fw"], cat[name]["fh"])
+            walls.append((name[2:], fr[0]))
+            if len(fr) > 1:
+                walls.append(("(baixa)", fr[1]))
+    sh.section("3. Paredes dos prédios (material x variação; inteira e baixa, do corte do The Sims)", walls)
+    roofs = []
+    for p in sorted(glob.glob(os.path.join(ART, "generated", "town", "roofs", "*_4x3.png"))):
+        roofs.append((os.path.splitext(os.path.basename(p))[0], trim(Image.open(p).convert("RGBA"))))
+    sh.section("4. Telhados (um tamanho de cada estilo; há de 3x3 a 8x7)", roofs, scale=1)
     # objetos de cenário
     props = []
     for name in sorted(cat):
         if name.startswith("c_"):
             for k, f in enumerate(frames(os.path.join(ROOT, cat[name]["path"].replace("res://", "")), cat[name]["fw"], cat[name]["fh"])):
                 props.append((name[2:] + ("" if k == 0 else " %d" % (k + 1)), f))
-    sh.section("4. Objetos de cenário (rua, vila, indústria, abrigo, campo, esporos)", props)
+    sh.section("5. Objetos de cenário e móveis (rua, vila, indústria, abrigo, campo, esporos)", props)
     # construções do jogador
     cons = []
     for name in sorted(cat):
@@ -163,7 +167,7 @@ def main():
             fr = frames(os.path.join(ROOT, s["path"].replace("res://", "")), s["fw"], s["fh"])
             for k, f in enumerate(fr[:5]):
                 cons.append((name + ("" if k == 0 else " %d" % (k + 1)), f))
-    sh.section("5. Construções do jogador (paredes de borda, utilidades, decoração)", cons)
+    sh.section("6. Construções do jogador (paredes de borda, utilidades, decoração)", cons)
     # personagens, caixas e veículos
     chars = []
     for name in sorted(cat):
@@ -174,7 +178,7 @@ def main():
             fr = frames(os.path.join(ROOT, s["path"].replace("res://", "")), s["fw"], s["fh"])
             for k, f in enumerate(fr[:4]):
                 chars.append((name + ("" if k == 0 else " %d" % (k + 1)), f))
-    sh.section("6. Personagens, caixas de saque e veículos", chars)
+    sh.section("7. Personagens, caixas de saque e veículos", chars)
     # ícones
     icons = Image.open(os.path.join(ART, "generated", "ui", "icons.png")).convert("RGBA")
     ic = []
@@ -185,7 +189,7 @@ def main():
             if f.getbbox():
                 ic.append(("", f))
                 n += 1
-    sh.section("7. Ícones dos itens", ic)
+    sh.section("8. Ícones dos itens", ic)
     sh.save(out)
 
 

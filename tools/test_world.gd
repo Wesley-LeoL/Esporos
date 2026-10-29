@@ -48,6 +48,21 @@ func _ready() -> void:
 	check(vd.infested, "pedido ignorado com infestação alta derruba a vila")
 	check(VillageData.item_category("feijao") == "comida" and VillageData.item_category("fios") == "eletronico"
 		and VillageData.item_category("pregos") == "", "categorias de entrega")
+	# cidades pequenas e aldeias com prédios exploráveis
+	var towns := 0
+	for pl in w1.places:
+		if pl["tipo"] == "cidade":
+			towns += 1
+	check(towns >= 4 and towns <= 7, "cidades pequenas (%d), sem metrópole" % towns)
+	var states := {}
+	for pl in w1.places:
+		states[pl["estado"]] = true
+	check(states.has("viva") and states.has("abandonada") and states.has("esporos"), "lugares vivos, abandonados e tomados por esporos")
+	var doors := {}
+	for k in w1.map_walls:
+		if String(w1.map_walls[k]["kind"]).ends_with("_porta"):
+			doors[int(w1.map_walls[k]["h"])] = true
+	check(w1.houses.size() > 60 and doors.size() == w1.houses.size(), "%d prédios exploráveis, todos com porta" % w1.houses.size())
 	w1.free()
 	w2.free()
 

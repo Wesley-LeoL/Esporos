@@ -28,7 +28,7 @@ const N_VILLAGES := 16
 
 ## Tipos de chão (colunas do atlas gerado; os índices vão para os saves).
 enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA, PISO_MADEIRA, PISO_CONCRETO,
-	GRAMA, GRAMA_SECA, CALCADA, FAIXA_X, FAIXA_Y, TERRA_BATIDA, ZEBRA_X, ZEBRA_Y, LAVOURA, GRAMA_ESPOROS }
+	GRAMA, GRAMA_SECA, CALCADA, FAIXA_X, FAIXA_Y, TERRA_BATIDA, ZEBRA_X, ZEBRA_Y, LAVOURA, GRAMA_ESPOROS, AZULEJO, CARPETE }
 
 ## Clima: [peso do sorteio, vento mínimo, vento máximo].
 const WEATHERS := {"limpo": [35, 0.15, 0.4], "nublado": [25, 0.3, 0.6], "chuva": [20, 0.4, 0.7],
@@ -110,8 +110,19 @@ var vehicle_spots: Array = []
 var terrain_deltas := {}
 var removed_cells := {}
 var road_cells := {}
-## Zona de cada superquarteirão de 24x24 (MapGen): centro, suburbio, industria ou campo.
-var sb_zone := {}
+## Lugares do mapa (MapGen): [{"cell", "tipo" cidade/aldeia, "estado" viva/abandonada/esporos,
+## "r" raio, "nome", "vid" vila viva ou -1}].
+var places: Array = []
+## Lugares tomados por esporos: [centro (Vector2), raio] (o ar fica pesado neles).
+var dead_zones: Array = []
+## Prédios exploráveis: id -> {"rect": Rect2i, "roof", "tipo", "estado"}; célula -> id.
+var houses := {}
+var house_cells := {}
+## Paredes dos prédios do mapa: Vector3i(x, y, d) -> {"kind", "open"}, e as chaves por chunk.
+var map_walls := {}
+var map_walls_by_chunk := {}
+## Prédios abertos agora (jogador local dentro ou logo atrás): id -> true.
+var house_open := {}
 ## Chão planejado que foge da regra da zona (praças, parques, lavouras, estacionamentos).
 var ground_cells := {}
 ## Lavouras: livres para andar, mas nada é posto em cima.
@@ -160,13 +171,7 @@ func generate(new_seed: int) -> void:
 	add_child(ghost)
 	canvas_mod = CanvasModulate.new()
 	add_child(canvas_mod)
-	var mg := MapGen.new(self)
-	mg.assign_zones()
-	mg.carve_grid()
-	mg.place_villages()
-	mg.connect_villages()
-	mg.decorate_villages()
-	mg.fill()
+	MapGen.new(self).generate()
 
 
 func _build_tileset() -> TileSet:
@@ -203,35 +208,43 @@ func _terrain(c: Vector2i) -> int:
 	var t: int
 	if ground_cells.has(c):
 		t = int(ground_cells[c])
+		if t != T.GRAMA and t != T.GRAMA_SECA:
+			return t
+	elif is_sidewalk(c):
+		return T.CALCADA
 	else:
 		var n := noise.get_noise_2d(c.x, c.y)
-		match MapGen.zone_at(self, c):
-			"centro":
-				t = T.CALCADA if is_sidewalk(c) else (T.CONC_A if noise.get_noise_2d(c.x * 3.1 + 40.0, c.y * 3.1) < 0.1 else T.CONC_B)
-			"suburbio":
-				t = T.CALCADA if is_sidewalk(c) else (T.GRAMA_SECA if n > 0.3 else T.GRAMA)
-			"industria":
-				t = T.CALCADA if is_sidewalk(c) else (T.MANCHA if n > 0.15 else T.CONC_B)
-			_:
-				t = T.GRAMA
-				if n > 0.34:
-					t = T.TERRA
-				elif n > 0.24 or n < -0.25:
-					t = T.GRAMA_SECA
-	if t in [T.CALCADA, T.VILA, T.LAVOURA]:
-		return t
+		t = T.GRAMA
+		if n > 0.34:
+			t = T.TERRA
+		elif n > 0.24 or n < -0.25:
+			t = T.GRAMA_SECA
+	for dz in dead_zones:
+		var dd := Vector2(c).distance_to(dz[0])
+		var k := spore_noise.get_noise_2d(c.x * 2.3, c.y * 2.3) * 3.0
+		if dd < float(dz[1]) + k:
+			return T.ESPOROS
+		if dd < float(dz[1]) + 4.0 + k:
+			return T.GRAMA_ESPOROS
 	var edge := smoothstep(RADIUS * 0.55, RADIUS, d)
 	var sn := spore_noise.get_noise_2d(c.x * 1.7, c.y * 1.7) * 0.5 + 0.5
 	if d > RADIUS - 1.5 or sn < edge * 0.9:
 		return T.ESPOROS
-	if sn < edge * 0.9 + 0.1 and t in [T.GRAMA, T.GRAMA_SECA, T.TERRA]:
+	if sn < edge * 0.9 + 0.1:
 		return T.GRAMA_ESPOROS
 	return t
 
 
-## Calçada: célula fora da pista encostada numa rua asfaltada (nas zonas urbanas).
+## Calçada: célula fora da pista encostada numa rua asfaltada, dentro de uma cidade.
 func is_sidewalk(c: Vector2i) -> bool:
-	if road_cells.has(c) or not MapGen.zone_at(self, c) in MapGen.URBAN:
+	if road_cells.has(c) or house_cells.has(c):
+		return false
+	var in_town := false
+	for pl in places:
+		if pl["tipo"] == "cidade" and Vector2(c - pl["cell"]).length() <= float(pl["r"]) + 1.5:
+			in_town = true
+			break
+	if not in_town:
 		return false
 	for dx in [-1, 0, 1]:
 		for dy in [-1, 0, 1]:
@@ -294,6 +307,22 @@ func _make_building(e: Dictionary) -> Structure:
 	return s
 
 
+## Prédio explorável: só o telhado vira nó (o resto é chão, paredes e objetos).
+func _make_house(id: int) -> House:
+	var hd: Dictionary = houses[id]
+	var h := House.new()
+	h.id = id
+	h.rect = hd["rect"]
+	h.roof = hd["roof"]
+	h.world = self
+	var w := float(h.rect.size.x)
+	var d := float(h.rect.size.y)
+	var top := ground.map_to_local(h.rect.position) + Vector2(0, -HALF_H)
+	h.position = top + Vector2(HALF_W * 0.5 * (w - d), HALF_H * 0.5 * (w + d))
+	entities.add_child(h)
+	return h
+
+
 func _add_prop(art: String, v: int, c: Vector2i, source := "gen") -> void:
 	_plan_add(c, {"t": "p", "art": art, "v": v, "cell": c, "source": source})
 	occupied[c] = true
@@ -329,7 +358,8 @@ func _build_shelter(v: VillageData) -> void:
 
 
 func _free_cell(c: Vector2i) -> bool:
-	return not occupied.has(c) and not road_cells.has(c) and not field_cells.has(c) and Vector2(c).length() < RADIUS - 3.0
+	return not occupied.has(c) and not road_cells.has(c) and not field_cells.has(c) and not house_cells.has(c) \
+		and Vector2(c).length() < RADIUS - 3.0
 
 
 ## Nó de uma construção (dados em 'built').
@@ -373,12 +403,15 @@ func edge_pos(k: Vector3i) -> Vector2:
 	return ground.map_to_local(Vector2i(k.x, k.y)) + WallEdge.edge_offset(k.z)
 
 
-func _make_wall(k: Vector3i) -> WallEdge:
+func _make_wall(k: Vector3i, from_map := false) -> WallEdge:
+	var src: Dictionary = map_walls[k] if from_map else walls[k]
 	var w := WallEdge.new()
-	w.kind = str(walls[k]["kind"])
+	w.kind = str(src["kind"])
+	w.map = from_map
+	w.house_id = int(src.get("h", -1))
 	w.cell = Vector2i(k.x, k.y)
 	w.dir = k.z
-	w.open = bool(walls[k].get("open", false))
+	w.open = bool(src.get("open", false))
 	w.world = self
 	w.position = edge_pos(k)
 	entities.add_child(w)
@@ -538,6 +571,8 @@ func _load_chunk(ch: Vector2i) -> void:
 			"b":
 				if not removed_cells.has(e["cell"]):
 					nodes.append(_make_building(e))
+			"h":
+				nodes.append(_make_house(int(e["id"])))
 			"p":
 				nodes.append(_make_prop(e))
 			"c":
@@ -564,6 +599,9 @@ func _load_chunk(ch: Vector2i) -> void:
 	for k: Vector3i in walls:
 		if chunk_of(Vector2i(k.x, k.y)) == ch:
 			nodes.append(_make_wall(k))
+	for k: Vector3i in map_walls_by_chunk.get(ch, []):
+		if not wall_nodes.has(k):
+			nodes.append(_make_wall(k, true))
 	loaded[ch] = {"nodes": nodes, "art": holder}
 
 
@@ -584,6 +622,8 @@ func _unload_chunk(ch: Vector2i) -> void:
 			var we := node as WallEdge
 			if walls.has(we.key()):
 				walls[we.key()]["open"] = we.open
+			elif map_walls.has(we.key()):
+				map_walls[we.key()]["open"] = we.open
 			wall_nodes.erase(we.key())
 		if node is LootContainer:
 			var lc := node as LootContainer
@@ -625,6 +665,11 @@ func spore_at(world_pos: Vector2) -> float:
 		"neblina":
 			s += 0.12
 	s += spore_noise.get_noise_2d(tp.x * 0.6, tp.y * 0.6) * 0.04
+	# lugares tomados por esporos
+	for dz in dead_zones:
+		var dd := tp.distance_to(dz[0])
+		if dd < float(dz[1]) + 6.0:
+			s += 0.75 * (1.0 - smoothstep(float(dz[1]) * 0.6, float(dz[1]) + 6.0, dd))
 	# vilas que caíram viram zonas mortas tomadas por esporos
 	for v in villages:
 		if v.infested:
@@ -1115,6 +1160,8 @@ func _structure_state(x: int, y: int, fuel: float, open: bool, extra: Dictionary
 func wall_changed(w: WallEdge) -> void:
 	if walls.has(w.key()):
 		walls[w.key()]["open"] = w.open
+	elif map_walls.has(w.key()):
+		map_walls[w.key()]["open"] = w.open
 	_wall_state.rpc(w.cell.x, w.cell.y, w.dir, w.open)
 
 
@@ -1123,6 +1170,8 @@ func _wall_state(x: int, y: int, d: int, open: bool) -> void:
 	var k := Vector3i(x, y, d)
 	if walls.has(k):
 		walls[k]["open"] = open
+	elif map_walls.has(k):
+		map_walls[k]["open"] = open
 	var w: WallEdge = wall_nodes.get(k)
 	if w != null:
 		w.set_open(open)
@@ -1181,7 +1230,7 @@ func can_place_at(kind: String, c: Vector2i, p: Player = null, d := -1) -> bool:
 		if d < 0:
 			return false
 		var k := Vector3i(c.x, c.y, d)
-		if walls.has(k):
+		if walls.has(k) or map_walls.has(k):
 			return false
 		var other := c + (Vector2i(1, 0) if d == 0 else Vector2i(0, 1))
 		if building_cells.has(c) or building_cells.has(other):
@@ -1287,6 +1336,9 @@ func _track(c: Vector2i, node: Node) -> void:
 func try_demolish(c: Vector2i, p: Player, d := -1) -> bool:
 	if d >= 0:
 		var k := Vector3i(c.x, c.y, d)
+		if map_walls.has(k):
+			Game.tell(p.peer, "Paredes dos prédios do mapa não dá para desmontar.")
+			return false
 		if not walls.has(k):
 			return false
 		if not _in_reach(p, edge_pos(k)):
@@ -2254,8 +2306,13 @@ func world_deltas() -> Dictionary:
 	for k: Vector3i in walls:
 		var wn: WallEdge = wall_nodes.get(k)
 		wl.append([k.x, k.y, k.z, walls[k]["kind"], wn.open if wn != null else bool(walls[k].get("open", false))])
+	var doors: Array = []
+	for k2: Vector3i in map_walls:
+		var wn2: WallEdge = wall_nodes.get(k2)
+		if (wn2.open if wn2 != null else bool(map_walls[k2].get("open", false))):
+			doors.append([k2.x, k2.y, k2.z])
 	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
-		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "weather": weather.duplicate(),
+		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "map_doors": doors, "weather": weather.duplicate(),
 		"weather_until": _weather_until}
 
 
@@ -2327,6 +2384,15 @@ func apply_deltas(save: Dictionary) -> void:
 	for wd in save.get("walls", []):
 		if DB.BUILDS.has(str(wd[3])) and is_edge_kind(str(wd[3])):
 			walls[Vector3i(int(wd[0]), int(wd[1]), int(wd[2]))] = {"kind": str(wd[3]), "open": bool(wd[4])}
+	for k3 in map_walls:
+		map_walls[k3]["open"] = false
+	for dd in save.get("map_doors", []):
+		var kd := Vector3i(int(dd[0]), int(dd[1]), int(dd[2]))
+		if map_walls.has(kd):
+			map_walls[kd]["open"] = true
+			var wn3: WallEdge = wall_nodes.get(kd)
+			if wn3 != null:
+				wn3.set_open(true)
 	if save.has("weather"):
 		weather = save["weather"]
 		_weather_until = float(save.get("weather_until", _weather_until))

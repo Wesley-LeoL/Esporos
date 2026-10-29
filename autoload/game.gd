@@ -180,6 +180,25 @@ func debug_command(cmd: String) -> void:
 			var base := world.ground.local_to_map(world.ground.to_local(p.position))
 			var target := base + Vector2i(int(a[1]), int(a[2]))
 			p.act("build", [a[0], target.x, target.y, int(a[3]) if a.size() > 3 else -1])
+		"tpplace":
+			# vai ao lugar n do tipo/estado pedido: tpplace:esporos,0 · tpplace:abandonada,1 · tpplace:aldeia,0
+			var found := 0
+			for pl in world.places:
+				if pl["estado"] == a[0] or pl["tipo"] == a[0]:
+					if found == int(a[1]):
+						p.teleport(world.ground.map_to_local(pl["cell"] + Vector2i(2, 2)))
+						break
+					found += 1
+		"tphouse":
+			# entra no prédio n mais perto (n = 0, 1, ...); "out" = para fora, na frente da porta
+			var hl: Array = world.houses.keys()
+			var pc := world.tile_pos(p.position)
+			hl.sort_custom(func(ia, ib): return Vector2(world.houses[ia]["rect"].get_center()).distance_to(pc) < Vector2(world.houses[ib]["rect"].get_center()).distance_to(pc))
+			var hr: Rect2i = world.houses[hl[int(a[0])]]["rect"]
+			var cc := hr.get_center()
+			if a.size() > 1:
+				cc = Vector2i(hr.end.x + 1, hr.end.y + 1)
+			p.teleport(world.ground.map_to_local(cc))
 		"demo":
 			var base2 := world.ground.local_to_map(world.ground.to_local(p.position))
 			var t2 := base2 + Vector2i(int(a[0]), int(a[1]))

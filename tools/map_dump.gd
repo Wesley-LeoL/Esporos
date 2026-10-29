@@ -7,6 +7,7 @@ const COLORS := {
 	5: Color("#616b8c"), 6: Color("#2d2f32"), 7: Color("#8e7c98"), 8: Color("#8e6a52"), 9: Color("#575772"),
 	10: Color("#3e5a30"), 11: Color("#6e6f3a"), 12: Color("#8b89a3"), 13: Color("#2a2e39"), 14: Color("#2a2e39"),
 	15: Color("#7b5e5a"), 16: Color("#3a3e49"), 17: Color("#3a3e49"), 18: Color("#4a3a30"), 19: Color("#4a5a3a"),
+	20: Color("#9898a3"), 21: Color("#5a1a22"),
 }
 
 
@@ -28,6 +29,12 @@ func _ready() -> void:
 			var t := w._terrain(Vector2i(x, y))
 			if t >= 0:
 				img.set_pixel(x + R, y + R, COLORS.get(t, Color.MAGENTA))
+	for id in w.houses:
+		var hr: Rect2i = w.houses[id]["rect"]
+		var hc: Color = {"viva": Color("#c9a0ff"), "abandonada": Color("#a08060"), "esporos": Color("#e070c0")}[w.houses[id]["estado"]]
+		for i in hr.size.x:
+			for j in hr.size.y:
+				img.set_pixel(hr.position.x + i + R, hr.position.y + j + R, hc.darkened(0.25 if i == 0 or j == 0 or i == hr.size.x - 1 or j == hr.size.y - 1 else 0.0))
 	for c: Vector2i in w.planned_buildings:
 		var e: Dictionary = w.planned_buildings[c]
 		var fp: Vector2i = e["fp"]

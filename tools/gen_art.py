@@ -130,11 +130,17 @@ def gen_props():
     crop_sheet("canteiro", "structures", [[R(am.planter(st)) for st in range(5)]], "canteiro (vazio..murcho)")
     crop_sheet("fogareiro", "structures", [[R(am.stove(True)), R(am.stove(False))]], "fogareiro")
     # paredes de borda: linha 0 = borda x+ (entre a célula e a vizinha x+1), linha 1 = borda y+
-    for name in ("parede_madeira", "parede_metal", "meia_parede", "janela"):
-        crop_sheet(name, "structures", [[R(am.edge_wall(name, d))] for d in (0, 1)], name + " (bordas)")
-    for name in ("porta", "portao"):
-        crop_sheet(name, "structures", [[R(am.edge_wall(name, d, False)), R(am.edge_wall(name, d, True))] for d in (0, 1)],
-                   name + " (bordas, fechada/aberta)")
+    # colunas: [cheia, baixa] (+ [aberta, aberta baixa] nas portas); a baixa é o corte do The Sims
+    for name in ("parede_madeira", "parede_metal", "meia_parede", "janela", "porta", "portao"):
+        rows = []
+        for d in (0, 1):
+            full = am.edge_wall(name, d, False)
+            row = [R(full), R(gtown.clip_parts(full, gtown.LOW_H))]
+            if name in ("porta", "portao"):
+                op = am.edge_wall(name, d, True)
+                row += [R(op), R(gtown.clip_parts(op, gtown.LOW_H))]
+            rows.append(row)
+        crop_sheet(name, "structures", rows, name + " (bordas)")
     crop_sheet("eolico", "structures", [[R(am.wind_turbine(h)) for h in range(1, 6)]], "eólico (1 a 5 módulos)")
     for name, on_off in (("bancada", False), ("mesa_reparo", False), ("bateria_casa", True), ("coletor", True),
                          ("cama", False), ("luminaria", True), ("poste", True), ("letreiro", True), ("mesa", False),
@@ -208,52 +214,64 @@ def gen_ground():
     return gg.VARIANTS
 
 
-# ---------------------------------------------------------------- kit urbano (gen_city)
+# ---------------------------------------------------------------- cidades: objetos, móveis, paredes e telhados
 import gen_city as gcity  # noqa: E402
+import gen_town as gtown  # noqa: E402
 
 CITY_CATALOG = os.path.join(ROOT, "scripts", "art", "city_catalog.gd")
+HOME_FURNITURE = ["cama", "mesa", "cadeira", "sofa", "estante", "tapete", "vaso"]
 
 
 def gen_city_props():
     for name, meta in gcity.PROPS.items():
         frames = [R(gcity.prop_model(name, f)) for f in range(meta["frames"])]
         crop_sheet("c_" + name, "city/props", [frames], name)
+    for name, meta in gtown.FURNITURE.items():
+        crop_sheet("c_" + name, "city/props", [[R(gtown.furniture_model(name, f)) for f in range(meta["frames"])]], name)
+    for name in HOME_FURNITURE:
+        crop_sheet("c_" + name, "city/props", [[R(am.object_model(name, True))]], name)
 
 
-def gen_city_buildings():
-    os.makedirs(os.path.join(OUT, "city", "buildings"), exist_ok=True)
-    data = {}
-    for name in gcity.BUILDINGS:
-        sheet, views = gcity.render_building(name)
-        Image.fromarray(sheet).save(os.path.join(OUT, "city", "buildings", name + ".png"), optimize=True)
-        data[name] = views
-        previews.append((name, sheet))
-        print("prédio:", name)
-    L = ["# GERADO por tools/gen_art.py (tools/gen_city.py) - não edite à mão.",
+def gen_town():
+    for mat in gtown.MATERIALS:
+        for var in gtown.VARIANTS:
+            crop_sheet("w_%s_%s" % (mat, var), "town/walls", gtown.wall_sheet_rows(mat, var, R), "%s %s" % (mat, var))
+    os.makedirs(os.path.join(OUT, "town", "roofs"), exist_ok=True)
+    roofs = {}
+    for st in gtown.ROOF_STYLES:
+        for (w, d) in gtown.ROOF_SIZES:
+            img, (bx, by) = gtown.render_roof(st, w, d)
+            key = "%s_%dx%d" % (st, w, d)
+            Image.fromarray(img).save(os.path.join(OUT, "town", "roofs", key + ".png"), optimize=True)
+            roofs[key] = (img.shape[1], img.shape[0], bx, by)
+        print("telhados:", st)
+    L = ["# GERADO por tools/gen_art.py (tools/gen_city.py, tools/gen_town.py) - não edite à mão.",
          "class_name CityCatalog",
          "extends RefCounted",
-         "## Kit urbano/rural gerado no padrão do FreeSample.",
-         "## DATA: prédios em 4 vistas, no mesmo formato de ArtCatalog (r, b, t, fp) + caminho do PNG.",
-         "## BUILDINGS: zona(s) e peso do sorteio. PROPS: objetos (folha c_<nome> no GenCatalog),",
-         "## grupo, raio de colisão em px (0 = sem colisão) e quadros.",
+         "## Arte das cidades no padrão do FreeSample (ver assets/art/STYLE.md).",
+         "## PROPS: objetos e móveis (folha c_<nome> no GenCatalog): grupo, raio de colisão em px",
+         "## (0 = sem colisão) e quadros. WALLS: materiais e variações das paredes de prédio (folha",
+         "## w_<material>_<variação>; colunas cheia, baixa, aberta, aberta baixa). ROOFS: telhados",
+         "## <estilo>_<w>x<d> com tamanho [w, h] e o vértice inferior da pegada [bx, by] no PNG.",
          "",
-         "const DATA := {"]
-    for name, views in data.items():
-        L.append('\t"%s": {"path": "res://assets/art/generated/city/buildings/%s.png", "v": [' % (name, name))
-        for v in views:
-            L.append('\t\t{"r": [%d, %d, %d, %d], "b": [%d, %d], "t": [%d, %d], "fp": [%d, %d]},'
-                     % tuple(v["r"] + v["b"] + v["t"] + v["fp"]))
-        L.append("\t]},")
-    L.append("}")
-    L.append("")
-    L.append("const BUILDINGS := {")
-    for name, b in gcity.BUILDINGS.items():
-        L.append('\t"%s": {"zona": [%s], "peso": %d},' % (name, ", ".join('"%s"' % z for z in b["zona"]), b["peso"]))
-    L.append("}")
-    L.append("")
-    L.append("const PROPS := {")
+         "const DATA := {}",
+         "",
+         "const PROPS := {"]
     for name, m in gcity.PROPS.items():
         L.append('\t"%s": {"grupo": "%s", "raio": %d, "frames": %d},' % (name, m["grupo"], m["raio"], m["frames"]))
+    for name, m in gtown.FURNITURE.items():
+        L.append('\t"%s": {"grupo": "interior", "raio": %d, "frames": %d},' % (name, m["raio"], m["frames"]))
+    radii = {"cama": 12, "mesa": 10, "cadeira": 0, "sofa": 12, "estante": 10, "tapete": 0, "vaso": 6}
+    for name in HOME_FURNITURE:
+        L.append('\t"%s": {"grupo": "interior", "raio": %d, "frames": 1},' % (name, radii[name]))
+    L.append("}")
+    L.append("")
+    L.append("const WALL_MATERIALS := [%s]" % ", ".join('"%s"' % m for m in gtown.MATERIALS))
+    L.append("const WALL_VARIANTS := [%s]" % ", ".join('"%s"' % v for v in gtown.VARIANTS))
+    L.append("const ROOF_STYLES := [%s]" % ", ".join('"%s"' % v for v in gtown.ROOF_STYLES))
+    L.append("const ROOFS := {")
+    for k, (w, h, bx, by) in roofs.items():
+        L.append('\t"%s": [%d, %d, %d, %d],' % (k, w, h, bx, by))
     L.append("}")
     with open(CITY_CATALOG, "w", encoding="utf-8") as f:
         f.write("\n".join(L) + "\n")
@@ -326,7 +344,7 @@ def main():
         gen_props()
     if only is None or "city" in only:
         gen_city_props()
-        gen_city_buildings()
+        gen_town()
     icon_cols = gen_icons() if only is None or "icons" in only else 8
     gv = gen_ground() if only is None or "ground" in only else 3
     if only is None:

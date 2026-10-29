@@ -94,7 +94,7 @@ static func add_building_strips(parent: Node2D, art: String, v: int, fp: Vector2
 ## que fica sobre o centro da pegada (a origem do nó). Devolve as faixas criadas (para
 ## animações que trocam a região, como as janelas acesas do Town Sampler).
 static func add_strips(parent: Node2D, tex: Texture2D, region: Rect2, center: Vector2, fp: Vector2i,
-		strip: int = 20) -> Array[Sprite2D]:
+		strip: int = 20, bias := 0.0) -> Array[Sprite2D]:
 	var w := float(fp.x)
 	var d := float(fp.y)
 	var hw := World.HALF_W * 0.5
@@ -111,6 +111,9 @@ static func add_strips(parent: Node2D, tex: Texture2D, region: Rect2, center: Ve
 		var xa := p0.x + x
 		var xb := xa + sw
 		var key := minf(_front_y(xa, left, bottom, right), _front_y(xb, left, bottom, right))
+		if bias > 0.0:
+			# telhados: depois de tudo o que está dentro da pegada (inclusive as paredes da frente)
+			key = maxf(_front_y(xa, left, bottom, right), _front_y(xb, left, bottom, right)) + bias
 		var sp := Sprite2D.new()
 		sp.texture = tex
 		sp.centered = false

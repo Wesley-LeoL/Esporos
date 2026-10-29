@@ -21,7 +21,7 @@ VARIANTS = 3
 # A ordem é o enum T de scripts/world/world.gd (os índices vão para os saves).
 GROUND_TYPES = ["CONC_A", "CONC_B", "ESPOROS", "ESTRADA", "TERRA", "PISO", "MANCHA", "VILA",
                 "PISO_MADEIRA", "PISO_CONCRETO", "GRAMA", "GRAMA_SECA", "CALCADA", "FAIXA_X", "FAIXA_Y",
-                "TERRA_BATIDA", "ZEBRA_X", "ZEBRA_Y", "LAVOURA", "GRAMA_ESPOROS"]
+                "TERRA_BATIDA", "ZEBRA_X", "ZEBRA_Y", "LAVOURA", "GRAMA_ESPOROS", "AZULEJO", "CARPETE"]
 
 
 def C(h):
@@ -203,6 +203,17 @@ def tile(kind, var):
         base[(V * 5) % 1 < 0.1] = R("wood", 1)
         stag = (((U * 2 + board * 0.5) % 1) < 0.03)
         base[stag] = R("wood", 1)
+    elif kind == "AZULEJO":
+        # piso de cerâmica: quadradinhos claros com rejunte, alguns trincados
+        base[:] = C("#9898a3")
+        alt = ((np.floor(U * 4) + np.floor(V * 4)) % 2) == 0
+        base[alt] = C("#8b89a3")
+        base[((U * 4) % 1 < 0.06) | ((V * 4) % 1 < 0.06)] = C("#68657c")
+        chips(base, rng, 1 + var, [C("#747e91")], size=((0.05, 0.08), (0.04, 0.07)), ell=False)
+    elif kind == "CARPETE":
+        base[:] = R("red", 1)
+        base[((U * 6) % 1 < 0.1) & ((V * 6) % 1 < 0.1)] = R("red", 2)
+        chips(base, rng, 2 + var, [R("red", 0)], size=((0.08, 0.16), (0.06, 0.12)), ell=False)
     img = np.zeros((TH, TW, 4), dtype=np.uint8)
     img[:, :, :3] = base
     img[:, :, 3] = np.where(INSIDE, 255, 0)

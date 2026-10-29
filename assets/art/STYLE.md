@@ -24,7 +24,7 @@ do pacote.
 
 **Solução:** os dois pacotes saíram do jogo (os arquivos estão em
 `assets/art/source/extras/`, ignorados pelo Godot). Tudo o que eles cobriam foi gerado de
-novo neste padrão: 17 prédios em 4 vistas, 44 objetos e 20 tipos de chão.
+novo neste padrão: objetos de cenário e chão. Os prédios agora são exploráveis, montados com paredes de borda, telhado e móveis (`tools/gen_town.py`).
 
 ## Regras
 
@@ -54,16 +54,18 @@ novo neste padrão: 17 prédios em 4 vistas, 44 objetos e 20 tipos de chão.
    - Um andar mede cerca de 59 px (1,2 unidade).
    - Uma porta tem cerca de 2 m.
    - Prédios ocupam células inteiras.
-9. **Vistas.** Prédios têm 4 vistas (rotações de 90°) lado a lado, como no pacote. Na vista
-   0 a porta fica na face +y. Objetos de uma célula têm uma vista, com quadros para
-   ligado/desligado ou variações.
+9. **Vistas.**
+   - Paredes ficam nas bordas das células: uma linha para cada direção de borda e as colunas
+     inteira, baixa (corte do The Sims, 0,2 de altura), aberta e aberta baixa.
+   - Telhados são uma imagem por tamanho de pegada, ancorada no vértice inferior.
+   - Objetos têm uma vista, com quadros para ligado/desligado ou variações.
 
 ## Onde fica cada coisa
 
 | Arte | Gerador | Saída |
 |---|---|---|
 | Chão (20 tipos x 3 variações) | `tools/gen_ground.py` | `generated/world/ground.png` |
-| Prédios da cidade, do subúrbio e do campo | `tools/gen_city.py` (`BUILDINGS`) | `generated/city/buildings/` + `scripts/art/city_catalog.gd` |
+| Paredes de prédio, telhados e móveis | `tools/gen_town.py` | `generated/town/walls/`, `generated/town/roofs/`, `generated/city/props/` + `scripts/art/city_catalog.gd` |
 | Objetos de cenário | `tools/gen_city.py` (`PROPS`) | `generated/city/props/` |
 | Personagens, construções, caixas, veículos e ícones | `tools/art_models.py` | `generated/characters/`, `structures/`, `props/`, `ui/` |
 
