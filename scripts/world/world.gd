@@ -47,10 +47,10 @@ const BUILDINGS: Array = [["BuildingBlock1", 15], ["BuildingBlock2", 15], ["Buil
 	["BuildingBlock19", 20], ["BuildingBlock24", 25], ["Building3", 5]]
 const PROPS: Array[String] = ["Advertising5", "Advertising6", "Advertising7", "SateliteDish2"]
 ## Versão do save: muda quando a geração do mundo muda (saves antigos não batem com o mapa).
-const SAVE_VERSION := 7
+const SAVE_VERSION := 8
 ## Versões de save que ainda carregam. Antes da 5 o mapa era outro (raio 64, sem chunks):
 ## desses saves só os sobreviventes e o legado são aproveitados (ver Game.read_save).
-const SAVE_COMPAT := [3, 4, 5, 6, 7]
+const SAVE_COMPAT := [3, 4, 5, 6, 7, 8]
 const VILLAGE_NAMES: Array[String] = ["Nova Esperança", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
 	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix", "Morro Azul",
 	"Forte Néon", "Cratera", "Porto Velho", "Colmeia", "Sétima Linha", "Refúgio Sul", "Barreira Leste"]
