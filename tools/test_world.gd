@@ -68,6 +68,23 @@ func _ready() -> void:
 		if v.infested or w1.in_safe_zone(w1.ground.map_to_local(v.cell)):
 			fenced += 1
 	check(fenced == w1.villages.size() and not w1.villages[0].safe, "todas as %d vilas cercadas (sem Abrigo Alfa)" % fenced)
+	# hordas simuladas longe dos jogadores: cerca melhor segura mais
+	var fallen := [0, 0]
+	for trial in 40:
+		for t2 in 2:
+			var vt := VillageData.new()
+			var rr := RandomNumberGenerator.new()
+			rr.seed = trial * 7 + 1
+			vt.setup(0, "Teste", Vector2i(60, 0), false, rr)
+			vt.wall_tier = 1 if t2 == 0 else 3
+			vt.prosperity = 30.0 if t2 == 0 else 80.0
+			vt.stock["comida"] = 999.0
+			for st in 400:
+				vt.step(rr, 0.6, false)
+				if vt.infested:
+					fallen[t2] += 1
+					break
+	check(fallen[1] < fallen[0], "cerca de nível 3 resiste mais às hordas (caíram %d x %d)" % [fallen[0], fallen[1]])
 	var gates := 0
 	for k in w1.map_walls:
 		if w1.map_walls[k]["kind"] == "w_muro_porta":

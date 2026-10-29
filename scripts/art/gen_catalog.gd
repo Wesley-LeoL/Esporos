@@ -5,6 +5,7 @@ extends RefCounted
 ## fica o pé / centro da célula (a origem do nó), cols/rows = quadros por linha/linhas.
 
 const SHEETS := {
+	"armadilha": {"path": "res://assets/art/generated/structures/armadilha.png", "fw": 60, "fh": 34, "ox": 30, "oy": 19, "cols": 1, "rows": 1},
 	"bancada": {"path": "res://assets/art/generated/structures/bancada.png", "fw": 56, "fh": 66, "ox": 28, "oy": 53, "cols": 1, "rows": 1},
 	"bateria_casa": {"path": "res://assets/art/generated/structures/bateria_casa.png", "fw": 40, "fh": 57, "ox": 20, "oy": 47, "cols": 2, "rows": 1},
 	"c_antena": {"path": "res://assets/art/generated/city/props/c_antena.png", "fw": 28, "fh": 99, "ox": 14, "oy": 92, "cols": 1, "rows": 1},
@@ -129,7 +130,11 @@ const SHEETS := {
 	"w_madeira_porta": {"path": "res://assets/art/generated/town/walls/w_madeira_porta.png", "fw": 76, "fh": 71, "ox": 38, "oy": 59, "cols": 4, "rows": 2},
 	"w_madeira_quebrada": {"path": "res://assets/art/generated/town/walls/w_madeira_quebrada.png", "fw": 46, "fh": 46, "ox": 23, "oy": 34, "cols": 2, "rows": 2},
 	"w_madeira_vitrine": {"path": "res://assets/art/generated/town/walls/w_madeira_vitrine.png", "fw": 46, "fh": 71, "ox": 23, "oy": 59, "cols": 2, "rows": 2},
-	"w_muro_parede": {"path": "res://assets/art/generated/town/walls/w_muro_parede.png", "fw": 46, "fh": 77, "ox": 23, "oy": 65, "cols": 2, "rows": 2},
+	"w_muro2_parede": {"path": "res://assets/art/generated/town/walls/w_muro2_parede.png", "fw": 48, "fh": 78, "ox": 24, "oy": 66, "cols": 2, "rows": 2},
+	"w_muro2_porta": {"path": "res://assets/art/generated/town/walls/w_muro2_porta.png", "fw": 94, "fh": 78, "ox": 47, "oy": 66, "cols": 4, "rows": 2},
+	"w_muro3_parede": {"path": "res://assets/art/generated/town/walls/w_muro3_parede.png", "fw": 48, "fh": 86, "ox": 24, "oy": 74, "cols": 2, "rows": 2},
+	"w_muro3_porta": {"path": "res://assets/art/generated/town/walls/w_muro3_porta.png", "fw": 94, "fh": 82, "ox": 47, "oy": 70, "cols": 4, "rows": 2},
+	"w_muro_parede": {"path": "res://assets/art/generated/town/walls/w_muro_parede.png", "fw": 48, "fh": 77, "ox": 24, "oy": 65, "cols": 2, "rows": 2},
 	"w_muro_porta": {"path": "res://assets/art/generated/town/walls/w_muro_porta.png", "fw": 94, "fh": 77, "ox": 47, "oy": 65, "cols": 4, "rows": 2},
 	"w_reboco_esporos": {"path": "res://assets/art/generated/town/walls/w_reboco_esporos.png", "fw": 48, "fh": 70, "ox": 24, "oy": 58, "cols": 2, "rows": 2},
 	"w_reboco_janela": {"path": "res://assets/art/generated/town/walls/w_reboco_janela.png", "fw": 46, "fh": 71, "ox": 23, "oy": 59, "cols": 2, "rows": 2},

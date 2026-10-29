@@ -40,6 +40,9 @@ var prosperity := 30.0
 var rep := 0.0
 var request := {}
 var request_cd := 60.0
+## Nível da cerca (1 chapa, 2 chapa reforçada, 3 muralha) e tempo até a próxima horda.
+var wall_tier := 1
+var siege_cd := 200.0
 
 
 func setup(new_id: int, new_nome: String, new_cell: Vector2i, is_safe: bool, rng: RandomNumberGenerator) -> void:
@@ -75,9 +78,26 @@ func status_text() -> String:
 
 
 ## Um passo da simulação (chamado a cada alguns segundos).
-func step(rng: RandomNumberGenerator, edge_ratio: float) -> void:
+func step(rng: RandomNumberGenerator, edge_ratio: float, near := false) -> void:
 	if infested or safe:
 		return
+	# a vila se desenvolve: com prosperidade e sucata, reforça a cerca
+	var want := 1 + (1 if level() >= 2 else 0) + (1 if level() >= 3 else 0)
+	if want > wall_tier and float(stock["sucata"]) >= 20.0 * float(wall_tier):
+		stock["sucata"] = float(stock["sucata"]) - 20.0 * float(wall_tier)
+		wall_tier += 1
+	# longe dos jogadores, as hordas são simuladas: a defesa (cerca, guardas) segura parte
+	if not near and rng.randf() < 0.02:
+		var horde := rng.randf_range(8.0, 34.0) + edge_ratio * 20.0
+		var defense := float(wall_tier) * 9.0 + float(level()) * 4.0
+		var dmg := horde - defense
+		if dmg > 0.0:
+			infestation += dmg
+			if dmg > 12.0:
+				pop = maxi(0, pop - 1)
+		if pop <= 0:
+			fall()
+			return
 	stock[specialty] = float(stock[specialty]) + rng.randf_range(1.0, 4.0) + float(level())
 	stock["comida"] = float(stock["comida"]) - float(pop) * 0.25
 	stock["sucata"] = float(stock["sucata"]) + rng.randf_range(0.0, 1.0)
@@ -191,7 +211,7 @@ static func item_category(id: String) -> String:
 func to_dict() -> Dictionary:
 	return {"id": id, "stock": stock.duplicate(), "pop": pop, "infestation": infestation,
 		"infested": infested, "caravan_cd": caravan_cd, "prosperity": prosperity, "rep": rep,
-		"request": request.duplicate(true), "request_cd": request_cd}
+		"request": request.duplicate(true), "request_cd": request_cd, "wall_tier": wall_tier, "siege_cd": siege_cd}
 
 
 func apply_dict(src: Dictionary) -> void:
@@ -206,3 +226,5 @@ func apply_dict(src: Dictionary) -> void:
 	rep = float(src.get("rep", 0.0))
 	request = src.get("request", {})
 	request_cd = float(src.get("request_cd", request_cd))
+	wall_tier = int(src.get("wall_tier", wall_tier))
+	siege_cd = float(src.get("siege_cd", siege_cd))

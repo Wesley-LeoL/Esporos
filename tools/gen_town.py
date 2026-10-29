@@ -31,6 +31,8 @@ MATERIALS = {
     "chapa": ("steel", lambda: combine(pat_corrugated(0.06), pat_chips(9, 0.02)), "slate", "steel"),
     # cerca das vilas: chapas remendadas entre postes, arame no alto
     "muro": ("rust", lambda: combine(pat_corrugated(0.05), pat_chips(13, 0.05)), "grey", "steel"),
+    "muro2": ("steel", lambda: pat_seams(0.2, (1, 1, 0)), "grey", "steel"),
+    "muro3": ("slate", lambda: pat_seams(0.25, (1, 1, 1)), "grey", "steel"),
 }
 FENCE_VARIANTS = ["parede", "porta"]
 VARIANTS = ["parede", "janela", "janela_q", "porta", "vitrine", "quebrada", "esporos"]
@@ -68,18 +70,35 @@ def clip_parts(parts, zmax):
     return out
 
 
-def fence_wall(variant, d, open_=False):
+def fence_wall(variant, d, open_=False, tier=1):
+    """Cerca das vilas. Nível 1: chapas remendadas; 2: chapa de aço rebitada com reforço;
+    3: muralha de concreto com espetos no alto."""
     S = lambda *a, **k: _slab(d, *a, **k)
-    H = WALL_H * 1.05
-    P = [S(0.04, 0.05, H / 2, "grey", (0.46, 0, H / 2)), S(0.04, 0.05, H / 2, "grey", (-0.46, 0, H / 2)),
-         S(0.5, 0.008, 0.01, "dark", (0, 0, H + 0.04)), S(0.5, 0.008, 0.01, "dark", (0, 0, H + 0.1))]
+    H = WALL_H * (1.05 if tier == 1 else (1.15 if tier == 2 else 1.25))
+    post = "grey" if tier < 3 else "slate"
+    P = [S(0.05, 0.06, H / 2, post, (0.46, 0, H / 2)), S(0.05, 0.06, H / 2, post, (-0.46, 0, H / 2))]
+    if tier == 1:
+        P += [S(0.5, 0.008, 0.01, "dark", (0, 0, H + 0.04)), S(0.5, 0.008, 0.01, "dark", (0, 0, H + 0.1))]
+    if variant == "parede" and tier == 2:
+        P.append(S(0.42, 0.04, H / 2, "steel", (0, 0, H / 2), pattern=combine(pat_seams(0.21, (1, 1, 0)), pat_chips(19, 0.03))))
+        P.append(S(0.43, 0.05, 0.04, "mustard", (0, 0, 0.12), pattern=pat_hazard(0.06)))
+        P.append(Part("box", (0.02, 0.38, 0.02), "grey", (0, 0, H * 0.5), rot_x(52) if d == 1 else rot_y(52) @ rot_z(90)))
+        return P
+    if variant == "parede" and tier == 3:
+        P.append(S(0.46, 0.08, H / 2, "slate", (0, 0, H / 2), pattern=combine(pat_seams(0.31, (0, 0, 1)), pat_chips(23, 0.04))))
+        P.append(S(0.48, 0.09, 0.04, "grey", (0, 0, H)))
+        for i in range(5):
+            P.append(_slab(d, 0.015, 0.015, 0.06, "bone", (-0.4 + 0.2 * i, 0, H + 0.08)))
+        return P
     if variant == "parede":
         P.append(S(0.22, 0.025, H * 0.45, "rust", (-0.22, 0, H * 0.45), pattern=combine(pat_corrugated(0.05), pat_chips(13, 0.06))))
         P.append(S(0.22, 0.025, H * 0.48, "steel", (0.22, 0, H * 0.48), pattern=combine(pat_corrugated(0.05), pat_chips(17, 0.05))))
         P.append(S(0.5, 0.03, 0.02, "wood", (0, 0, 0.32)))
     else:
+        if tier > 1:
+            P.append(S(0.5, 0.06, 0.06, post, (0, 0, H - 0.06)))
         if not open_:
-            P.append(S(0.42, 0.02, H * 0.42, "steel", (0, 0, H * 0.44), pattern=pat_seams(0.14, (1, 1, 0))))
+            P.append(S(0.42, 0.02 + 0.015 * tier, H * 0.42, "steel", (0, 0, H * 0.44), pattern=pat_seams(0.14, (1, 1, 0))))
             P.append(S(0.42, 0.022, 0.04, "mustard", (0, 0, H * 0.7), pattern=pat_hazard(0.06)))
         else:
             q = Part("box", (0.02, 0.36, H * 0.42), "steel", (-0.42, 0.36, H * 0.44))
@@ -90,8 +109,8 @@ def fence_wall(variant, d, open_=False):
 
 
 def map_wall(material, variant, d, open_=False):
-    if material == "muro":
-        return fence_wall(variant, d, open_)
+    if material.startswith("muro"):
+        return fence_wall(variant, d, open_, {"muro": 1, "muro2": 2, "muro3": 3}[material])
     ramp, pat, cap, leaf = MATERIALS[material]
     S = lambda *a, **k: _slab(d, *a, **k)
     P = []
@@ -299,3 +318,13 @@ FURNITURE = {
     "tv": {"raio": 9, "frames": 1}, "maca": {"raio": 12, "frames": 1}, "arquivo": {"raio": 8, "frames": 1},
     "entulho": {"raio": 0, "frames": 3}, "fungo": {"raio": 0, "frames": 1},
 }
+
+
+def trap_model():
+    """Armadilha de espetos (pisável; fere infectados)."""
+    P = [Part("box", (0.36, 0.36, 0.015), "rust", (0, 0, 0.015), pattern=pat_chips(29, 0.1))]
+    for i in range(4):
+        for j in range(4):
+            x, y = -0.27 + 0.18 * i, -0.27 + 0.18 * j
+            P.append(Part("box", (0.012, 0.012, 0.07), "bone" if (i + j) % 2 else "grey", (x, y, 0.08)))
+    return P

@@ -180,6 +180,44 @@ func debug_command(cmd: String) -> void:
 			var base := world.ground.local_to_map(world.ground.to_local(p.position))
 			var target := base + Vector2i(int(a[1]), int(a[2]))
 			p.act("build", [a[0], target.x, target.y, int(a[3]) if a.size() > 3 else -1])
+		"siege":
+			# horda na vila mais perto (testes): siege ou siege:extra
+			var pc4 := world.tile_pos(p.position)
+			var bv: VillageData = null
+			for v4 in world.villages:
+				if bv == null or Vector2(v4.cell).distance_to(pc4) < Vector2(bv.cell).distance_to(pc4):
+					bv = v4
+			world.spawn_horde(bv, int(arg) if arg != "" else 0)
+		"tpfence":
+			# vai para dentro da cerca, junto do trecho mais danificado da vila mais perto
+			var pc6 := world.tile_pos(p.position)
+			var bk := Vector3i(0, 0, -1)
+			var bhp := 1e9
+			for v6 in world.villages:
+				if Vector2(v6.cell).distance_to(pc6) < 30.0:
+					for k6 in world._place_of(v6.id)["fence_keys"]:
+						var e6: Dictionary = world.map_walls[k6]
+						var h6 := 0.0 if e6["broken"] else float(e6["hp"])
+						if h6 < bhp:
+							bhp = h6
+							bk = k6
+			if bk.z >= 0:
+				var mid := world.edge_pos(bk)
+				var vc := world.ground.map_to_local(world.villages[world.village_at(mid + Vector2(0, -1))].cell) if world.village_at(mid + Vector2(0, -1)) >= 0 else mid
+				p.teleport(mid + (vc - mid).normalized() * 60.0)
+		"fenceinfo":
+			var pc5 := world.tile_pos(p.position)
+			for v5 in world.villages:
+				if Vector2(v5.cell).distance_to(pc5) < 30.0:
+					var broken := 0
+					var dmg := 0
+					for k5 in world._place_of(v5.id)["fence_keys"]:
+						var e5: Dictionary = world.map_walls[k5]
+						if e5["broken"]:
+							broken += 1
+						elif e5["hp"] < e5["max"]:
+							dmg += 1
+					print("[cerca] %s nível %d pop %d infest %.0f danificados %d derrubados %d dentro %d caiu %s" % [v5.nome, v5.wall_tier, v5.pop, v5.infestation, dmg, broken, world._infected_inside(v5.id), v5.infested])
 		"buildmode":
 			hud.set_build_mode(arg != "0")
 		"hot":

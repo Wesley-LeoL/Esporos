@@ -73,7 +73,7 @@ const PROPS := {
 	"vaso": {"grupo": "interior", "raio": 6, "frames": 1},
 }
 
-const WALL_MATERIALS := ["tijolo", "concreto", "reboco", "madeira", "chapa", "muro"]
+const WALL_MATERIALS := ["tijolo", "concreto", "reboco", "madeira", "chapa", "muro", "muro2", "muro3"]
 const WALL_VARIANTS := ["parede", "janela", "janela_q", "porta", "vitrine", "quebrada", "esporos"]
 const ROOF_STYLES := ["laje", "laje_metal", "telha", "telha_cinza", "esporos"]
 const ROOFS := {

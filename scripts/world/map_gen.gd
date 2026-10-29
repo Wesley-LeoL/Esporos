@@ -132,6 +132,7 @@ func _places() -> void:
 func _fence(pl: Dictionary) -> void:
 	var c: Vector2i = pl["cell"]
 	var R: int = pl["cerca"]
+	var keys: Array = []
 	for i in range(-R, R + 1):
 		var edges := [Vector3i(c.x + i, c.y - R - 1, 1), Vector3i(c.x + i, c.y + R, 1),
 			Vector3i(c.x - R - 1, c.y + i, 0), Vector3i(c.x + R, c.y + i, 0)]
@@ -141,11 +142,28 @@ func _fence(pl: Dictionary) -> void:
 			if Vector2(a).length() > World.RADIUS - 3.0:
 				continue
 			var gate := w.road_cells.has(a) or w.road_cells.has(b)
-			w.map_walls[k] = {"kind": "w_muro_porta" if gate else "w_muro_parede", "open": false, "h": -1}
+			w.map_walls[k] = {"kind": "w_muro_porta" if gate else "w_muro_parede", "open": false, "h": -1,
+				"vid": int(pl["vid"]), "hp": World.FENCE_HP[1], "max": World.FENCE_HP[1], "broken": false}
+			keys.append(k)
 			var ch := World.chunk_of(a)
 			if not w.map_walls_by_chunk.has(ch):
 				w.map_walls_by_chunk[ch] = []
 			w.map_walls_by_chunk[ch].append(k)
+			# armadilhas de espetos do lado de fora dos portões
+			if gate:
+				var outside := a if absi(a.x - c.x) > R or absi(a.y - c.y) > R else b
+				var out_dir := outside - (b if outside == a else a)
+				for step in [1, 2]:
+					var tc: Vector2i = outside + out_dir * step
+					if not w.built.has(tc) and Vector2(tc).length() < World.RADIUS - 3.0:
+						w.built[tc] = {"kind": "armadilha", "fuel": 0.0, "open": false, "eternal": true, "vila": int(pl["vid"])}
+	pl["fence_keys"] = keys
+	# torres automáticas nos cantos de dentro (só funcionam com o muro de nível 2 ou mais)
+	for corner in [Vector2i(-R + 1, -R + 1), Vector2i(R - 1, -R + 1), Vector2i(-R + 1, R - 1), Vector2i(R - 1, R - 1)]:
+		var tcell: Vector2i = c + corner
+		if w._free_cell(tcell) and not w.ground_cells.has(tcell):
+			w.built[tcell] = {"kind": "torre", "fuel": 0.0, "open": false, "eternal": true, "vila": int(pl["vid"])}
+			w.occupied[tcell] = true
 
 
 # ------------------------------------------------------------------ ruas
@@ -392,6 +410,14 @@ func _pick(mix: Dictionary) -> String:
 
 ## Prédio explorável: piso, paredes nas bordas (porta, janelas, divisória), telhado, móveis e caixas.
 func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -1) -> bool:
+	# não atravessa a cerca de nenhuma vila
+	for pl in w.places:
+		if pl.has("cerca"):
+			var R: int = pl["cerca"]
+			var inner := Rect2i(pl["cell"] - Vector2i(R, R), Vector2i(2 * R + 1, 2 * R + 1))
+			var outer := inner.grow(2)
+			if rect.intersects(outer) and not inner.grow(-1).encloses(rect):
+				return false
 	for x in range(rect.position.x - 1, rect.end.x + 1):
 		for y in range(rect.position.y - 1, rect.end.y + 1):
 			var q := Vector2i(x, y)
@@ -555,6 +581,8 @@ func _inside_cell(rect: Rect2i, side: int) -> Vector2i:
 
 
 func _add_map_wall(k: Vector3i, kind: String, open: bool, partition := false) -> void:
+	if w.map_walls.has(k):
+		return  # a cerca da vila tem prioridade
 	w.map_walls[k] = {"kind": kind, "open": open, "h": w.houses.size() - 1, "p": partition}
 	var ch := World.chunk_of(Vector2i(k.x, k.y))
 	if not w.map_walls_by_chunk.has(ch):

@@ -25,6 +25,9 @@ const SEAL_RADIUS := 190.0
 const POWER_RADIUS_PX := 525.0
 const PURIFY_RADIUS_PX := 150.0
 const N_VILLAGES := 16
+## Vida de cada trecho da cerca por nível (1 chapa, 2 chapa reforçada, 3 muralha).
+const FENCE_HP := [0.0, 400.0, 800.0, 1500.0]
+const FENCE_MAT := ["muro", "muro", "muro2", "muro3"]
 
 ## Tipos de chão (colunas do atlas gerado; os índices vão para os saves).
 enum T { CONC_A, CONC_B, ESPOROS, ESTRADA, TERRA, PISO, MANCHA, VILA, PISO_MADEIRA, PISO_CONCRETO,
@@ -47,10 +50,10 @@ const BUILDINGS: Array = [["BuildingBlock1", 15], ["BuildingBlock2", 15], ["Buil
 	["BuildingBlock19", 20], ["BuildingBlock24", 25], ["Building3", 5]]
 const PROPS: Array[String] = ["Advertising5", "Advertising6", "Advertising7", "SateliteDish2"]
 ## Versão do save: muda quando a geração do mundo muda (saves antigos não batem com o mapa).
-const SAVE_VERSION := 8
+const SAVE_VERSION := 9
 ## Versões de save que ainda carregam. Antes da 5 o mapa era outro (raio 64, sem chunks):
 ## desses saves só os sobreviventes e o legado são aproveitados (ver Game.read_save).
-const SAVE_COMPAT := [3, 4, 5, 6, 7, 8]
+const SAVE_COMPAT := [3, 4, 5, 6, 7, 8, 9]
 const VILLAGE_NAMES: Array[String] = ["Nova Esperança", "Poço Seco", "Torre Cinza", "Vila Ferrugem",
 	"Entreposto 9", "Vale Mudo", "Posto Delta", "Ninho Baixo", "Cais Morto", "Estação Fênix", "Morro Azul",
 	"Forte Néon", "Cratera", "Porto Velho", "Colmeia", "Sétima Linha", "Refúgio Sul", "Barreira Leste"]
@@ -362,6 +365,7 @@ func _make_structure(c: Vector2i, d: Dictionary) -> Structure:
 	s.cell = c
 	s.world = self
 	s.eternal = bool(d.get("eternal", false))
+	s.vila = int(d.get("vila", -1))
 	s.fuel = float(d.get("fuel", 0.0))
 	s.open = bool(d.get("open", false))
 	s.apply_extra(d)
@@ -402,6 +406,9 @@ func _make_wall(k: Vector3i, from_map := false) -> WallEdge:
 	w.kind = str(src["kind"])
 	w.map = from_map
 	w.house_id = int(src.get("h", -1))
+	w.fence_vid = int(src.get("vid", -1))
+	w.hp = float(src.get("hp", 0.0))
+	w.max_hp = float(src.get("max", 0.0))
 	w.partition = bool(src.get("p", false))
 	w.cell = Vector2i(k.x, k.y)
 	w.dir = k.z
@@ -594,7 +601,7 @@ func _load_chunk(ch: Vector2i) -> void:
 		if chunk_of(Vector2i(k.x, k.y)) == ch:
 			nodes.append(_make_wall(k))
 	for k: Vector3i in map_walls_by_chunk.get(ch, []):
-		if not wall_nodes.has(k):
+		if not wall_nodes.has(k) and not bool(map_walls[k].get("broken", false)):
 			nodes.append(_make_wall(k, true))
 	loaded[ch] = {"nodes": nodes, "art": holder}
 
@@ -898,6 +905,7 @@ func _spawn_entity(d: Dictionary) -> Node:
 			e.home = Game.v2(d.get("home", d["pos"]))
 			if d.has("hp"):
 				e.hp = float(d["hp"])
+			e.siege_vid = int(d.get("siege", -1))
 			e.setup_net()
 			node = e
 		"corpse":
@@ -1546,6 +1554,8 @@ func _spawn_step() -> void:
 		var e := n as Infected
 		if e.legacy:
 			continue
+		if e.siege_vid >= 0 and nearest_player(e.position, 2200.0) != null:
+			continue
 		var near_any := false
 		for p in alive:
 			if e.position.distance_to(p.net_pos) <= 950.0:
@@ -1596,10 +1606,20 @@ func _spawn_step() -> void:
 func _village_step() -> void:
 	for v in villages:
 		var was := v.infested
-		v.step(rng, clampf(Vector2(v.cell).length() / RADIUS, 0.0, 1.0))
+		var tier_before := v.wall_tier
+		var near := nearest_player(ground.map_to_local(v.cell), 2600.0) != null
+		v.step(rng, clampf(Vector2(v.cell).length() / RADIUS, 0.0, 1.0), near)
+		if v.wall_tier != tier_before:
+			_fence_tier.rpc(v.id, v.wall_tier)
+			_tell_near(v, "A vila %s reforçou a cerca (nível %d)." % [v.nome, v.wall_tier])
+		if not v.infested:
+			_siege_step(v, near)
+			_fence_repair(v)
+		_village_defense(v)
 		_request_step(v)
 		if v.infested and not was:
 			Game.say_all("A vila %s caiu: virou uma zona morta tomada por esporos e infectados." % v.nome)
+			_village_fallen(v)
 		_npc_step(v)
 		if v.infested:
 			_check_cleared(v)
@@ -1620,6 +1640,268 @@ func _village_step() -> void:
 					_store_items("c:%d" % i, items)
 					_container_items.rpc("c:%d" % i, items)
 	_villages_state.rpc(_villages_list())
+
+
+# ======================================================================= cerco às vilas
+## Vila viva cuja cerca contém este ponto (-1 = nenhuma).
+func village_at(world_pos: Vector2) -> int:
+	var t := tile_pos(world_pos)
+	for pl in places:
+		if not pl.has("cerca"):
+			continue
+		var c: Vector2i = pl["cell"]
+		var R := float(pl["cerca"]) + 1.0
+		if absf(t.x - c.x - 0.5) <= R and absf(t.y - c.y - 0.5) <= R:
+			return int(pl["vid"])
+	return -1
+
+
+func _place_of(vid: int) -> Dictionary:
+	for pl in places:
+		if int(pl["vid"]) == vid:
+			return pl
+	return {}
+
+
+## Trecho da cerca para onde um infectado deve ir: a passagem (brecha ou portão aberto)
+## mais perto, se não for muito mais longe que o muro mais perto; senão, o muro mais perto.
+func fence_goal(vid: int, from: Vector2) -> Vector3i:
+	var pl := _place_of(vid)
+	var best_wall := Vector3i(0, 0, -1)
+	var bw := 1e9
+	var best_gap := Vector3i(0, 0, -1)
+	var bg := 1e9
+	for k: Vector3i in pl.get("fence_keys", []):
+		var off := edge_pos(k) - from
+		var d := Vector2(off.x, off.y * 2.0).length()
+		if fence_open(k):
+			if d < bg:
+				bg = d
+				best_gap = k
+		elif d < bw:
+			bw = d
+			best_wall = k
+	if best_gap.z >= 0 and bg < bw * 2.5 + 120.0:
+		return best_gap
+	return best_wall
+
+
+## Distância (isométrica, em px) de um ponto até o segmento de uma borda.
+func edge_dist(k: Vector3i, pos: Vector2) -> float:
+	var mid := edge_pos(k)
+	var ends := WallEdge.edge_ends(k.z)
+	var a := Vector2(mid.x + ends[0].x, (mid.y + ends[0].y) * 2.0)
+	var b := Vector2(mid.x + ends[1].x, (mid.y + ends[1].y) * 2.0)
+	var p := Vector2(pos.x, pos.y * 2.0)
+	var ab := b - a
+	var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.001), 0.0, 1.0)
+	return p.distance_to(a + ab * t)
+
+
+func fence_open(k: Vector3i) -> bool:
+	var e: Dictionary = map_walls.get(k, {})
+	return e.is_empty() or bool(e.get("broken", false)) or bool(e.get("open", false))
+
+
+## Servidor: um infectado bateu num trecho da cerca.
+func damage_fence(k: Vector3i, amount: float) -> void:
+	var e: Dictionary = map_walls.get(k, {})
+	if e.is_empty() or bool(e.get("broken", false)):
+		return
+	e["hp"] = maxf(0.0, float(e["hp"]) - amount)
+	make_noise(edge_pos(k), 260.0)
+	_fence_state.rpc(k.x, k.y, k.z, float(e["hp"]))
+	if float(e["hp"]) <= 0.0:
+		var vid := int(e.get("vid", -1))
+		if vid >= 0:
+			_tell_near(villages[vid], "Os infectados abriram uma brecha na cerca de %s!" % villages[vid].nome)
+
+
+## Todos os peers: vida de um trecho de cerca (0 = derrubado; > 0 depois de derrubado = reconstruído).
+@rpc("authority", "call_local", "unreliable_ordered")
+func _fence_state(x: int, y: int, d: int, hp: float) -> void:
+	var k := Vector3i(x, y, d)
+	var e: Dictionary = map_walls.get(k, {})
+	if e.is_empty():
+		return
+	e["hp"] = hp
+	var node: WallEdge = wall_nodes.get(k)
+	if hp <= 0.0:
+		e["broken"] = true
+		if node != null:
+			wall_nodes.erase(k)
+			node.queue_free()
+		return
+	if bool(e.get("broken", false)):
+		e["broken"] = false
+		var c := Vector2i(x, y)
+		if is_loaded(c) and node == null:
+			_track(c, _make_wall(k, true))
+		return
+	if node != null:
+		node.set_hp(hp, float(e["max"]))
+
+
+## Todos os peers: a vila subiu o nível da cerca (troca a arte e a vida máxima).
+@rpc("authority", "call_local", "reliable")
+func _fence_tier(vid: int, tier: int) -> void:
+	var pl := _place_of(vid)
+	var mx: float = FENCE_HP[clampi(tier, 1, 3)]
+	for k: Vector3i in pl.get("fence_keys", []):
+		var e: Dictionary = map_walls[k]
+		var ratio := float(e["hp"]) / maxf(1.0, float(e["max"]))
+		var variant := "porta" if String(e["kind"]).ends_with("_porta") else "parede"
+		e["kind"] = "w_%s_%s" % [FENCE_MAT[clampi(tier, 1, 3)], variant]
+		e["max"] = mx
+		if not bool(e.get("broken", false)):
+			e["hp"] = maxf(ratio, 0.6) * mx
+		var node: WallEdge = wall_nodes.get(k)
+		if node != null:
+			node.kind = e["kind"]
+			node.set_hp(float(e["hp"]), mx)
+
+
+## Servidor: moradores consertam a cerca com o estoque de sucata da vila (reconstroem um
+## trecho derrubado por vez, se não houver infectado dentro).
+func _fence_repair(v: VillageData) -> void:
+	var pl := _place_of(v.id)
+	var inside := _infected_inside(v.id)
+	var rebuilt := false
+	var fixed := 0
+	for k: Vector3i in pl.get("fence_keys", []):
+		var e: Dictionary = map_walls[k]
+		var mx := float(e["max"])
+		if bool(e.get("broken", false)):
+			if not rebuilt and inside == 0 and float(v.stock["sucata"]) >= 3.0:
+				v.stock["sucata"] = float(v.stock["sucata"]) - 3.0
+				rebuilt = true
+				_fence_state.rpc(k.x, k.y, k.z, mx * 0.4)
+		elif float(e["hp"]) < mx and fixed < 6 and float(v.stock["sucata"]) > 0.5:
+			v.stock["sucata"] = float(v.stock["sucata"]) - 0.1
+			fixed += 1
+			e["hp"] = minf(mx, float(e["hp"]) + 10.0 + 4.0 * float(v.level()))
+			_fence_state.rpc(k.x, k.y, k.z, float(e["hp"]))
+
+
+## Servidor: o jogador conserta um trecho de cerca com 2 sucatas (+35%).
+func repair_fence(p: Player, k: Vector3i) -> void:
+	var e: Dictionary = map_walls.get(k, {})
+	if e.is_empty() or bool(e.get("broken", false)) or float(e["hp"]) >= float(e["max"]):
+		return
+	if not afford_near(p, {"sucata": 2}):
+		Game.tell(p.peer, "Consertar o muro custa 2 sucatas.")
+		return
+	pay_near(p, {"sucata": 2})
+	e["hp"] = minf(float(e["max"]), float(e["hp"]) + float(e["max"]) * 0.35)
+	_fence_state.rpc(k.x, k.y, k.z, float(e["hp"]))
+	p.data.add_xp("metalurgia", 2.0)
+	var vid := int(e.get("vid", -1))
+	if vid >= 0:
+		villages[vid].rep += 1.0
+
+
+## [integridade % da cerca, trechos derrubados].
+func fence_summary(vid: int) -> Array:
+	var hp := 0.0
+	var mx := 0.0
+	var broken := 0
+	for k: Vector3i in _place_of(vid).get("fence_keys", []):
+		var e: Dictionary = map_walls[k]
+		mx += float(e["max"])
+		if bool(e.get("broken", false)):
+			broken += 1
+		else:
+			hp += float(e["hp"])
+	return [hp / maxf(mx, 1.0) * 100.0, broken]
+
+
+func _infected_inside(vid: int) -> int:
+	var n := 0
+	for e in get_tree().get_nodes_in_group("infected"):
+		if village_at((e as Node2D).position) == vid:
+			n += 1
+	return n
+
+
+func _tell_near(v: VillageData, text: String) -> void:
+	var vpos := ground.map_to_local(v.cell)
+	for k in players:
+		var p: Player = players[k]
+		var pos := p.position if p.is_local() else p.net_pos
+		if pos.distance_to(vpos) < 2600.0:
+			Game.tell(p.peer, text)
+
+
+## Servidor: hordas atacam as vilas quando há jogador por perto (longe, o ataque é
+## simulado em VillageData.step). Infectados dentro da cerca aumentam a infestação.
+func _siege_step(v: VillageData, near: bool) -> void:
+	if not near:
+		return
+	var inside := _infected_inside(v.id)
+	if inside > 0:
+		v.infestation = minf(100.0, v.infestation + 0.7 * float(inside))
+		if v.infestation >= 100.0:
+			v.fall()
+			return
+	v.siege_cd -= 6.0
+	if v.siege_cd > 0.0:
+		return
+	v.siege_cd = rng.randf_range(160.0, 320.0)
+	if rng.randf() > 0.35 + v.infestation / 200.0:
+		return
+	spawn_horde(v)
+
+
+## Servidor: manda uma horda para cima da vila.
+func spawn_horde(v: VillageData, extra := 0) -> void:
+	var total := get_tree().get_nodes_in_group("infected").size()
+	var n := mini(4 + v.level() + rng.randi_range(0, 4) + int(v.infestation / 25.0) + extra, 48 - total)
+	if n <= 0:
+		return
+	var pl := _place_of(v.id)
+	var R := float(pl.get("cerca", 10)) + rng.randf_range(10.0, 15.0)
+	var ang := rng.randf() * TAU
+	var center := Vector2(v.cell) + Vector2(cos(ang), sin(ang)) * R
+	for i in n:
+		var c := Vector2i((center + Vector2(rng.randf_range(-3, 3), rng.randf_range(-3, 3))).round())
+		spawn_infected(ground.map_to_local(c), rng.randf() < 0.1, {"siege": v.id})
+	_tell_near(v, "Uma horda de %d infectados está atacando a vila %s!" % [n, v.nome])
+
+
+## Torres da vila só funcionam com cerca de nível 2 ou mais (e enquanto a vila resiste).
+func _village_defense(v: VillageData) -> void:
+	var on := not v.infested and v.wall_tier >= 2
+	for n in get_tree().get_nodes_in_group("turrets"):
+		var st := n as Structure
+		if st.vila == v.id and st.powered != on:
+			st.powered = on
+			structure_changed(st)
+
+
+## Servidor: a vila caiu: portões abertos, moradores somem.
+func _village_fallen(v: VillageData) -> void:
+	for n in get_tree().get_nodes_in_group("npcs"):
+		if (n as Npc).village_id == v.id:
+			n.queue_free()
+	var pl := _place_of(v.id)
+	for k: Vector3i in pl.get("fence_keys", []):
+		if String(map_walls[k]["kind"]).ends_with("_porta"):
+			map_walls[k]["open"] = true
+			_wall_state.rpc(k.x, k.y, k.z, true)
+
+
+## Servidor: um morador morreu.
+func npc_died(npc: Npc) -> void:
+	var v := villages[npc.village_id]
+	v.pop = maxi(0, v.pop - 1)
+	v.infestation = minf(100.0, v.infestation + 6.0)
+	_tell_near(v, "%s, %s de %s, foi morto pelos infectados." % [npc.nome, Npc.ROLE_NAMES[npc.role].to_lower(), v.nome])
+	spawn_net({"t": "corpse", "pos": [npc.position.x, npc.position.y], "nome": npc.nome, "items": []})
+	npc.queue_free()
+	if v.pop <= 0 and not v.infested:
+		v.fall()
+		Game.say_all("A vila %s caiu: virou uma zona morta tomada por esporos e infectados." % v.nome)
+		_village_fallen(v)
 
 
 func _check_cleared(v: VillageData) -> void:
@@ -2373,13 +2655,18 @@ func world_deltas() -> Dictionary:
 	for k: Vector3i in walls:
 		var wn: WallEdge = wall_nodes.get(k)
 		wl.append([k.x, k.y, k.z, walls[k]["kind"], wn.open if wn != null else bool(walls[k].get("open", false))])
+	var fence: Array = []
+	for k4: Vector3i in map_walls:
+		var e4: Dictionary = map_walls[k4]
+		if e4.has("vid") and (bool(e4.get("broken", false)) or float(e4["hp"]) < float(e4["max"])):
+			fence.append([k4.x, k4.y, k4.z, 0.0 if bool(e4.get("broken", false)) else float(e4["hp"])])
 	var doors: Array = []
 	for k2: Vector3i in map_walls:
 		var wn2: WallEdge = wall_nodes.get(k2)
 		if (wn2.open if wn2 != null else bool(map_walls[k2].get("open", false))):
 			doors.append([k2.x, k2.y, k2.z])
 	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
-		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "map_doors": doors, "team_house": team_house, "weather": weather.duplicate(),
+		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "map_doors": doors, "fence": fence, "team_house": team_house, "weather": weather.duplicate(),
 		"weather_until": _weather_until}
 
 
@@ -2468,6 +2755,15 @@ func apply_deltas(save: Dictionary) -> void:
 		var vid := int(vd["id"])
 		if vid < villages.size():
 			villages[vid].apply_dict(vd)
+	# cercas: nível de cada vila e trechos danificados/derrubados
+	for v in villages:
+		if v.wall_tier > 1:
+			_fence_tier(v.id, v.wall_tier)
+	for fd in save.get("fence", []):
+		var kf := Vector3i(int(fd[0]), int(fd[1]), int(fd[2]))
+		if map_walls.has(kf):
+			map_walls[kf]["hp"] = float(fd[3])
+			map_walls[kf]["broken"] = float(fd[3]) <= 0.0
 
 
 ## Servidor ao carregar um save: entidades persistentes (cadáveres e elites de legado).

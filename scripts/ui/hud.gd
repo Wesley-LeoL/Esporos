@@ -973,6 +973,17 @@ func _process(delta: float) -> void:
 			_update_build_bar(p)
 
 
+func _fence_text(v: VillageData) -> String:
+	var fs: Array = Game.world.fence_summary(v.id)
+	var names := ["", "chapa remendada", "chapa reforçada", "muralha de concreto"]
+	var t := "Cerca: %s (nível %d) · integridade %d%%" % [names[clampi(v.wall_tier, 1, 3)], v.wall_tier, int(fs[0])]
+	if int(fs[1]) > 0:
+		t += " · %d BRECHA(S)" % int(fs[1])
+	if v.wall_tier < 3:
+		t += " · sobe de nível com prosperidade e sucata no estoque"
+	return t
+
+
 # ------------------------------------------------------------------ barra rápida
 func _build_hotbar() -> void:
 	hotbar_root = _vbox(8)
@@ -2539,6 +2550,7 @@ func _tab_village(p: Player) -> void:
 	_bar(info, v.prosperity, 100.0, OK_COLOR, 400, 16)
 	info.add_child(_label("Especialidade: %s · risco de infestação %d%%" % [{"comida": "comida", "sucata": "materiais", "medico": "remédios"}[v.specialty],
 		int(v.infestation)], S, UITheme.MUTED))
+	info.add_child(_label(_fence_text(v), S, UITheme.WARN if Game.world.fence_summary(v.id)[1] > 0 else UITheme.MUTED))
 	if v.infested:
 		_lbl(box, "Esta vila caiu. Limpe os infectados por perto para que os sobreviventes voltem.", UITheme.DANGER)
 		return

@@ -141,6 +141,7 @@ def gen_props():
                 row += [R(op), R(gtown.clip_parts(op, gtown.LOW_H))]
             rows.append(row)
         crop_sheet(name, "structures", rows, name + " (bordas)")
+    crop_sheet("armadilha", "structures", [[R(gtown.trap_model())]], "armadilha de espetos")
     crop_sheet("eolico", "structures", [[R(am.wind_turbine(h)) for h in range(1, 6)]], "eólico (1 a 5 módulos)")
     for name, on_off in (("bancada", False), ("mesa_reparo", False), ("bateria_casa", True), ("coletor", True),
                          ("cama", False), ("luminaria", True), ("poste", True), ("letreiro", True), ("mesa", False),
@@ -234,7 +235,7 @@ def gen_city_props():
 
 def gen_town():
     for mat in gtown.MATERIALS:
-        for var in (gtown.FENCE_VARIANTS if mat == "muro" else gtown.VARIANTS):
+        for var in (gtown.FENCE_VARIANTS if mat.startswith("muro") else gtown.VARIANTS):
             crop_sheet("w_%s_%s" % (mat, var), "town/walls", gtown.wall_sheet_rows(mat, var, R), "%s %s" % (mat, var))
     os.makedirs(os.path.join(OUT, "town", "roofs"), exist_ok=True)
     roofs = {}

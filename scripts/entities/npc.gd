@@ -18,6 +18,8 @@ var net_pos := Vector2.ZERO
 var facing := 2
 var moving := false
 var atk_seq := 0
+var hp := 60.0
+var max_hp := 60.0
 
 var _wander_t := 0.0
 var _goal := Vector2.ZERO
@@ -29,7 +31,7 @@ var _seen_atk := 0
 
 func setup_net() -> void:
 	net_pos = position
-	Net.make_sync(self, [".:net_pos", ".:facing", ".:moving", ".:atk_seq"], 0.1)
+	Net.make_sync(self, [".:net_pos", ".:facing", ".:moving", ".:atk_seq", ".:hp"], 0.1)
 
 
 func _ready() -> void:
@@ -45,6 +47,9 @@ func _ready() -> void:
 	add_child(shape)
 	if home == Vector2.ZERO:
 		home = position
+	if role == "guarda":
+		max_hp = 130.0
+		hp = minf(hp, max_hp) if hp < 60.0 else max_hp
 	_goal = position
 	net_pos = position
 
@@ -81,9 +86,47 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 
+## Servidor: um infectado acertou este morador.
+func take_hit(amount: float, _from: Node2D) -> void:
+	if not Net.is_server() or hp <= 0.0:
+		return
+	hp -= amount
+	if hp <= 0.0:
+		world.npc_died(self)
+
+
+## Infectado mais perto (para fugir ou lutar).
+func _nearest_infected(limit: float) -> Infected:
+	var best: Infected = null
+	var best_d := limit
+	for n in get_tree().get_nodes_in_group("infected"):
+		var e := n as Infected
+		var off := e.position - position
+		var d := Vector2(off.x, off.y * 2.0).length()
+		if d < best_d:
+			best_d = d
+			best = e
+	return best
+
+
 func _server_ai(delta: float) -> void:
 	_cd = maxf(0.0, _cd - delta)
 	var target: Infected = null
+	if role != "guarda":
+		# moradores e comerciante correm para longe dos infectados
+		var danger := _nearest_infected(170.0)
+		if danger != null:
+			var away := position - danger.position
+			_goal = position + Vector2(away.x, away.y * 2.0).normalized() * 90.0 * Vector2(1, 0.5)
+			_wander_t = 1.5
+			var to2 := _goal - position
+			velocity = Vector2(to2.x, to2.y * 2.0).normalized() * Vector2(1, 0.5) * 62.0
+			move_and_slide()
+			facing = GenArt.facing_of(velocity)
+			_anim_t += delta * 62.0 / 9.0
+			moving = true
+			net_pos = position
+			return
 	if role == "guarda":
 		var best := 170.0
 		for n in get_tree().get_nodes_in_group("infected"):
@@ -141,6 +184,9 @@ func _draw() -> void:
 	draw_circle(Vector2.ZERO, 10.0, Color(0, 0, 0, 0.3))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	GenArt.draw_frame(self, "survivor_m0_a0_e0", facing, _frame(), Vector2.ZERO, TINTS.get(role, Color.WHITE))
+	if hp < max_hp and hp > 0.0:
+		draw_rect(Rect2(-9, -44, 18, 3), Color(0, 0, 0, 0.75))
+		draw_rect(Rect2(-9, -44, 18.0 * clampf(hp / max_hp, 0.0, 1.0), 3), Color("#7fe0a0"))
 	if role != "morador":
 		draw_set_transform(Vector2(0, -50), 0.0, Vector2(0.5, 0.5))
 		var f := UITheme.font()

@@ -19,6 +19,10 @@ var map := false
 var house_id := -1
 ## Divisória interna (escurece com o interior quando o prédio é visto de fora).
 var partition := false
+## Trecho da cerca de uma vila (-1 = não é cerca), com vida.
+var fence_vid := -1
+var hp := 0.0
+var max_hp := 0.0
 var world: World
 var low := false
 var _shape: CollisionPolygon2D
@@ -57,6 +61,7 @@ func _ready() -> void:
 	add_to_group("walls")
 	if is_door():
 		add_to_group("interactable")
+	_check_damaged()
 	var ends := edge_ends(dir)
 	var a := ends[0]
 	var b := ends[1]
@@ -73,7 +78,27 @@ func _apply_open() -> void:
 	queue_redraw()
 
 
+func set_hp(v: float, mx: float) -> void:
+	hp = v
+	max_hp = mx
+	_check_damaged()
+	queue_redraw()
+
+
+## Trecho de cerca danificado vira interativo (consertar com [E]).
+func _check_damaged() -> void:
+	if fence_vid < 0 or is_door():
+		return
+	var dmg := hp < max_hp - 0.5
+	if dmg and not is_in_group("interactable"):
+		add_to_group("interactable")
+	elif not dmg and is_in_group("interactable"):
+		remove_from_group("interactable")
+
+
 func prompt() -> String:
+	if fence_vid >= 0 and not is_door():
+		return "[E] Consertar muro (2 sucatas) · %d%%" % int(hp / maxf(1.0, max_hp) * 100.0) if hp < max_hp else ""
 	if not is_door():
 		return ""
 	var nome := "porta"
@@ -84,6 +109,9 @@ func prompt() -> String:
 
 ## Servidor.
 func interact(_p: Player) -> void:
+	if fence_vid >= 0 and not is_door():
+		world.repair_fence(_p, key())
+		return
 	if not is_door():
 		return
 	open = not open
@@ -119,4 +147,11 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	var col := (2 if (open and is_door()) else 0) + (1 if low else 0)
 	if GenCatalog.SHEETS.has(kind):
-		GenArt.draw_frame(self, kind, dir, mini(col, int(GenCatalog.SHEETS[kind]["cols"]) - 1))
+		var tint := Color.WHITE
+		if fence_vid >= 0 and max_hp > 0.0 and hp < max_hp:
+			var k := hp / max_hp
+			tint = Color(1.0, 0.55 + 0.45 * k, 0.55 + 0.45 * k)
+		GenArt.draw_frame(self, kind, dir, mini(col, int(GenCatalog.SHEETS[kind]["cols"]) - 1), Vector2.ZERO, tint)
+	if fence_vid >= 0 and max_hp > 0.0 and hp < max_hp:
+		draw_rect(Rect2(-10, -58, 20, 3), Color(0, 0, 0, 0.75))
+		draw_rect(Rect2(-10, -58, 20.0 * clampf(hp / max_hp, 0.0, 1.0), 3), Color("#ffb84a"))

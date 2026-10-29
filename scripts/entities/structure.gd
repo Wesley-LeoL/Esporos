@@ -20,6 +20,8 @@ var powered := false
 var fuel := 0.0
 var open := false
 var eternal := false
+## Defesa de uma vila (torre ou armadilha da vila; -1 = do jogador).
+var vila := -1
 var art := ""
 var art_variant := 0
 var fp := Vector2i.ONE
@@ -80,7 +82,7 @@ func _ready() -> void:
 	if kind != "edificio":
 		add_to_group("station_" + kind)
 	var def: Dictionary = DB.BUILDS.get(kind, {})
-	if kind == "gerador" or def.has("gera") or def.has("consome") or def.has("capacidade"):
+	if vila < 0 and (kind == "gerador" or def.has("gera") or def.has("consome") or def.has("capacidade")):
 		add_to_group("power")
 	if def.get("andavel", false):
 		_shape.disabled = true
@@ -215,6 +217,8 @@ func prompt() -> String:
 			if eternal:
 				return "Gerador do abrigo (250 W, sem combustível)" + _grid_text()
 			return "[E] Abastecer gerador (combustível %d%%)%s" % [int(fuel), _grid_text()]
+		"torre" when vila >= 0:
+			return "Torre da vila: %s" % ("vigiando" if powered else "desligada (liga quando a cerca chega ao nível 2)")
 		"purificador", "torre", "vedacao", "luminaria", "poste", "letreiro":
 			return "%s: %s%s" % [DB.BUILDS[kind]["nome"], "ligado" if powered else "sem energia", _grid_text()]
 		"fogareiro":
@@ -446,6 +450,15 @@ func _physics_process(delta: float) -> void:
 	if _power_t <= 0.0:
 		_power_t = 0.5
 		_refresh_power()
+	if kind == "armadilha" and server:
+		_cd -= delta
+		if _cd <= 0.0:
+			_cd = 0.4
+			for n in get_tree().get_nodes_in_group("infected"):
+				var e2 := n as Infected
+				var o2 := e2.position - position
+				if Vector2(o2.x, o2.y * 2.0).length() < 26.0:
+					e2.take_damage(7.0, self)
 	if kind == "torre":
 		_cd -= delta
 		_tracer_t = maxf(0.0, _tracer_t - delta)
