@@ -13,6 +13,7 @@ var count := 0
 var _icon: TextureRect
 var _num: Label
 var _key: Label
+var _selected := false
 
 
 func _ready() -> void:
@@ -58,8 +59,19 @@ func show_item(id: String, n: int) -> void:
 	_icon.texture = GenArt.icon(id) if id != "" else null
 	_icon.modulate = Color.WHITE if n > 0 else Color(1, 1, 1, 0.3)
 	_num.text = str(n) if id != "" and n != 1 else ""
-	tooltip_text = ("%s (x%d)\nClique ou tecla %d: usar · botão direito: tirar" % [DB.item_name(id), n, index + 1]) if id != "" else \
+	tooltip_text = ("%s (x%d)\nTecla %d ou clique: escolher · escolhido, o clique usa · botão direito: tirar" % [DB.item_name(id), n, index + 1]) if id != "" else \
 		"Arraste um item do inventário para cá"
+
+
+func set_selected(v: bool) -> void:
+	if v != _selected:
+		_selected = v
+		queue_redraw()
+
+
+func _draw() -> void:
+	if _selected:
+		draw_rect(Rect2(Vector2(2, 2), size - Vector2(4, 4)), UITheme.ACCENT, false, 3.0)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -67,7 +79,11 @@ func _gui_input(event: InputEvent) -> void:
 		return
 	var mb := event as InputEventMouseButton
 	if mb.button_index == MOUSE_BUTTON_LEFT and item_id != "":
-		hud.hot_use(index)
+		# o primeiro clique escolhe; com o espaço já escolhido, o clique usa
+		if hud.hot_sel == index and not HUD._is_weapon(item_id):
+			hud.hot_use(index)
+		else:
+			hud.hot_select(index)
 		accept_event()
 	elif mb.button_index == MOUSE_BUTTON_RIGHT and item_id != "":
 		hud.hot_set(index, "")

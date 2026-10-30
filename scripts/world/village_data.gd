@@ -20,7 +20,7 @@ const OFFERS := {
 		["semente_batata", 3, 0], ["semente_milho", 3, 0], ["semente_tomate", 3, 1], ["enxada", 8, 1], ["panela", 6, 0]],
 	"sucata": [["pregos", 5, 0], ["fios", 6, 0], ["metal", 4, 0], ["martelo", 8, 0], ["alicate", 9, 1], ["serra", 12, 2],
 		["municao_9mm", 10, 2]],
-	"medico": [["bandagem", 3, 0], ["gaze", 3, 0], ["antisseptico", 6, 0], ["kit_sutura", 8, 1], ["antibiotico", 10, 1],
+	"medico": [["bandagem", 3, 0], ["gaze", 3, 0], ["antisseptico", 6, 0], ["tala", 5, 0], ["antibiotico", 10, 1],
 		["kit_cirurgico", 25, 2], ["filtro", 8, 0]],
 }
 

@@ -153,7 +153,7 @@ def gen_props():
 # ---------------------------------------------------------------- ícones
 ICON = 28
 ITEMS = ["feijao", "carne_seca", "barra_cereal", "agua_limpa", "agua_suja", "mascara", "filtro",
-         "supressor", "bandagem", "antisseptico", "kit_sutura", "antibiotico", "kit_cirurgico",
+         "supressor", "bandagem", "antisseptico", "tala", "antibiotico", "kit_cirurgico",
          "bateria", "combustivel", "sucata", "madeira", "metal", "cano", "machete",
          "manual_mecanica", "manual_metalurgia", "manual_medicina", "manual_engenharia",
          "implante_pulmao", "implante_hud", "implante_braco",

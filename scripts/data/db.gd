@@ -31,7 +31,7 @@ const SKILL_DESC := {
 	"eletronica": "Geradores, torres, purificadores e baterias.",
 	"carpintaria": "Paredes, portas, pisos e baús.",
 	"metalurgia": "Estruturas de metal, filtros e blindagens.",
-	"medicina": "Bandagens, suturas e cirurgias.",
+	"medicina": "Bandagens, talas e cirurgias.",
 	"cibernetica": "Instalar e manter implantes; menos estresse neural.",
 	"agricultura": "Plantar e colher.",
 	"culinaria": "Cozinhar com menos risco e mais nutrientes.",
@@ -174,7 +174,7 @@ const ITEMS := {
 	"supressor": {"nome": "Supressor químico", "tipo": "supressor", "peso": 0.1, "vol": 0.2, "desc": "-15% de carga e avanço reduzido por 60 s."},
 	"bandagem": {"nome": "Bandagem", "tipo": "med", "peso": 0.05, "vol": 0.1, "desc": "Estanca sangramento. Use na aba Corpo."},
 	"antisseptico": {"nome": "Antisséptico", "tipo": "med", "carga": true, "uso_carga": 25.0, "peso": 0.3, "vol": 0.3, "desc": "Frasco com 4 usos. Desinfeta ferimentos (aba Corpo)."},
-	"kit_sutura": {"nome": "Kit de sutura", "tipo": "med", "peso": 0.2, "vol": 0.3, "desc": "Fecha ferimentos profundos. Aba Corpo."},
+	"tala": {"nome": "Tala", "tipo": "med", "peso": 0.3, "vol": 0.6, "desc": "Imobiliza torção ou fratura (braço ou perna): alivia a lentidão e deixa o osso sarar. Aba Corpo."},
 	"antibiotico": {"nome": "Antibiótico", "tipo": "med", "peso": 0.05, "vol": 0.1, "desc": "Combate sepse e infecção fúngica. Aba Corpo."},
 	"kit_cirurgico": {"nome": "Kit cirúrgico", "tipo": "kit", "peso": 2.0, "vol": 2.0, "desc": "Necessário para instalar implantes."},
 	"bateria": {"nome": "Bateria", "tipo": "bateria", "carga": true, "peso": 0.6, "vol": 0.5, "desc": "Recarrega os implantes com a carga que tiver."},
@@ -373,13 +373,13 @@ const ROUPA_COBRE := {"cabeca": {"cabeca": 1.0}, "torso": {"torso": 1.0, "braco_
 	"maos": {"braco_e": 0.5, "braco_d": 0.5}, "pernas": {"perna_e": 1.0, "perna_d": 1.0}, "pes": {"perna_e": 0.4, "perna_d": 0.4}}
 ## Conjuntos: vestir todas as peças soma o bônus do conjunto ao de cada peça.
 ## Bônus: reparo (consertos de itens, veículos e muros mais rápidos/eficientes), medico
-## (tratamentos mais rápidos e sutura mais segura), combate (dano corpo a corpo e recarga),
+## (tratamentos mais rápidos e curativos melhores), combate (dano corpo a corpo e recarga),
 ## esporos (menos carga patogênica e filtro dos esporos).
 const CONJUNTOS := {
 	"mecanico": {"nome": "Mecânico", "pecas": ["macacao_mecanico", "luvas_mecanico", "botas_trabalho"], "bonus": {"reparo": 0.2},
 		"desc": "Consertos de máquinas, veículos, itens e muros mais rápidos"},
 	"medico": {"nome": "Médico", "pecas": ["jaleco", "luvas_cirurgicas", "calca_hospitalar"], "bonus": {"medico": 0.15},
-		"desc": "Tratamentos mais rápidos e suturas mais seguras"},
+		"desc": "Tratamentos mais rápidos e bandagens que fecham a ferida mais rápido"},
 	"tatico": {"nome": "Tático", "pecas": ["capacete_militar", "colete_tatico", "luvas_taticas", "calca_tatica", "botas_militares"], "bonus": {"combate": 0.1},
 		"desc": "Mais dano corpo a corpo e recarga mais rápida"},
 	"hazmat": {"nome": "Anti-esporos", "pecas": ["traje_hazmat", "luvas_borracha", "botas_borracha"], "bonus": {"esporos": 0.2},
@@ -414,6 +414,7 @@ const CRAFTS := {
 		"estacao": "bancada", "ferramentas": ["alicate", "martelo"], "xp": {"metalurgia": 10, "pontaria": 4}},
 	"cartucho_12": {"nome": "Cartucho calibre 12 (x4)", "qtd": 4, "custo": {"metal": 1, "sucata": 1, "combustivel": 1}, "req": {"metalurgia": 3, "pontaria": 1},
 		"estacao": "bancada", "ferramentas": ["alicate", "martelo"], "xp": {"metalurgia": 10, "pontaria": 4}},
+	"tala": {"nome": "Tala", "custo": {"madeira": 1, "bandagem": 1}, "req": {}, "ferramentas": [], "xp": {"medicina": 4}},
 	"capacete_sucata": {"nome": "Capacete de sucata", "custo": {"sucata": 3, "metal": 1, "pregos": 6}, "req": {"metalurgia": 1}, "estacao": "bancada",
 		"ferramentas": ["martelo"], "xp": {"metalurgia": 10}},
 	"armadura_sucata": {"nome": "Armadura de sucata", "custo": {"sucata": 6, "metal": 3, "fios": 2}, "req": {"metalurgia": 2}, "estacao": "bancada",
@@ -434,7 +435,7 @@ const LOOT := {
 		["semente_milho", 3, 2, 4], ["semente_tomate", 3, 2, 4], ["enxada", 2, 1, 1], ["regador", 2, 1, 1], ["panela", 3, 1, 1], ["taco", 3, 1, 1], ["mochila_escolar", 3, 1, 1], ["coldre", 2, 1, 1],
 		["bone", 3, 1, 1], ["camiseta", 4, 1, 1], ["moletom", 3, 1, 1], ["calca_jeans", 4, 1, 1], ["tenis", 3, 1, 1],
 		["jaqueta_couro", 1, 1, 1], ["capacete_obra", 1, 1, 1], ["capacete_moto", 1, 1, 1], ["luvas_borracha", 1, 1, 1], ["botas_borracha", 1, 1, 1]],
-	"medico": [["bandagem", 30, 1, 3], ["antisseptico", 25, 1, 2], ["kit_sutura", 15, 1, 1], ["antibiotico", 15, 1, 2],
+	"medico": [["bandagem", 30, 1, 3], ["antisseptico", 25, 1, 2], ["tala", 15, 1, 1], ["antibiotico", 15, 1, 2],
 		["supressor", 12, 1, 2], ["agua_limpa", 8, 1, 2], ["gaze", 18, 1, 3], ["alcool", 12, 1, 1],
 		["analgesico", 12, 1, 2], ["manual_medicina", 4, 1, 1], ["kit_cirurgico", 3, 1, 1],
 		["jaleco", 5, 1, 1], ["luvas_cirurgicas", 6, 1, 1], ["calca_hospitalar", 5, 1, 1], ["traje_hazmat", 1, 1, 1]],

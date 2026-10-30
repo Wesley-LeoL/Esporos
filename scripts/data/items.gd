@@ -14,7 +14,7 @@ extends RefCounted
 
 const STATE_KEYS := ["dur", "carga", "venc", "filtro", "mun"]
 ## Itens renomeados entre versões (id antigo -> novo).
-const RENAMED := {"manual_logica": "manual_metalurgia"}
+const RENAMED := {"manual_logica": "manual_metalurgia", "kit_sutura": "tala"}
 
 
 ## Relógio do mundo (Game.play_time). Sem o autoload (testes), 0.

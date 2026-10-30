@@ -376,9 +376,11 @@ func _heal(d: SurvivorData) -> void:
 		limb["bleed"] = 0.0
 		limb["infection"] = 0.0
 		limb["disinfected"] = false
-		limb["sutured"] = false
 		limb["bandaged"] = false
 		limb["heal"] = 0.0
+		limb["osso"] = 0
+		limb["tala"] = false
+		limb["osso_t"] = 0.0
 	d.blood = 100.0
 	d.antibiotic_t = 0.0
 
@@ -535,7 +537,7 @@ func _cmd_kit(d: SurvivorData, which: String) -> void:
 				"bandagem": 6, "bateria": 2, "machete": 1, "fita": 2, "pistola": 1, "municao_9mm": 36, "lanterna": 1, "pilha": 2,
 				"abridor": 1}
 		"kit_medico":
-			items = {"bandagem": 10, "antisseptico": 10, "kit_sutura": 6, "antibiotico": 6, "supressor": 4, "kit_cirurgico": 2}
+			items = {"bandagem": 10, "antisseptico": 10, "tala": 6, "antibiotico": 6, "supressor": 4, "kit_cirurgico": 2}
 		"kit_build":
 			# muito material: o que não couber fica num saco no chão
 			d.wear(Items.make("mochila_militar")[0])

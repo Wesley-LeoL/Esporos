@@ -34,7 +34,7 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
   * **Fome:** Necessidade de ingestão calórica para manter a estamina e a regeneração.
   * **Sede:** Água limpa vs. Água contaminada. Beber água de poças/fontes não tratadas acelera perigosamente a carga patogênica.
 * **Medicina por Membros (Cooperativa):** 
-  * Ferimentos localizados que exigem desinfecção, suturas, bandagens e antibióticos.
+  * Ferimentos localizados que exigem desinfecção, bandagens e antibióticos; ossos torcidos ou quebrados (quedas) pedem tala.
   * *Mecânica Co-op:* Um jogador pode realizar cirurgias de campo ou aplicar curativos em um aliado ferido, exigindo tempo estático e gerando vulnerabilidade para la dupla.
 
 ---
@@ -56,7 +56,7 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
   * **Ferramentas e Utilitários:** Chaves de fenda, martelos, serras, alicates, lanternas (com pilhas gastáveis), fitas adesivas (*Duct Tape*) para reparos de improviso.
   * **Recursos de Construção e Sucata:** Chapas de metal, tábuas de madeira, pregos, fios elétricos, sucatas eletrônicas e galões de combustível.
   * **Sobrevivência e Proteção Respiratória:** Máscaras de gás (com durabilidade de vedação), filtros de carvão ativado (descartáveis), galões de água limpa e cantis.
-  * **Suprimentos Médicos:** Bandagens esterilizadas, gaze, kits de sutura (agulha e linha), desinfetantes (álcool/iodo), antibióticos de uso restrito e analgésicos.
+  * **Suprimentos Médicos:** Bandagens esterilizadas, gaze, talas, desinfetantes (álcool/iodo), antibióticos de uso restrito e analgésicos.
   * **Alimentação:** Comidas enlatadas (exigem abridor de latas ou faca), alimentos perecíveis que estragam no inventário com o tempo, sementes e ferramentas agrícolas.
   * **Armas e Munições:** Armas brancas improvisadas (com degradação e risco de quebrar no meio do combate), armas de fogo e caixas de munição específica.
 
@@ -79,7 +79,7 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
   * *Carpintaria e Construção:* Paredes, barricadas, pisos e estruturas de base.
   * *Metalurgia e Soldagem:* Blindagens pesadas em metal e portões industriais.
 * **C. Suporte, Ciência e Biologia:**
-  * *Medicina e Primeiros Socorros:* Eficácia de bandagens, suturas e cirurgias de campo.
+  * *Medicina e Primeiros Socorros:* Eficácia de bandagens, talas e cirurgias de campo.
   * *Cibernética:* Reduz estresse sináptico e rejeição de implantes corporais.
   * *Agricultura e Botânica:* Cultivo de alimentos e identificação de plantas.
   * *Culinária:* Reduz intoxicação e garante bônus temporários de estamina.
@@ -145,7 +145,7 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 ### Ações com tempo e medicina cooperativa (fase 6)
 
 - **Ações com tempo:** tratar (2 a 8 s), operar (14 s), remover implante (10 s), manutenção (5 s), fabricar, consertar, recarregar (1,6 s pistola, 2,4 s espingarda), comer, beber, vestir mochila ou máscara, trocar filtro e ler manuais. Uma barra aparece no HUD e sobre a cabeça do personagem (todos veem). Andar ou levar um golpe interrompe. Medicina, Cibernética e Pontaria encurtam o tempo.
-- **Tratar um aliado:** na aba Corpo escolha o paciente (aliados a até ~2 tiles). Curativos, antibiótico, sutura, instalação e remoção de implantes usam os suprimentos e as habilidades de quem trata. Os dois ficam parados e vulneráveis; se qualquer um se mexer ou for atacado, o procedimento para. Tratar outra pessoa é 25% mais rápido e rende 50% mais experiência; suturar a si mesmo falha mais e operar a si mesmo deixa o implante com integridade 80%.
+- **Tratar um aliado:** na aba Corpo escolha o paciente (aliados a até ~2 tiles). Curativos, antibiótico, tala, instalação e remoção de implantes usam os suprimentos e as habilidades de quem trata. Os dois ficam parados e vulneráveis; se qualquer um se mexer ou for atacado, o procedimento para. Tratar outra pessoa é 25% mais rápido e rende 50% mais experiência; operar a si mesmo deixa o implante com integridade 80%.
 
 ### Ferimentos, roupas e armaduras (fase 12)
 
@@ -154,12 +154,16 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Roupas:** 5 espaços (cabeça, tronco, mãos, pernas, pés), além da máscara. Cada espaço cobre membros: o tronco cobre também 60% dos braços, as mãos 50% dos braços, os pés 40% das pernas. A defesa somada vai até 80%. As peças gastam ao absorver golpes; em farrapos (0%) protegem 40% do normal. Conserto com fita, como as outras coisas.
 - **Conjuntos:** cada peça dá um bônus pequeno, e o conjunto completo soma um bônus maior:
   - *Mecânico* (macacão, luvas e botas de trabalho): consertos de itens, veículos e muros mais rápidos;
-  - *Médico* (jaleco, luvas cirúrgicas e calça hospitalar): tratamentos mais rápidos e suturas mais seguras;
+  - *Médico* (jaleco, luvas cirúrgicas e calça hospitalar): tratamentos mais rápidos e bandagens que fecham a ferida mais rápido;
   - *Tático* (capacete, colete, luvas, calça e botas militares): mais dano corpo a corpo e recarga mais rápida;
   - *Anti-esporos* (traje, luvas e botas de borracha): menos carga patogênica e menos gasto de filtro;
   - *Sucata* (capacete, armadura e caneleiras, fabricados na bancada): só proteção, e pesa.
 - **Onde achar:** roupas comuns nas caixas comuns, as médicas em clínicas, as de mecânico, anti-esporos e militares nas caixas técnicas (as militares são raras). Todo sobrevivente começa de camiseta ou moletom, calça jeans e tênis.
-- **Aba Corpo:** à esquerda ficam os espaços de roupa (botão direito: tirar ou consertar), os conjuntos e os bônus, e as roupas do inventário com o botão "Vestir". À direita, os 6 membros em linha, só com o nome: o contorno é vermelho neon e pulsa quando o membro está machucado. Clicar num membro mostra a vida, o estado, a proteção da roupa e o tratamento.
+- **Sem sutura (decisão de 30/10):** a bandagem segura o sangramento. Na ferida leve ele para; na profunda cai para 15%. Com o tempo (e sem infecção acima de 25%), a profunda enfaixada vira leve e a leve cicatriza. Medicina e o conjunto médico fazem a bandagem começar o fechamento mais adiantado. Saves antigos trocam kits de sutura por talas.
+- **Ossos:** braços e pernas podem sofrer torção ou fratura. A torção sara sozinha em ~4 min (~1,5 min com tala); a fratura só sara imobilizada com tala (~10 min, comendo e bebendo). Perna machucada deixa o personagem lento (torção -15%, fratura -35%) e braço machucado tira dano corpo a corpo; a tala reduz a penalidade e o analgésico corta pela metade. Tala: item médico, fabricada com 1 madeira + 1 bandagem.
+- **Quedas:** `SurvivorData.fall_injury(metros)` já calcula o dano de pular ou cair (abaixo de 2,5 m nada; até 4 m torção; até 7 m torção ou fratura numa perna; até 11 m fratura e dano no tronco; acima disso as duas pernas e risco de morte). Atletismo amortece 0,3 m por nível; implante de pernas, 1,5 m. Será chamada quando existirem prédios com andares (casas de dois andares, quartel de bombeiros) e janelas para pular.
+- **Barra rápida:** a tecla 1-5 (ou um clique no espaço) só escolhe o item. Arma escolhida vai para a mão e o clique ataca; outro item (bandagem, comida, tala...) é usado com o clique do mouse. Escolher o mesmo espaço de novo solta (e guarda a arma).
+- **Aba Corpo:** nas cores normais da interface. À esquerda ficam os espaços de roupa (botão direito: tirar ou consertar), os conjuntos e os bônus, e as roupas do inventário com o botão "Vestir". À direita, os 6 membros em linha, só com o nome: só o membro machucado (ferida, osso, infecção ou vida baixa) ganha contorno vermelho neon pulsando. Clicar num membro mostra a vida, o estado, a proteção da roupa e o tratamento.
 
 ### Mundo em chunks e vilas vivas (fase 7)
 
@@ -225,5 +229,5 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 8 | Agricultura (canteiro, sementes, rega, colheita), culinária (fogareiro, receitas, água fervida) e veículos (picape blindada e moto elétrica) | **feito** |
 | 10 | Padrão visual único (STYLE.md), arte própria no lugar do Town Sampler e do Neon District | **feito** |
 | 11 | Cidades pequenas e aldeias (vivas, abandonadas, tomadas por esporos), prédios exploráveis com corte estilo The Sims | **feito** |
-| 12 | Ferimentos com chance de sangrar (uma ferida por vez), roupas e armaduras com defesa, desgaste e conjuntos com bônus, aba Corpo em neon | **feito** |
+| 12 | Ferimentos com chance de sangrar (uma ferida por vez), torções e fraturas com tala, quedas, roupas e armaduras com conjuntos, barra rápida de escolher e clicar | **feito** |
 | 9 | Construção em bordas (estilo The Sims) com 3 abas, utilidades e decoração, rede de energia (eólico, combustão, baterias), mesa de reparos, dia/noite, clima e iluminação | **feito** |

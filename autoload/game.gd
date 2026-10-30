@@ -160,6 +160,8 @@ func debug_command(cmd: String) -> void:
 			wl["wound"] = int(a[1]) if a.size() > 1 else 1
 			wl["bleed"] = 0.25 * float(wl["wound"])
 			wl["hp"] = minf(float(wl["hp"]), 60.0)
+		"fall":
+			p.data.fall_injury(float(arg))
 		"wear":
 			for id in a:
 				p.data.wear(Items.make(id)[0])
@@ -233,6 +235,8 @@ func debug_command(cmd: String) -> void:
 			hud.hot_set(int(a[0]), a[1])
 		"hotuse":
 			hud.hot_use(int(arg))
+		"hotsel":
+			hud.hot_select(int(arg))
 		"tpplace":
 			# vai ao lugar n do tipo/estado pedido: tpplace:esporos,0 · tpplace:abandonada,1 · tpplace:aldeia,0
 			var found := 0

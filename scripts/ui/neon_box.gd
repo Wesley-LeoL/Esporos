@@ -1,20 +1,16 @@
 class_name NeonBox
 extends PanelContainer
-## Caixa com contorno neon (vermelho por padrão, estilo cyberpunk). 'pulse' faz o contorno
-## e o brilho pulsarem (membro machucado); 'strength' é o brilho base (0-1). Emite 'pressed'
-## no clique esquerdo quando 'clickable'.
+## Caixa clicável no estilo normal da interface. Com 'pulse' (membro machucado), o contorno
+## fica vermelho neon e pulsa. 'selected' destaca o contorno. Emite 'pressed' no clique
+## esquerdo quando 'clickable'.
 
 signal pressed
 
 const NEON := Color("#ff2a4d")
-const BG := Color(0.07, 0.015, 0.035, 0.92)
 
-var color := NEON
 var pulse := false
-var strength := 1.0
 var selected := false
 var clickable := false
-var glow := true
 var pad := Vector4(10, 8, 10, 8)
 var _sb: StyleBoxFlat
 var _phase := 0.0
@@ -22,8 +18,8 @@ var _phase := 0.0
 
 func _ready() -> void:
 	_sb = StyleBoxFlat.new()
-	_sb.bg_color = BG
-	_sb.set_border_width_all(3 if selected else 2)
+	_sb.bg_color = UITheme.PANEL_SOFT
+	_sb.set_border_width_all(2)
 	_sb.set_corner_radius_all(2)
 	_sb.content_margin_left = pad.x
 	_sb.content_margin_top = pad.y
@@ -45,19 +41,18 @@ func _process(_delta: float) -> void:
 
 
 func _apply(k: float) -> void:
-	var c := color
-	var a := strength * (0.45 + 0.55 * k) if pulse else strength
-	c.a = clampf(a, 0.0, 1.0)
-	if selected:
-		c = c.lerp(Color.WHITE, 0.25)
-	_sb.border_color = c
-	if glow and a > 0.4:
-		_sb.shadow_color = Color(color.r, color.g, color.b, 0.5 * a)
-		_sb.shadow_size = int(round(2.0 + (8.0 * k if pulse else 4.0) * strength))
-	else:
+	if not pulse:
+		_sb.border_color = UITheme.ACCENT if selected else UITheme.BORDER
+		_sb.bg_color = UITheme.PANEL if selected else UITheme.PANEL_SOFT
 		_sb.shadow_size = 0
-	if pulse:
-		_sb.bg_color = BG.lerp(Color(color.r * 0.35, 0.0, color.b * 0.2, 0.95), 0.35 * k)
+	else:
+		var c := NEON
+		c.a = 0.45 + 0.55 * k
+		_sb.set_border_width_all(3 if selected else 2)
+		_sb.border_color = c.lerp(Color.WHITE, 0.25) if selected else c
+		_sb.shadow_color = Color(NEON.r, NEON.g, NEON.b, 0.5 * k)
+		_sb.shadow_size = int(round(2.0 + 7.0 * k))
+		_sb.bg_color = UITheme.PANEL_SOFT.lerp(Color(0.35, 0.02, 0.08), 0.35 * k)
 	queue_redraw()
 
 

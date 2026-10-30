@@ -103,6 +103,8 @@ var air_panel: PanelContainer
 ## Barra rápida (5 espaços na direita).
 var hotbar_root: VBoxContainer
 var hot_slots: Array[HotSlot] = []
+## Espaço escolhido na barra rápida (-1 = nenhum). A tecla escolhe; o clique usa.
+var hot_sel := -1
 ## Modo construção: faixa embaixo com as abas, moldura na tela e HUD normal escondida.
 var build_mode := false
 var build_bar: PanelContainer
@@ -808,7 +810,7 @@ func _input(event: InputEvent) -> void:
 		_build_key = ""
 		_update_build_bar(p)
 	elif not blocks_input() and not build_mode and _hot_key(event) >= 0:
-		hot_use(_hot_key(event))
+		hot_select(_hot_key(event))
 	elif event.is_action_pressed("vehicle_status"):
 		var v := Game.world.vehicle_of(p.peer)
 		if window_kind == "vehicle":
@@ -1003,9 +1005,61 @@ func _build_hotbar() -> void:
 
 
 func _update_hotbar(d: SurvivorData) -> void:
+	if hot_sel >= 0 and String(d.hotbar[hot_sel]) == "":
+		hot_sel = -1
 	for i in hot_slots.size():
 		var id: String = d.hotbar[i] if i < d.hotbar.size() else ""
 		hot_slots[i].show_item(id, d.count(id) if id != "" else 0)
+		hot_slots[i].set_selected(i == hot_sel)
+
+
+static func _is_weapon(id: String) -> bool:
+	return String(Items.def(id).get("tipo", "")) in ["arma", "arma_fogo"]
+
+
+## Escolhe o espaço i (tecla 1-5 ou clique no espaço). Arma escolhida vai para a mão e o
+## clique ataca; outro item espera o clique do mouse para ser usado. Escolher de novo solta.
+func hot_select(i: int) -> void:
+	var p := _player()
+	if p == null or p.data == null:
+		return
+	var d := p.data
+	var id: String = d.hotbar[i]
+	if id == "":
+		hot_sel = -1
+		return
+	if hot_sel == i:
+		hot_sel = -1
+		var w := d.weapon_inst()
+		if _is_weapon(id) and not w.is_empty() and String(w["id"]) == id:
+			p.act("use_item", [int(w["u"])])  # guarda a arma
+		return
+	hot_sel = i
+	var inst := d.first_of(id)
+	if inst.is_empty():
+		Game.say("Sem %s no inventário." % DB.item_name(id).to_lower())
+		return
+	if _is_weapon(id):
+		if int(inst["u"]) != d.hand_u:
+			p.act("use_item", [int(inst["u"])])
+	else:
+		Game.say("Pronto para usar: %s (clique)." % DB.item_name(id).to_lower())
+
+
+## O clique do mouse no mundo vai usar o item escolhido (em vez de atacar)?
+func hot_consumes_click() -> bool:
+	var p := _player()
+	if hot_sel < 0 or p == null or p.data == null or build_mode or blocks_input():
+		return false
+	var id: String = p.data.hotbar[hot_sel]
+	return id != "" and not _is_weapon(id)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT \
+			and hot_consumes_click():
+		hot_use(hot_sel)
+		get_viewport().set_input_as_handled()
 
 
 func _hot_key(event: InputEvent) -> int:
@@ -1054,13 +1108,13 @@ func hot_use(i: int) -> void:
 			else:
 				p.act("treat", [l2, "desinfetar", 0])
 			return
-		"kit_sutura":
+		"tala":
 			var l3 := _worst_limb(d, func(limb: Dictionary) -> bool:
-				return int(limb["wound"]) == 2)
+				return int(limb.get("osso", 0)) > 0 and not limb.get("tala", false))
 			if l3 == "":
-				Game.say("Nenhum ferimento profundo.")
+				Game.say("Nenhum osso para imobilizar.")
 			else:
-				p.act("treat", [l3, "suturar", 0])
+				p.act("treat", [l3, "imobilizar", 0])
 			return
 		"antibiotico":
 			p.act("treat", ["torso", "antibiotico", 0])
@@ -1927,7 +1981,7 @@ func _tab_body(d: SurvivorData) -> void:
 	var allies := _nearby_allies(p)
 	var sel := _hbox(8)
 	box.add_child(sel)
-	sel.add_child(_neon_title("PACIENTE"))
+	sel.add_child(_sec_title("PACIENTE"))
 	var ids: Array[int] = [0]
 	for o in allies:
 		ids.append(o.peer)
@@ -1978,32 +2032,26 @@ func _tab_body(d: SurvivorData) -> void:
 		_patient_surgery(box, d, target)
 
 
-func _neon_title(text: String) -> Label:
-	var l := _label(text, S, NeonBox.NEON)
-	l.add_theme_color_override("font_shadow_color", Color(NeonBox.NEON, 0.45))
-	l.add_theme_constant_override("shadow_offset_x", 0)
-	l.add_theme_constant_override("shadow_offset_y", 0)
-	l.add_theme_constant_override("shadow_outline_size", 6)
+func _sec_title(text: String) -> Label:
+	var l := _label(text, S, UITheme.ACCENT)
 	l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return l
 
 
-func _neon(parent: Control, strength := 0.8, pulse := false) -> NeonBox:
-	var nb := NeonBox.new()
-	nb.strength = strength
-	nb.pulse = pulse
-	parent.add_child(nb)
-	return nb
+func _card(parent: Control, pad := Vector4(14, 10, 14, 12)) -> PanelContainer:
+	var c := _panel("card", 8, pad)
+	c.mouse_filter = Control.MOUSE_FILTER_PASS
+	parent.add_child(c)
+	return c
 
 
 ## Coluna de equipamento: espaços de roupa (e a máscara), conjuntos e roupas no inventário.
 func _body_equipment(cols: HBoxContainer, d: SurvivorData) -> void:
-	var panel := _neon(cols, 0.85)
+	var panel := _card(cols)
 	panel.custom_minimum_size.x = 600
-	panel.pad = Vector4(14, 10, 14, 12)
 	var v := _vbox(8)
 	panel.add_child(v)
-	v.add_child(_neon_title("EQUIPAMENTO"))
+	v.add_child(_sec_title("EQUIPAMENTO"))
 	var grid := GridContainer.new()
 	grid.columns = 2
 	grid.add_theme_constant_override("h_separation", 10)
@@ -2018,7 +2066,7 @@ func _body_equipment(cols: HBoxContainer, d: SurvivorData) -> void:
 		if n <= 0:
 			continue
 		if not any_set:
-			v.add_child(_neon_title("CONJUNTOS"))
+			v.add_child(_sec_title("CONJUNTOS"))
 			any_set = true
 		var total := (DB.CONJUNTOS[cj]["pecas"] as Array).size()
 		var full := n >= total
@@ -2038,7 +2086,7 @@ func _body_equipment(cols: HBoxContainer, d: SurvivorData) -> void:
 			if String(Items.def(inst["id"]).get("tipo", "")) == "roupa":
 				spare.append(inst)
 	if not spare.is_empty():
-		v.add_child(_neon_title("NO INVENTÁRIO"))
+		v.add_child(_sec_title("NO INVENTÁRIO"))
 		for inst: Dictionary in spare:
 			var row := _hbox(8)
 			v.add_child(row)
@@ -2055,12 +2103,8 @@ func _body_equipment(cols: HBoxContainer, d: SurvivorData) -> void:
 ## Um espaço de roupa: o item (menu com botão direito, como no inventário) e a proteção.
 func _body_slot(grid: GridContainer, d: SurvivorData, slot: String) -> void:
 	var inst: Dictionary = d.equip[slot]
-	var nb := NeonBox.new()
-	nb.strength = 0.9 if not inst.is_empty() else 0.35
-	nb.glow = not inst.is_empty()
-	nb.pad = Vector4(6, 6, 10, 6)
+	var nb := _card(grid, Vector4(6, 6, 10, 6))
 	nb.custom_minimum_size = Vector2(280, 0)
-	grid.add_child(nb)
 	var row := _hbox(8)
 	nb.add_child(row)
 	var sl := InvSlot.new()
@@ -2074,7 +2118,7 @@ func _body_slot(grid: GridContainer, d: SurvivorData, slot: String) -> void:
 	info.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(info)
 	var slot_name: String = "Rosto" if slot == "mascara" else DB.ROUPA_SLOT_NAMES[slot]
-	info.add_child(_label(slot_name.to_upper(), S, Color(NeonBox.NEON, 0.85)))
+	info.add_child(_label(slot_name.to_upper(), S, UITheme.ACCENT))
 	if inst.is_empty():
 		info.add_child(_label("vazio", S, UITheme.MUTED))
 		return
@@ -2096,12 +2140,11 @@ func _body_slot(grid: GridContainer, d: SurvivorData, slot: String) -> void:
 ## embaixo, os detalhes e o tratamento do membro escolhido.
 func _body_limbs(cols: HBoxContainer, d: SurvivorData, limbs: Dictionary, target: int, pname: String,
 		blood: float, pathogen: float, antib: float) -> void:
-	var panel := _neon(cols, 0.85)
+	var panel := _card(cols)
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.pad = Vector4(14, 10, 14, 12)
 	var v := _vbox(10)
 	panel.add_child(v)
-	v.add_child(_neon_title("CORPO · %s" % pname.to_upper()))
+	v.add_child(_sec_title("CORPO · %s" % pname.to_upper()))
 	var vit := _hbox(10)
 	v.add_child(vit)
 	vit.add_child(UITheme.icon_rect("sangue", UITheme.LIFE, 28))
@@ -2130,14 +2173,12 @@ func _body_limbs(cols: HBoxContainer, d: SurvivorData, limbs: Dictionary, target
 		var nb := NeonBox.new()
 		nb.clickable = true
 		nb.pulse = hurt
-		nb.strength = 1.0 if hurt else 0.3
-		nb.glow = hurt
 		nb.selected = l == body_sel
 		nb.pad = Vector4(6, 10, 6, 10)
 		nb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		line.add_child(nb)
 		var nl := _label(String(SurvivorData.LIMB_NAMES[l]).to_upper(), S,
-			NeonBox.NEON.lerp(Color.WHITE, 0.3) if hurt else (UITheme.TEXT if l == body_sel else UITheme.MUTED))
+			NeonBox.NEON.lerp(Color.WHITE, 0.35) if hurt else (UITheme.TEXT if l == body_sel else UITheme.MUTED))
 		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		nb.add_child(nl)
@@ -2152,7 +2193,7 @@ func _body_limbs(cols: HBoxContainer, d: SurvivorData, limbs: Dictionary, target
 	top.add_child(_item_icon("antibiotico", 40))
 	_btn(top, "Antibiótico (x%d)" % d.count("antibiotico"), _act(func() -> void: _player().act("treat", ["torso", "antibiotico", target])), d.count("antibiotico") > 0)
 	_lbl(top, "Ativo por %ds" % int(antib) if antib > 0.0 else "Cura sepse e infecção fúngica.", UITheme.MUTED)
-	_lbl(v, "Nem todo golpe abre ferida; com uma ferida aberta, novos cortes pioram a mesma. Feridas profundas só param de sangrar com sutura + bandagem. Você usa os seus suprimentos e a sua Medicina.", UITheme.MUTED)
+	_lbl(v, "Nem todo golpe abre ferida; com uma ferida aberta, novos cortes pioram a mesma. A bandagem segura o sangramento e fecha a ferida com o tempo; torções e fraturas pedem tala. Você usa os seus suprimentos e a sua Medicina.", UITheme.MUTED)
 
 
 ## 0 = saudável; > 0 = machucado (ferida, infecção ou vida baixa).
@@ -2164,18 +2205,18 @@ func _limb_severity(limb: Dictionary) -> float:
 		s += float(limb["infection"])
 	if float(limb["hp"]) < 70.0:
 		s += 70.0 - float(limb["hp"])
+	s += 40.0 * float(limb.get("osso", 0))
 	return s
 
 
 func _limb_detail(v: VBoxContainer, d: SurvivorData, limb: Dictionary, l: String, target: int) -> void:
 	var hurt := _limb_severity(limb) > 0.0
-	var card := _neon(v, 0.9 if hurt else 0.45)
-	card.pad = Vector4(14, 10, 14, 10)
+	var card := _card(v, Vector4(14, 10, 14, 10))
 	var cv := _vbox(8)
 	card.add_child(cv)
 	var head := _hbox(12)
 	cv.add_child(head)
-	var title := _label(String(SurvivorData.LIMB_NAMES[l]).to_upper(), L, NeonBox.NEON if hurt else UITheme.TEXT)
+	var title := _label(String(SurvivorData.LIMB_NAMES[l]).to_upper(), L, UITheme.TEXT)
 	head.add_child(title)
 	var hp := float(limb["hp"])
 	var hcol := OK_COLOR if hp > 50.0 else UITheme.WARN if hp > 20.0 else UITheme.DANGER
@@ -2190,15 +2231,16 @@ func _limb_detail(v: VBoxContainer, d: SurvivorData, limb: Dictionary, l: String
 	elif int(limb["wound"]) == 1:
 		st.append("ferida leve")
 	if int(limb["wound"]) > 0 and float(limb["bleed"]) > 0.0 and not (limb["bandaged"] and int(limb["wound"]) == 1):
-		st.append("sangrando (%.1f/s)" % (float(limb["bleed"]) * (0.4 if limb["bandaged"] else 1.0)))
+		st.append("sangrando (%.1f/s)" % (float(limb["bleed"]) * (0.15 if limb["bandaged"] else 1.0)))
 	if float(limb["infection"]) > 1.0:
 		st.append("infecção %d%%" % int(limb["infection"]))
 	if limb["disinfected"]:
 		st.append("desinfetado")
-	if limb["sutured"]:
-		st.append("suturado")
 	if limb["bandaged"]:
 		st.append("enfaixado")
+	var osso := int(limb.get("osso", 0))
+	if osso > 0:
+		st.append(("FRATURA" if osso == 2 else "torção") + (" imobilizada (%d%%)" % int(float(limb.get("osso_t", 0.0))) if limb.get("tala", false) else ""))
 	var stt := ", ".join(st)
 	_lbl(cv, "Saudável." if st.is_empty() else stt.left(1).to_upper() + stt.substr(1) + ".", UITheme.MUTED if st.is_empty() else UITheme.WARN)
 	if target == 0:
@@ -2208,8 +2250,10 @@ func _limb_detail(v: VBoxContainer, d: SurvivorData, limb: Dictionary, l: String
 	cv.add_child(bt)
 	var wounded := int(limb["wound"]) > 0
 	_btn(bt, "Desinfetar", _act(func() -> void: _player().act("treat", [l, "desinfetar", target])), wounded and d.count("antisseptico") + d.count("alcool") > 0)
-	_btn(bt, "Suturar", _act(func() -> void: _player().act("treat", [l, "suturar", target])), int(limb["wound"]) == 2 and d.count("kit_sutura") > 0)
 	_btn(bt, "Enfaixar", _act(func() -> void: _player().act("treat", [l, "enfaixar", target])), wounded and not limb["bandaged"] and d.count("bandagem") + d.count("gaze") > 0)
+	if l in SurvivorData.BONE_LIMBS:
+		_btn(bt, "Imobilizar (tala x%d)" % d.count("tala"), _act(func() -> void: _player().act("treat", [l, "imobilizar", target])),
+			osso > 0 and not limb.get("tala", false) and d.count("tala") > 0)
 
 
 ## Cirurgia no aliado: remover implantes dele ou instalar um dos seus.

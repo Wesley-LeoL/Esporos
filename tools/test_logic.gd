@@ -249,6 +249,47 @@ func _initialize() -> void:
 		bl.damage_limb("braco_e", 14.0)
 	check(int(bl.limbs["braco_e"]["wound"]) == 0 and float(bl.limbs["torso"]["bleed"]) > bleed0,
 		"com ferida aberta, cortes em outro membro só aumentam o sangramento")
+	# ossos: queda, torção/fratura, tala; ferida profunda fecha só com bandagem
+	var fa := SurvivorData.from_spec({"nome": "Queda", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
+	var sp0 := fa.speed_mult()
+	fa.fall_injury(2.0)
+	check(fa.limbs["perna_e"]["osso"] == 0 and fa.limbs["perna_d"]["osso"] == 0, "pulo baixo não machuca")
+	fa.fall_injury(9.0)
+	var broken := "perna_e" if int(fa.limbs["perna_e"]["osso"]) == 2 else "perna_d"
+	check(int(fa.limbs[broken]["osso"]) == 2, "queda de 9 m quebra uma perna")
+	var sp_broken := fa.speed_mult()
+	check(sp_broken < sp0 - 0.3, "perna quebrada deixa lento (%.2f < %.2f)" % [sp_broken, sp0])
+	fa.give("tala", 1)
+	fa.treat(broken, "imobilizar")
+	check(fa.limbs[broken]["tala"] and fa.speed_mult() > sp_broken, "tala alivia a lentidão")
+	fa.calories = 1500.0
+	fa.water = 80.0
+	for i in 700:
+		fa._tick_bone(broken, fa.limbs[broken], 1.0, true)
+	check(int(fa.limbs[broken]["osso"]) == 0 and not fa.limbs[broken]["tala"], "fratura imobilizada sara com o tempo")
+	var nt := SurvivorData.from_spec({"nome": "SemTala", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
+	nt.break_bone("braco_e", 2)
+	for i in 1200:
+		nt._tick_bone("braco_e", nt.limbs["braco_e"], 1.0, true)
+	check(int(nt.limbs["braco_e"]["osso"]) == 2, "fratura sem tala não sara")
+	nt.break_bone("perna_d", 1)
+	for i in 260:
+		nt._tick_bone("perna_d", nt.limbs["perna_d"], 1.0, true)
+	check(int(nt.limbs["perna_d"]["osso"]) == 0, "torção sara sozinha")
+	var dp := SurvivorData.from_spec({"nome": "Fundo", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
+	dp.limbs["torso"]["wound"] = 2
+	dp.limbs["torso"]["bleed"] = 0.5
+	dp.give("bandagem", 1)
+	dp.give("alcool", 1)
+	dp.treat("torso", "desinfetar")
+	dp.treat("torso", "enfaixar")
+	dp.calories = 1500.0
+	dp.water = 80.0
+	for i in 230:
+		dp._tick_wounds(1.0, 0.0)
+	check(int(dp.limbs["torso"]["wound"]) == 1, "ferida profunda enfaixada vira leve com o tempo")
+	check(not DB.ITEMS.has("kit_sutura") and Items.sanitize([{"id": "kit_sutura", "n": 1}])[0]["id"] == "tala", "sutura saiu (saves antigos viram tala)")
+
 	# roupas: defesa, desgaste e conjuntos
 	var nu := SurvivorData.from_spec({"nome": "Nu", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
 	for slot: String in DB.ROUPA_SLOTS:

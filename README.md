@@ -33,7 +33,7 @@ Para testar o co-op numa máquina só: `godot --path . -- --autostart=host --nam
 - **Ações com tempo e medicina cooperativa**: curativos, cirurgias, recarga e consumo levam tempo e são interrompidos por movimento ou dano; na aba Corpo dá para tratar e operar um aliado próximo.
 - **Agricultura, culinária e veículos**: canteiros com sementes, rega e colheita (esporos densos matam a plantação); fogareiro e panela para cozinhar e ferver água; picape blindada e moto elétrica abandonadas, com ligação direta, energia, conserto, porta-malas e passageiros.
 - **Metabolismo**: fome (calorias) e sede (água limpa vs. suja); carboidratos e proteínas foram removidos do protótipo.
-- **Medicina por membros**: 6 membros com ferida leve/profunda, sangramento, desinfecção, sutura, bandagem, antibiótico, sepse e infecção fúngica por ferida aberta.
+- **Medicina por membros**: 6 membros com ferida leve/profunda, sangramento, desinfecção, bandagem, torções e fraturas (tala), antibiótico, sepse e infecção fúngica por ferida aberta.
 - **Cibernética**: implantes (filtro pulmonar, HUD, braço, pernas hidráulicas, malha subdérmica) com bateria, estresse térmico, integridade e manutenção. O **núcleo neural** limita os implantes (1 sem processador; Mk1 e Mk2 ampliam); passar do limite dá rejeição ou **sobrecarga sináptica** (controle atrasado, espasmos, HUD distorcido, sem ações complexas).
 - **Criação de personagem por pontos**: Força, Resistência, habilidades iniciais e traços (qualidades e defeitos), com modelos prontos; refeita a cada morte.
 - **12 habilidades por uso** (Luta, Pontaria, Atletismo, Furtividade, Mecânica, Eletrônica, Carpintaria, Metalurgia, Medicina, Cibernética, Agricultura, Culinária) e manuais; "parede de conhecimento" para construções e cirurgias.

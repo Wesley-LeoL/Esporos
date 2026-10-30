@@ -170,7 +170,7 @@ const ICONS := {
 	"supressor": 7,
 	"bandagem": 8,
 	"antisseptico": 9,
-	"kit_sutura": 10,
+	"tala": 10,
 	"antibiotico": 11,
 	"kit_cirurgico": 12,
 	"bateria": 13,

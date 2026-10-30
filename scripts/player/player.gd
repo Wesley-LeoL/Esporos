@@ -19,7 +19,7 @@ const ACTIONS := ["hotbar", "use_item", "treat", "craft", "install", "maintain",
 ## Ações que levam tempo (barra de progresso; mover-se ou levar dano interrompe).
 const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item", "vehicle"]
 const TREAT_NAMES := {"antibiotico": "Aplicando antibiótico", "desinfetar": "Desinfetando", "enfaixar": "Enfaixando",
-	"suturar": "Suturando"}
+	"imobilizar": "Imobilizando"}
 const USE_TIME := {"comida": 1.5, "bebida": 1.5, "cantil": 1.2, "mascara": 2.0, "roupa": 2.0, "filtro": 2.5, "manual": 8.0,
 	"analgesico": 1.0, "supressor": 1.5, "mochila": 1.5, "coldre": 1.0, "bateria": 2.0, "pilha": 1.0}
 ## Ações que a sobrecarga sináptica impede (GDD 4: incapacidade de ações complexas).
@@ -229,8 +229,9 @@ func _local_control(delta: float) -> void:
 	attack_cd = maxf(0.0, attack_cd - delta)
 	_update_nearby()
 	var building_mode := Game.hud != null and Game.hud.build_mode
+	var hot_click := Game.hud != null and Game.hud.hot_consumes_click()
 	if build_kind == "" and not demolish and not building_mode and attack_cd <= 0.0 and Input.is_action_pressed("attack") \
-			and not console_open and not menu_open and veh == null:
+			and not console_open and not menu_open and veh == null and not hot_click:
 		attack_cd = 0.55
 		attack_seq += 1
 		var aim := facing
@@ -555,7 +556,7 @@ func _duration(action: String, args: Array, patient: Player) -> float:
 	var cib := 1.0 - 0.05 * float(data.level("cibernetica"))
 	match action:
 		"treat":
-			return {"antibiotico": 2.0, "desinfetar": 3.0, "enfaixar": 4.0, "suturar": 8.0}.get(str(args[1]), 3.0) * med \
+			return {"antibiotico": 2.0, "desinfetar": 3.0, "enfaixar": 4.0, "imobilizar": 6.0}.get(str(args[1]), 3.0) * med \
 				* (1.25 if patient == self else 1.0)
 		"install":
 			return 14.0 * cib
