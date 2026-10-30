@@ -129,6 +129,7 @@ def gen_props():
     crop_sheet("moto", "props", [[R(am.moto(), FACING_THETA[d]) for d in range(8)]], "moto (8 direções)")
     crop_sheet("canteiro", "structures", [[R(am.planter(st)) for st in range(5)]], "canteiro (vazio..murcho)")
     crop_sheet("fogareiro", "structures", [[R(am.stove(True)), R(am.stove(False))]], "fogareiro")
+    crop_sheet("fornalha", "structures", [[R(am.furnace(True)), R(am.furnace(False))]], "fornalha")
     # paredes de borda: linha 0 = borda x+ (entre a célula e a vizinha x+1), linha 1 = borda y+
     # colunas: [cheia, baixa] (+ [aberta, aberta baixa] nas portas); a baixa é o corte do The Sims
     for name in ("parede_madeira", "parede_metal", "meia_parede", "janela", "porta", "portao"):

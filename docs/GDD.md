@@ -165,6 +165,20 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Barra rápida:** a tecla 1-5 (ou um clique no espaço) só escolhe o item. Arma escolhida vai para a mão e o clique ataca; outro item (bandagem, comida, tala...) é usado com o clique do mouse. Escolher o mesmo espaço de novo solta (e guarda a arma).
 - **Aba Corpo:** nas cores normais da interface. À esquerda ficam os espaços de roupa (botão direito: tirar ou consertar), os conjuntos e os bônus, e as roupas do inventário com o botão "Vestir". À direita, os 6 membros em linha, só com o nome: só o membro machucado (ferida, osso, infecção ou vida baixa) ganha contorno vermelho neon pulsando. Clicar num membro mostra a vida, o estado, a proteção da roupa e o tratamento.
 
+### Interação com móveis, estações e máquinas (fase 13)
+
+- **Móveis guardam os itens.** Nas casas, lojas, bares, clínicas e oficinas, os itens ficam nos móveis: geladeira (comida e água), fogão (panela, abridor, enlatados), pia (antisséptico, álcool, bandagens), armário (roupas, mochila, lanterna; às vezes arma), estante e arquivo (manuais, pilhas, sementes, eletrônica), prateleira e balcão (mantimentos e miudezas) e tambores (combustível e sucata). Na clínica, armário, arquivo e pia são médicos; na oficina, técnicos. Cerca de 35% dos móveis estão vazios (55% nas vilas vivas, onde os moradores guardam pouco). A caixa solta só aparece em prédio sem móvel que guarde coisas.
+- **Estações:** bancada, fogareiro, fornalha (nova) e mesa de reparos. A receita que exige estação só se faz nela: chegue perto, aperte [E] e a janela da estação lista as receitas dela. A aba Inventário lista só o que se faz à mão. A mesa de reparos abre a lista de tudo o que está gasto (inventário e roupa vestida).
+  - *Fogareiro:* queima lenha (1 madeira = 2 receitas).
+  - *Fornalha* (sucata 6, metal 2; Metalurgia 1): funde 3 sucatas em 1 metal e faz pregos; 1 madeira por fornada.
+- **Máquinas precisam de insumo**, além de energia:
+  - *Gerador:* combustível (como antes);
+  - *Eólico:* vento; *coletor:* chuva;
+  - *Purificador:* filtro (1 filtro = 5 min ligado);
+  - *Selagem de ar:* filtros (2 filtros = 6 min);
+  - *Torre:* munição 9 mm (até 25 balas, 1 por tiro).
+  Sem insumo, a máquina não liga nem gasta energia. [E] põe o insumo que estiver no inventário. As torres das vilas não precisam.
+
 ### Mundo em chunks e vilas vivas (fase 7)
 
 - **Mapa: cidades pequenas e aldeias (29/10):**
@@ -230,4 +244,5 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 10 | Padrão visual único (STYLE.md), arte própria no lugar do Town Sampler e do Neon District | **feito** |
 | 11 | Cidades pequenas e aldeias (vivas, abandonadas, tomadas por esporos), prédios exploráveis com corte estilo The Sims | **feito** |
 | 12 | Ferimentos com chance de sangrar (uma ferida por vez), torções e fraturas com tala, quedas, roupas e armaduras com conjuntos, barra rápida de escolher e clicar | **feito** |
+| 13 | Móveis com itens (geladeira, armário, pia...), estações com janela de fabricação (bancada, fogareiro, fornalha, mesa de reparos) e máquinas que gastam insumo (filtro, munição, lenha) | **feito** |
 | 9 | Construção em bordas (estilo The Sims) com 3 abas, utilidades e decoração, rede de energia (eólico, combustão, baterias), mesa de reparos, dia/noite, clima e iluminação | **feito** |

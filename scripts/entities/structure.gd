@@ -7,7 +7,9 @@ extends StaticBody2D
 
 ## Objetos com [E].
 const INTERACTIVE := ["gerador", "purificador", "vedacao", "torre", "canteiro", "fogareiro", "eolico", "bateria_casa",
-	"coletor", "cama", "bancada", "mesa_reparo", "luminaria", "poste", "letreiro"]
+	"coletor", "cama", "bancada", "mesa_reparo", "luminaria", "poste", "letreiro", "fornalha"]
+## Estações: [E] abre a janela de fabricação (ou de consertos) dela.
+const STATIONS := ["bancada", "fogareiro", "fornalha", "mesa_reparo"]
 ## Objetos com quadro "ligado" na coluna 0 e "desligado" na 1.
 const ON_OFF := ["gerador", "purificador", "vedacao", "bateria_casa", "luminaria", "poste", "letreiro"]
 const MAX_MODS := 5
@@ -79,6 +81,8 @@ func _ready() -> void:
 			add_to_group("turrets")
 	if kind in INTERACTIVE:
 		add_to_group("interactable")
+	if kind in STATIONS:
+		add_to_group("stations")
 	if kind != "edificio":
 		add_to_group("station_" + kind)
 	var def: Dictionary = DB.BUILDS.get(kind, {})
@@ -99,6 +103,57 @@ func _ready() -> void:
 		powered = true
 	_apply_open()
 	_refresh_power()
+
+
+## Insumo que a construção gasta para funcionar (DB.BUILDS[kind]["insumo"]; {} = nenhum).
+## 'fuel' guarda o nível (0-100). O gerador usa combustível pela lógica própria dele.
+static func supply_of(k: String) -> Dictionary:
+	return DB.BUILDS.get(k, {}).get("insumo", {})
+
+
+## Precisa de insumo para funcionar? As defesas das vilas não precisam.
+func needs_supply() -> bool:
+	return vila < 0 and not supply_of(kind).is_empty()
+
+
+func supply_text() -> String:
+	var sup := supply_of(kind)
+	if kind == "torre":
+		return "munição %d" % int(round(fuel / float(sup["tiro"])))
+	return "%s %d%%" % [sup["nome"], int(fuel)]
+
+
+## Servidor: põe o insumo que o jogador tiver, até encher.
+func refill(player: Player) -> void:
+	var sup := supply_of(kind)
+	var per := float(sup["por_item"])
+	if fuel > 100.0 - per * 0.5:
+		Game.tell(player.peer, "%s já está cheio (%s)." % [DB.BUILDS[kind]["nome"], supply_text()])
+		return
+	var n := 0
+	for it: String in sup["itens"]:
+		while fuel <= 100.0 - per * 0.5 and player.data.take_item(it):
+			fuel = minf(100.0, fuel + per)
+			n += 1
+	if n == 0:
+		var names: Array[String] = []
+		for it2: String in sup["itens"]:
+			names.append(DB.item_name(it2).to_lower())
+		Game.tell(player.peer, "Você precisa de %s." % " ou ".join(names))
+		return
+	Game.tell(player.peer, "%s: %s." % [DB.BUILDS[kind]["nome"], supply_text()])
+	_refresh_power()
+	world.structure_changed(self)
+
+
+## Servidor: gasta insumo de uma estação (receita no fogareiro ou na fornalha).
+func use_supply(amount: float) -> bool:
+	if fuel + 0.01 < amount:
+		return false
+	fuel = maxf(0.0, fuel - amount)
+	world.structure_changed(self)
+	queue_redraw()
+	return true
 
 
 func cells() -> Array[Vector2i]:
@@ -219,14 +274,17 @@ func prompt() -> String:
 			return "[E] Abastecer gerador (combustível %d%%)%s" % [int(fuel), _grid_text()]
 		"torre" when vila >= 0:
 			return "Torre da vila: %s" % ("vigiando" if powered else "desligada (liga quando a cerca chega ao nível 2)")
-		"purificador", "torre", "vedacao", "luminaria", "poste", "letreiro":
+		"purificador", "torre", "vedacao":
+			var st := "ligado" if powered else ("sem " + String(supply_of(kind)["nome"]) if fuel <= 0.0 else "sem energia")
+			return "[E] %s · %s · %s%s" % ["Municiar" if kind == "torre" else "Pôr filtro", supply_text(), st, _grid_text()]
+		"luminaria", "poste", "letreiro":
 			return "%s: %s%s" % [DB.BUILDS[kind]["nome"], "ligado" if powered else "sem energia", _grid_text()]
-		"fogareiro":
-			return "Fogareiro: cozinhe pela aba Inventário (precisa de panela)"
+		"fogareiro", "fornalha":
+			return "[E] Usar %s · %s" % [String(DB.BUILDS[kind]["nome"]).to_lower(), supply_text()]
 		"bancada":
-			return "Bancada: receitas técnicas ficam disponíveis por perto (aba Inventário)"
+			return "[E] Usar bancada de fabricação"
 		"mesa_reparo":
-			return "Mesa de reparos: conserte pelo menu do item (botão direito)"
+			return "[E] Usar mesa de reparos"
 		"eolico":
 			var w := "[E] Subir o mastro (%d/%d módulos)" % [mods, MAX_MODS] if mods < MAX_MODS else "Eólico no topo (%d módulos)" % mods
 			return "%s · vento aqui %d%%%s" % [w, int(aberto * 100.0), _grid_text()]
@@ -349,7 +407,16 @@ func interact(player: Player) -> void:
 		"canteiro":
 			_interact_planter(player)
 			return
-		"fogareiro", "bancada", "mesa_reparo", "bateria_casa", "luminaria", "poste", "letreiro", "purificador", "torre", "vedacao":
+		"purificador", "torre", "vedacao":
+			if needs_supply():
+				refill(player)
+			else:
+				Game.tell(player.peer, prompt() + ".")
+			return
+		"fogareiro", "bancada", "mesa_reparo", "fornalha":
+			# a janela da estação abre no cliente; aqui não há o que fazer
+			return
+		"bateria_casa", "luminaria", "poste", "letreiro":
 			Game.tell(player.peer, prompt() + ".")
 			return
 		"eolico":
@@ -462,7 +529,8 @@ func _physics_process(delta: float) -> void:
 	if kind == "torre":
 		_cd -= delta
 		_tracer_t = maxf(0.0, _tracer_t - delta)
-		if server and powered and _cd <= 0.0:
+		var armed := not needs_supply() or fuel >= float(supply_of(kind)["tiro"]) - 0.01
+		if server and powered and armed and _cd <= 0.0:
 			var best: Infected = null
 			var best_d := 290.0
 			for n in get_tree().get_nodes_in_group("infected"):
@@ -479,6 +547,9 @@ func _physics_process(delta: float) -> void:
 				best.take_damage(20.0, self)
 				world.make_noise(position, 520.0)
 				_cd = 1.0
+				if needs_supply():
+					fuel = maxf(0.0, fuel - float(supply_of(kind)["tiro"]))
+					world.structure_changed(self)
 		if _tracer_t <= 0.0 and _tracer != Vector2.ZERO:
 			_tracer = Vector2.ZERO
 			queue_redraw()
@@ -514,8 +585,8 @@ func _draw() -> void:
 				col = 3
 			else:
 				col = 1 if grow < 40.0 else 2
-		"fogareiro":
-			col = 0
+		"fogareiro", "fornalha":
+			col = 0 if fuel > 0.0 else 1
 		"torre":
 			row = 0 if powered else 1
 			col = _aim

@@ -593,6 +593,15 @@ func open_vehicle(v: Vehicle) -> void:
 	open_window("vehicle")
 
 
+## Estação (bancada, fogareiro, fornalha, mesa de reparos): janela de fabricação ou consertos.
+var station_node: Structure
+
+
+func open_station(st: Structure) -> void:
+	station_node = st
+	open_window("station")
+
+
 ## Conversa com um NPC: janela da vila.
 func open_village(vid: int) -> void:
 	village_open = vid
@@ -660,6 +669,7 @@ func close_window() -> void:
 	window_root.visible = false
 	village_open = -1
 	vehicle_node = null
+	station_node = null
 	_close_ctx()
 	if not menu_root.visible:
 		get_tree().paused = false
@@ -679,6 +689,13 @@ func _rebuild_window() -> void:
 		"vehicle":
 			window_title.text = "VEÍCULO"
 			_tab_vehicle(p)
+		"station":
+			if station_node == null or not is_instance_valid(station_node) or \
+					Vector2(station_node.position.x - p.position.x, (station_node.position.y - p.position.y) * 2.0).length() > 150.0:
+				close_window()
+				return
+			window_title.text = String(DB.BUILDS[station_node.kind]["nome"]).to_upper()
+			_win_station(p, station_node)
 
 
 func _win_act(cb: Callable) -> Callable:
@@ -1656,19 +1673,78 @@ func _loot_grid(box: VBoxContainer, _d: SurvivorData) -> void:
 
 
 func _crafting(box: VBoxContainer, d: SurvivorData) -> void:
-	_head(box, "Fabricação")
+	_head(box, "Fabricação à mão")
+	_lbl(box, "Receitas de bancada, fogareiro e fornalha: chegue perto da estação e aperte [E].", UITheme.MUTED)
+	_recipes(box, d, "", _act)
+
+
+## Linhas de receita de uma estação ("" = feitas à mão). 'wrap' refaz a tela depois do clique.
+func _recipes(box: VBoxContainer, d: SurvivorData, station: String, wrap: Callable) -> void:
 	for rid: String in DB.CRAFTS:
 		var cdef: Dictionary = DB.CRAFTS[rid]
+		if String(cdef.get("estacao", "")) != station:
+			continue
 		var crow := _row(box)
 		crow.add_child(_item_icon(String(cdef.get("saida", rid)), 40))
 		var tools: Array = cdef.get("ferramentas", [])
-		var station := String(cdef.get("estacao", ""))
 		var near := station == "" or Game.world.station_near(_player().position, station)
 		var ok := d.meets(cdef["req"]) and _afford_local(cdef["custo"]) and d.missing_tools(tools) == "" and near
-		_lbl(crow, "%s\n%s · exige %s · ferramentas: %s%s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"]),
-			DB.tools_text(tools), ("" if station == "" else " · perto de: %s" % String(DB.BUILDS[station]["nome"]).to_lower())],
-			UITheme.TEXT if ok else NO_COLOR)
-		_btn(crow, "Fabricar", _act(func() -> void: _player().act("craft", [rid])), d.meets(cdef["req"]))
+		_lbl(crow, "%s\n%s · exige %s · ferramentas: %s" % [cdef["nome"], DB.cost_text(cdef["custo"]), DB.req_text(cdef["req"]),
+			DB.tools_text(tools)], UITheme.TEXT if ok else NO_COLOR)
+		_btn(crow, "Fabricar", wrap.call(func() -> void: _player().act("craft", [rid])), d.meets(cdef["req"]))
+
+
+func _win_station(p: Player, st: Structure) -> void:
+	var box := window_box
+	_clear(box)
+	var d := p.data
+	_lbl(box, String(DB.BUILDS[st.kind]["desc"]), UITheme.MUTED)
+	var sup := Structure.supply_of(st.kind)
+	if not sup.is_empty():
+		var row := _row(box)
+		row.add_child(_item_icon(String(sup["itens"][0]), 40))
+		var lvl := _label("%s: %d%%" % [String(sup["nome"]).capitalize(), int(st.fuel)], S, UITheme.TEXT if st.fuel > 0.0 else UITheme.DANGER)
+		lvl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(lvl)
+		_bar(row, st.fuel, 100.0, UITheme.WARN, 200, 10)
+		var have := 0
+		for it: String in sup["itens"]:
+			have += d.count(it)
+		var key := Game.world.key_of(st)
+		_btn(row, "Pôr %s (madeira x%d)" % [sup["nome"], have], _win_act(func() -> void: _player().act("refuel_station", [key])),
+			have > 0 and st.fuel < 100.0 - float(sup["por_item"]) * 0.5)
+		if sup.has("uso"):
+			_lbl(row, "Cada receita gasta %d%%." % int(sup["uso"]), UITheme.MUTED)
+	if st.kind == "mesa_reparo":
+		_win_repairs(box, d)
+		return
+	_head(box, "Receitas")
+	_recipes(box, d, st.kind, _win_act)
+
+
+## Mesa de reparos: tudo o que está gasto, no inventário e vestido.
+func _win_repairs(box: VBoxContainer, d: SurvivorData) -> void:
+	_head(box, "Consertos (fita adesiva x%d · sucata x%d)" % [d.count("fita"), d.count("sucata")])
+	var any := false
+	var lists: Array = []
+	for c: String in d.bags:
+		lists.append_array(d.bags[c])
+	for slot: String in d.equip:
+		if not d.equip[slot].is_empty():
+			lists.append(d.equip[slot])
+	for inst: Dictionary in lists:
+		if not inst.has("dur") or float(inst["dur"]) >= 100.0:
+			continue
+		any = true
+		var row := _row(box)
+		row.add_child(_item_icon(inst["id"], 40))
+		_lbl(row, "%s · %d%%" % [DB.item_name(inst["id"]), int(float(inst["dur"]))], UITheme.TEXT)
+		var gun := String(Items.def(inst["id"]).get("tipo", "")) == "arma_fogo"
+		var u := int(inst.get("u", 0))
+		_btn(row, "Consertar (fita%s)" % (" + sucata" if gun else ""), _win_act(func() -> void: _player().act("repair", [u])),
+			d.count("fita") > 0 and (not gun or d.count("sucata") > 0))
+	if not any:
+		_lbl(box, "Nada para consertar.", UITheme.MUTED)
 
 
 # ------------------------------------------------------------------ ações da grade
@@ -1837,10 +1913,12 @@ func map_hovered(ch: Vector2i) -> void:
 			empty += 1
 	if not counts.is_empty():
 		var kinds := {"comum": "comida, água e materiais", "medico": "remédios e curativos", "tecnico": "peças, baterias, ferramentas e implantes"}
-		_lbl(map_info, "Caixas: %d (%d já vazias)" % [counts.values().reduce(func(a, b): return a + b, 0), empty], UITheme.TEXT)
+		_lbl(map_info, "Lugares com itens: %d (%d já vazios)" % [counts.values().reduce(func(a, b): return a + b, 0), empty], UITheme.TEXT)
+		var names := {"comum": "comuns", "medico": "médicos", "tecnico": "técnicos", "geladeira": "geladeiras", "cozinha": "fogões",
+			"pia": "pias", "armario": "armários", "estante": "estantes e arquivos", "prateleira": "prateleiras", "balcao": "balcões", "tambores": "tambores"}
 		for t in counts:
-			_lbl(map_info, "• %d %s: %s" % [int(counts[t]), {"comum": "comuns", "medico": "médicas", "tecnico": "técnicas"}[t], kinds[t]],
-				MapView.TABLE_COLORS[t])
+			_lbl(map_info, "• %d %s%s" % [int(counts[t]), names.get(t, t), (": " + kinds[t]) if kinds.has(t) else ""],
+				MapView.TABLE_COLORS.get(t, UITheme.MUTED))
 	var vehs := 0
 	for n in get_tree().get_nodes_in_group("vehicles"):
 		var vt := w.tile_pos((n as Node2D).position)

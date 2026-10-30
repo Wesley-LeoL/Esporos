@@ -436,7 +436,7 @@ func debug_command(cmd: String) -> void:
 		"power":
 			for n in get_tree().get_nodes_in_group("power"):
 				var st := n as Structure
-				print("[power] %s pw=%s out=%.1f dem=%.1f mods=%d aberto=%.2f carga=%.0f grid=%s light=%s" % [st.kind, st.powered,
+				print("[power] %s fuel=%.1f pw=%s out=%.1f dem=%.1f mods=%d aberto=%.2f carga=%.0f grid=%s light=%s" % [st.kind, st.fuel, st.powered,
 					st.output, st.demand, st.mods, st.aberto, st.charge, st.grid, st._light.enabled if st._light != null else "-"])
 		"hour":
 			# vai até a hora pedida (0-24)
@@ -455,6 +455,37 @@ func debug_command(cmd: String) -> void:
 			var cs := get_tree().get_nodes_in_group("corpses")
 			if not cs.is_empty():
 				p.teleport((cs[0] as Node2D).position + Vector2(0, 12))
+		"openfurn":
+			# vai até o móvel com itens mais perto e abre (testes)
+			var bestc: LootContainer = null
+			for n in get_tree().get_nodes_in_group("containers"):
+				var lc := n as LootContainer
+				if lc.art != "" and not lc.items.is_empty() and (bestc == null or lc.position.distance_to(p.position) < bestc.position.distance_to(p.position)):
+					bestc = lc
+			if bestc != null:
+				p.teleport(bestc.position + Vector2(0, 30))
+				hud.open_loot(bestc)
+		"openst":
+			# abre a janela da estação mais perto (testes)
+			var bs: Structure = null
+			for n in get_tree().get_nodes_in_group("stations"):
+				if bs == null or (n as Node2D).position.distance_to(p.position) < bs.position.distance_to(p.position):
+					bs = n as Structure
+			if bs != null:
+				hud.open_station(bs)
+		"stfuel":
+			for n in get_tree().get_nodes_in_group("stations"):
+				if (n as Node2D).position.distance_to(p.position) < 200.0:
+					p.act("refuel_station", [world.key_of(n)])
+					break
+		"usest":
+			# [E] na construção mais perto do tipo pedido (testes)
+			var bu: Structure = null
+			for n in get_tree().get_nodes_in_group("station_" + arg):
+				if bu == null or (n as Node2D).position.distance_to(p.position) < bu.position.distance_to(p.position):
+					bu = n as Structure
+			if bu != null:
+				p.act("interact", [world.key_of(bu)])
 		"interact_near":
 			p._update_nearby()
 			if p.nearby != null:

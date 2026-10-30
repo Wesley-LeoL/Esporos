@@ -1530,18 +1530,19 @@ func maintain_implant(slot: String) -> void:
 
 
 ## Fabrica. 'paid' = os materiais já foram pagos (com recipientes próximos, pelo World).
-func craft(recipe: String, paid := false) -> void:
+## Fabrica. Devolve true se os materiais foram gastos (mesmo que a comida tenha queimado).
+func craft(recipe: String, paid := false) -> bool:
 	var def: Dictionary = DB.CRAFTS[recipe]
 	if not meets(def["req"]):
 		message.emit("Habilidade insuficiente: %s." % DB.req_text(def["req"]))
-		return
+		return false
 	if not paid and not can_afford(def["custo"]):
 		message.emit("Faltam materiais: %s." % DB.cost_text(def["custo"]))
-		return
+		return false
 	var miss := missing_tools(def.get("ferramentas", []))
 	if miss != "":
 		message.emit("Falta ferramenta: %s." % miss)
-		return
+		return false
 	if not paid:
 		pay(def["custo"])
 	var out_id := String(def.get("saida", recipe))
@@ -1551,10 +1552,11 @@ func craft(recipe: String, paid := false) -> void:
 		if rng.randf() < burn:
 			add_xp("culinaria", 3.0)
 			message.emit("Queimou! Os ingredientes foram perdidos (%s)." % def["nome"])
-			return
+			return true
 	give(out_id, int(def.get("qtd", 1)))
 	add_xp_map(def["xp"])
 	message.emit("Fabricado: %s." % def["nome"])
+	return true
 
 
 # ---------------------------------------------------------------- persistência

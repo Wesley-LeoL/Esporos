@@ -80,6 +80,7 @@ const SHEETS := {
 	"eolico": {"path": "res://assets/art/generated/structures/eolico.png", "fw": 38, "fh": 138, "ox": 19, "oy": 128, "cols": 5, "rows": 1},
 	"estante": {"path": "res://assets/art/generated/structures/estante.png", "fw": 44, "fh": 66, "ox": 22, "oy": 55, "cols": 1, "rows": 1},
 	"fogareiro": {"path": "res://assets/art/generated/structures/fogareiro.png", "fw": 44, "fh": 44, "ox": 22, "oy": 33, "cols": 2, "rows": 1},
+	"fornalha": {"path": "res://assets/art/generated/structures/fornalha.png", "fw": 58, "fh": 88, "ox": 29, "oy": 74, "cols": 2, "rows": 1},
 	"gerador": {"path": "res://assets/art/generated/structures/gerador.png", "fw": 54, "fh": 59, "ox": 27, "oy": 45, "cols": 2, "rows": 1},
 	"infected": {"path": "res://assets/art/generated/characters/infected.png", "fw": 52, "fh": 53, "ox": 26, "oy": 48, "cols": 6, "rows": 8},
 	"janela": {"path": "res://assets/art/generated/structures/janela.png", "fw": 46, "fh": 70, "ox": 23, "oy": 58, "cols": 2, "rows": 2},

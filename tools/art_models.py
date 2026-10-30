@@ -4,6 +4,7 @@ Medidas dos personagens em metros (convertidas para células por M); estruturas 
 em unidades de célula (1 = aresta de uma célula 80x40). Eixos do modelo: +x frente,
 +y esquerda, +z cima.
 """
+import numpy as np
 from art_render import (Part, combine, limb, pat_cross, pat_hazard, pat_noise, pat_planks,
                         pat_seams, rot_x, rot_y, rot_z, scale_parts, transform)
 
@@ -336,6 +337,32 @@ def stove(on):
     if on:
         P.append(Part("cyl", (0.10, 0.02), "glow_amber", (0, 0, 0.39)))
     return P
+
+
+def furnace(on):
+    """Fornalha de tijolo com chaminé; boca acesa quando tem lenha."""
+    P = [Part("box", (0.34, 0.32, 0.30), "rust", (0, 0, 0.30), pattern=pat_bricks_small()),
+         Part("box", (0.36, 0.34, 0.03), "grey", (0, 0, 0.62)),
+         Part("box", (0.12, 0.12, 0.30), "rust", (-0.16, -0.14, 0.94), pattern=pat_bricks_small()),
+         Part("box", (0.13, 0.13, 0.02), "dark", (-0.16, -0.14, 1.25)),
+         Part("box", (0.015, 0.16, 0.10), "dark", (0.345, 0, 0.18))]
+    if on:
+        P.append(Part("box", (0.016, 0.12, 0.07), "glow_amber", (0.35, 0, 0.17)))
+        P.append(Part("box", (0.016, 0.06, 0.03), "glow_red", (0.355, 0, 0.12)))
+    return P
+
+
+def pat_bricks_small():
+    def f(p, n):
+        d = np.zeros(len(p), dtype=int)
+        row = np.floor((p[:, 2] + 5.0) / 0.10).astype(int)
+        off = (row % 2) * 0.09
+        u = np.where(np.abs(n[:, 0]) > 0.5, p[:, 1], p[:, 0])
+        mort = (((p[:, 2] + 5.0) / 0.10) % 1.0 < 0.18) | ((((u + off + 5.0) / 0.18) % 1.0) < 0.10)
+        side = np.abs(n[:, 2]) < 0.5
+        d[mort & side] = -1
+        return d, None, None
+    return f
 
 
 # ====================================================================== construção nova

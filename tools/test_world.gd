@@ -90,6 +90,21 @@ func _ready() -> void:
 		if w1.map_walls[k]["kind"] == "w_muro_porta":
 			gates += 1
 	check(gates >= w1.villages.size(), "portões nas cercas (%d)" % gates)
+	# móveis guardam os itens das casas (geladeira, armário, pia...), às vezes vazios
+	var furn := 0
+	var furn_full := 0
+	var tabs := {}
+	var boxes := 0
+	for cd in w1.container_data:
+		if String(cd.get("art", "")) != "":
+			furn += 1
+			tabs[cd["table"]] = true
+			if not cd["items"].is_empty():
+				furn_full += 1
+		else:
+			boxes += 1
+	check(furn > w1.houses.size() and furn_full > furn / 4 and furn_full < furn, "%d móveis com itens (%d cheios), %d caixas soltas" % [furn, furn_full, boxes])
+	check(tabs.has("geladeira") and tabs.has("armario") and tabs.has("pia"), "geladeira, armário e pia têm saque próprio")
 	w1.free()
 	w2.free()
 

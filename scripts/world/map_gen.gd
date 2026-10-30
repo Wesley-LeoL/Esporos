@@ -530,11 +530,22 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 	_shuffle(furn)
 	var limit := int(edge_cells.size() * 0.5)
 	var placed := 0
+	var stores := 0
 	for f in furn:
 		if placed >= limit or edge_cells.is_empty():
 			break
 		var cell: Vector2i = edge_cells.pop_back()
-		w._add_prop(f, rng.randi() % int(CityCatalog.PROPS[f]["frames"]), cell)
+		var fv := rng.randi() % int(CityCatalog.PROPS[f]["frames"])
+		if DB.FURN_LOOT.has(f):
+			# móvel que guarda coisas: às vezes vazio; vilas vivas guardam pouco
+			var table: String = DB.FURN_TABLE_BY_TYPE.get(tipo, {}).get(f, DB.FURN_LOOT[f][1])
+			var rolls := 0
+			if rng.randf() > (0.55 if vid >= 0 else 0.35):
+				rolls = rng.randi_range(1, 2 if estado == "viva" else 3)
+			w._add_container(cell, table, vid, f, fv, rolls)
+			stores += 1
+		else:
+			w._add_prop(f, fv, cell)
 		placed += 1
 	if estado == "abandonada":
 		for i in rng.randi_range(1, 3):
@@ -546,9 +557,8 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 				w._add_prop("fungo", 0, inner_cells.pop_back())
 	# caixas de saque
 	var tables: Array = spec[8]
-	var n_loot := rng.randi_range(1, 2) + (1 if estado != "viva" else 0)
-	if vid >= 0:
-		n_loot = 1
+	# caixa solta só onde não há móvel que guarde coisas (os itens ficam nos móveis)
+	var n_loot := 0 if stores > 0 else 1
 	for i in n_loot:
 		var pool := edge_cells if not edge_cells.is_empty() else inner_cells
 		if pool.is_empty():

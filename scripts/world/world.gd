@@ -465,14 +465,17 @@ func _make_chest(c: Vector2i) -> LootContainer:
 
 
 ## Planeja uma caixa do mapa; devolve o id.
-func _add_container(c: Vector2i, table: String, village_id: int) -> int:
+## Recipiente do mapa. 'art' = móvel (geladeira, armário...) que guarda os itens; "" = caixa.
+## 'rolls' < 0 sorteia 2 a 4 itens.
+func _add_container(c: Vector2i, table: String, village_id: int, art := "", art_v := 0, rolls := -1) -> int:
 	var id := container_data.size()
 	# o estado de cada item (durabilidade, carga, validade) usa um gerador próprio por caixa,
 	# para não mudar a sequência do gerador do mapa
 	var srng := RandomNumberGenerator.new()
 	srng.seed = hash([seed_value, id])
-	container_data.append({"cell": c, "table": table, "village": village_id,
-		"items": DB.roll_loot(table, rng.randi_range(2, 4), rng, srng, 0.0), "dirty": false})
+	var n := rolls if rolls >= 0 else rng.randi_range(2, 4)
+	container_data.append({"cell": c, "table": table, "village": village_id, "art": art, "v": art_v,
+		"items": DB.roll_loot(table, n, rng, srng, 0.0) if n > 0 else [], "dirty": false})
 	_plan_add(c, {"t": "c", "id": id, "cell": c})
 	occupied[c] = true
 	return id
@@ -486,6 +489,8 @@ func _make_container(id: int) -> LootContainer:
 	lc.village_id = int(cd["village"])
 	lc.items = cd["items"]
 	lc.dirty = bool(cd["dirty"])
+	lc.art = String(cd.get("art", ""))
+	lc.art_v = int(cd.get("v", 0))
 	lc.position = ground.map_to_local(cd["cell"])
 	entities.add_child(lc)
 	container_nodes[id] = lc
@@ -1244,6 +1249,19 @@ func _wall_state(x: int, y: int, d: int, open: bool) -> void:
 
 
 ## Há uma construção desse tipo perto (cozinhar no fogareiro)?
+## Estação mais perto (a até ~2 tiles) do tipo pedido, ou null.
+func station_node(pos: Vector2, kind: String) -> Structure:
+	var best: Structure = null
+	var bd := 130.0
+	for n in get_tree().get_nodes_in_group("station_" + kind):
+		var off := (n as Node2D).position - pos
+		var d := Vector2(off.x, off.y * 2.0).length()
+		if d < bd:
+			bd = d
+			best = n as Structure
+	return best
+
+
 func station_near(pos: Vector2, kind: String) -> bool:
 	for n in get_tree().get_nodes_in_group("station_" + kind):
 		var off := (n as Node2D).position - pos
@@ -2192,6 +2210,8 @@ func _power_grid(grid: Array, dt: float) -> void:
 				var need := float(def.get("consome", 0.0))
 				if def.has("luz") and dk < 0.15:
 					need = 0.0  # luzes só acendem com o escuro
+				if st.needs_supply() and st.fuel <= 0.0 and st.kind != "torre":
+					need = 0.0  # purificador e selagem sem filtro ficam desligados
 				st.demand = need
 				if need > 0.0:
 					consumers.append(st)
@@ -2214,6 +2234,14 @@ func _power_grid(grid: Array, dt: float) -> void:
 		if st.powered != on:
 			st.powered = on
 			changed.append(st)
+	# insumo gasto por quem ficou ligado (filtro do purificador e da selagem)
+	for st5: Structure in consumers:
+		var sup := Structure.supply_of(st5.kind)
+		if st5.powered and st5.needs_supply() and sup.has("gasto"):
+			var before5 := int(st5.fuel)
+			st5.fuel = maxf(0.0, st5.fuel - float(sup["gasto"]) * dt)
+			if int(st5.fuel) != before5 and not st5 in changed:
+				changed.append(st5)
 	for n in grid:
 		var st2 := n as Structure
 		if st2.demand <= 0.0 and not st2.kind in ["gerador", "eolico", "bateria_casa"] and st2.powered:

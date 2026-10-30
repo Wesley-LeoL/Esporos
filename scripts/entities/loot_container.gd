@@ -11,11 +11,20 @@ var chest := false
 var cell := Vector2i.ZERO
 var dirty := false
 var village_id := -1
+## Móvel que guarda os itens (geladeira, armário...; "" = caixa). Desenhado e com colisão pelo
+## Prop filho; o recipiente só cuida dos itens.
+var art := ""
+var art_v := 0
 
 
 func _ready() -> void:
 	add_to_group("interactable")
 	add_to_group("containers")
+	if art != "":
+		var pr := Prop.new()
+		pr.art = art
+		pr.variant = art_v
+		add_child(pr)
 
 
 ## Só para sacos largados (replicados). As caixas do mapa são geradas igual em todos os
@@ -29,6 +38,8 @@ func title() -> String:
 		return "Baú"
 	if temporary:
 		return "Itens no chão"
+	if art != "" and DB.FURN_LOOT.has(art):
+		return String(DB.FURN_LOOT[art][0])
 	return {"comum": "Caixa", "medico": "Armário médico", "tecnico": "Caixa técnica"}.get(table, "Caixa")
 
 
@@ -36,6 +47,9 @@ func prompt() -> String:
 	var n := Items.total_units(items)
 	if chest:
 		return "[E] Abrir baú (%d itens)" % n
+	if art != "":
+		var nm := title().to_lower()
+		return ("[E] Abrir %s (vazio)" % nm) if items.is_empty() else ("[E] Abrir %s" % nm)
 	if items.is_empty():
 		return "Vazio"
 	return "[E] Revistar (%d itens)" % n
@@ -52,6 +66,8 @@ func _process(_delta: float) -> void:
 
 
 func _draw() -> void:
+	if art != "":
+		return
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.5))
 	draw_circle(Vector2.ZERO, 14.0, Color(0, 0, 0, 0.3))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -14,7 +14,7 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["hotbar", "use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save", "move", "drop", "repair", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy", "vehicle", "reorder", "sort_inv",
+	"attack", "save", "move", "drop", "repair", "refuel_station", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy", "vehicle", "reorder", "sort_inv",
 	"loot_order", "sort_loot"]
 ## Ações que levam tempo (barra de progresso; mover-se ou levar dano interrompe).
 const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item", "vehicle"]
@@ -458,13 +458,17 @@ func _run_act(action: String, args: Array) -> void:
 			var rid := str(args[0])
 			if _station_ok(rid):
 				var cdef: Dictionary = DB.CRAFTS[rid]
+				var done := false
 				if not data.can_afford(cdef["custo"]) and data.meets(cdef["req"]) and data.missing_tools(cdef.get("ferramentas", [])) == "" \
 						and world.afford_near(self, cdef["custo"]):
 					# usa materiais dos baús e sacos por perto
 					world.pay_near(self, cdef["custo"])
-					data.craft(rid, true)
+					done = data.craft(rid, true)
 				else:
-					data.craft(rid)
+					done = data.craft(rid)
+				var sn := _station_fuel_node(rid)
+				if done and sn != null:
+					sn.use_supply(float(Structure.supply_of(sn.kind)["uso"]))
 		"install":
 			var pi := _patient_of(action, args)
 			if pi != null:
@@ -479,6 +483,12 @@ func _run_act(action: String, args: Array) -> void:
 				pr._sync_t = 0.0
 		"interact":
 			world.interact(self, str(args[0]))
+		"refuel_station":
+			var sn2 := world.node_of(str(args[0])) as Structure
+			if sn2 != null and sn2.kind in Structure.STATIONS and Structure.supply_of(sn2.kind).size() > 0 \
+					and Vector2(sn2.position.x - (position if is_local() else net_pos).x,
+						(sn2.position.y - (position if is_local() else net_pos).y) * 2.0).length() < 140.0:
+				sn2.refill(self)
 		"hotbar":
 			var hi := int(args[0])
 			if hi >= 0 and hi < 5:
@@ -519,10 +529,25 @@ func _station_ok(recipe: String) -> bool:
 	if not DB.CRAFTS.has(recipe):
 		return false
 	var st := String(DB.CRAFTS[recipe].get("estacao", ""))
-	if st == "" or world.station_near(position if is_local() else net_pos, st):
+	if st == "":
 		return true
-	Game.tell(peer, "Precisa estar perto de: %s." % String(DB.BUILDS[st]["nome"]).to_lower())
-	return false
+	var node := world.station_node(position if is_local() else net_pos, st)
+	if node == null:
+		Game.tell(peer, "Precisa usar: %s." % String(DB.BUILDS[st]["nome"]).to_lower())
+		return false
+	var sup := Structure.supply_of(st)
+	if sup.has("uso") and node.fuel + 0.01 < float(sup["uso"]):
+		Game.tell(peer, "%s sem %s: ponha madeira." % [DB.BUILDS[st]["nome"], sup["nome"]])
+		return false
+	return true
+
+
+## Estação que vai gastar insumo nesta receita (fogareiro, fornalha), ou null.
+func _station_fuel_node(recipe: String) -> Structure:
+	var st := String(DB.CRAFTS[recipe].get("estacao", ""))
+	if st == "" or not Structure.supply_of(st).has("uso"):
+		return null
+	return world.station_node(position if is_local() else net_pos, st)
 
 
 # ------------------------------------------------------------------ ações com tempo (servidor)
@@ -871,6 +896,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			Game.hud.open_loot(nearby)
 		elif nearby is Npc and Game.hud != null:
 			Game.hud.open_village((nearby as Npc).village_id)
+		elif nearby is Structure and (nearby as Structure).kind in Structure.STATIONS and Game.hud != null:
+			Game.hud.open_station(nearby as Structure)
 		else:
 			act("interact", [world.key_of(nearby)])
 	elif event.is_action_pressed("cancel"):
