@@ -32,12 +32,18 @@ const TYPES := {
 	"celeiro": [4, 5, 3, 4, ["madeira"], World.T.PISO_MADEIRA, ["telha", "telha_cinza"],
 		["feno", "feno", "paletes", "tambores"], ["comum"]],
 }
+const TYPE_NAMES := {"casa": "casa", "loja": "loja", "mercado": "mercado", "bar": "bar", "clinica": "clínica",
+	"oficina": "oficina", "celeiro": "celeiro"}
 const TOWN_MIX := {"casa": 40, "loja": 18, "mercado": 8, "bar": 10, "clinica": 10, "oficina": 14}
 const HAMLET_MIX := {"casa": 70, "celeiro": 18, "oficina": 12}
 
 var w: World
 var rng: RandomNumberGenerator
 var _dead_name := 0
+## Recipientes já criados nos prédios: [id, centro do prédio, id do prédio] (para esconder chaves).
+var _house_conts: Array = []
+## Prédios trancados à espera da chave: [id, centro, rótulo].
+var _locked_houses: Array = []
 
 
 func _init(world: World) -> void:
@@ -60,6 +66,7 @@ func generate() -> void:
 		_populate(pl)
 	_countryside()
 	_vehicles()
+	_house_keys()
 
 
 # ------------------------------------------------------------------ lugares
@@ -489,6 +496,8 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 			var wk := "w_%s_%s" % [mat, variant]
 			var open := variant == "porta" and estado != "viva" and rng.randf() < 0.5
 			_add_map_wall(k, wk, open)
+			if variant == "porta":
+				w.houses[id]["doors"] = (w.houses[id].get("doors", []) as Array) + [[k, open]]
 	# divisória nas casas maiores (com uma passagem)
 	var door_cells: Array[Vector2i] = [_inside_cell(rect, door_side)]
 	if tipo in ["casa", "clinica"] and maxi(rect.size.x, rect.size.y) >= 5:
@@ -531,6 +540,7 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 	var limit := int(edge_cells.size() * 0.5)
 	var placed := 0
 	var stores := 0
+	var conts: Array = []  # [id, móvel]
 	for f in furn:
 		if placed >= limit or edge_cells.is_empty():
 			break
@@ -542,7 +552,15 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 			var rolls := 0
 			if rng.randf() > (0.55 if vid >= 0 else 0.35):
 				rolls = rng.randi_range(1, 2 if estado == "viva" else 3)
-			w._add_container(cell, table, vid, f, fv, rolls)
+			# armário, arquivo e balcão às vezes estão trancados (e guardam mais coisas)
+			var lk := 0
+			if vid < 0 and rng.randf() < {"armario": 0.35, "arquivo": 0.45, "balcao": 0.3, "estante": 0.12}.get(f, 0.0):
+				lk = 2 if f == "arquivo" else 1
+				rolls = rng.randi_range(2, 4)
+			var cid := w._add_container(cell, table, vid, f, fv, rolls)
+			if lk > 0:
+				w.container_data[cid]["lock"] = lk
+			conts.append([cid, f])
 			stores += 1
 		else:
 			w._add_prop(f, fv, cell)
@@ -563,8 +581,58 @@ func _house(rect: Rect2i, tipo: String, estado: String, door_side: int, vid := -
 		var pool := edge_cells if not edge_cells.is_empty() else inner_cells
 		if pool.is_empty():
 			break
-		w._add_container(pool.pop_back(), tables[rng.randi() % tables.size()], vid)
+		var tb: String = tables[rng.randi() % tables.size()]
+		var bid := w._add_container(pool.pop_back(), tb, vid)
+		if vid < 0 and tb == "tecnico" and rng.randf() < 0.2:
+			w.container_data[bid]["lock"] = 2
+		conts.append([bid, "caixa"])
+	_locks(id, tipo, estado, vid, conts)
 	return true
+
+
+## Fechaduras: a chave de cada móvel trancado fica em outro móvel do mesmo prédio; a da porta
+## (se o prédio estiver trancado) fica num prédio vizinho. Sem lugar livre, só a gazua resolve.
+func _locks(id: int, tipo: String, estado: String, vid: int, conts: Array) -> void:
+	var center := Vector2(w.houses[id]["rect"].get_center())
+	var free: Array = []
+	for c in conts:
+		if int(w.container_data[int(c[0])].get("lock", 0)) == 0:
+			free.append(int(c[0]))
+	for c in conts:
+		var cid := int(c[0])
+		if int(w.container_data[cid].get("lock", 0)) > 0 and not free.is_empty():
+			var name := String(DB.FURN_LOOT[c[1]][0]).to_lower() if DB.FURN_LOOT.has(c[1]) else "caixa"
+			_hide_key(free[rng.randi() % free.size()], "c:%d" % cid, name)
+	# porta trancada (todas as portas do prédio usam a mesma chave)
+	var doors: Array = w.houses[id].get("doors", [])
+	var any_open := false
+	for dd in doors:
+		any_open = any_open or bool(dd[1])
+	var chance: float = {"viva": 0.25, "abandonada": 0.35, "esporos": 0.18}.get(estado, 0.0)
+	if vid < 0 and not doors.is_empty() and not any_open and rng.randf() < chance:
+		w.houses[id]["lock"] = 2 if tipo in ["loja", "mercado", "clinica", "oficina", "bar"] else 1
+		var pn := w.place_name(Vector2i(center))
+		_locked_houses.append([id, center, TYPE_NAMES.get(tipo, "prédio") + (" em %s" % pn if pn != "" else "")])
+	for c in conts:
+		_house_conts.append([int(c[0]), center, id])
+
+
+## Depois do mapa pronto: a chave de cada prédio trancado vai para um móvel de um prédio
+## vizinho (aberto). Sem vizinho, só forçando a fechadura.
+func _house_keys() -> void:
+	for lh in _locked_houses:
+		var id := int(lh[0])
+		var near: Array = []
+		for hc in _house_conts:
+			if int(hc[2]) != id and (lh[1] as Vector2).distance_to(hc[1]) < 16.0 and int(w.container_data[int(hc[0])].get("lock", 0)) == 0 \
+					and int(w.houses[int(hc[2])].get("lock", 0)) == 0:
+				near.append(int(hc[0]))
+		if not near.is_empty():
+			_hide_key(near[rng.randi() % near.size()], "h:%d" % id, String(lh[2]))
+
+
+func _hide_key(cid: int, lock: String, label: String) -> void:
+	(w.container_data[cid]["items"] as Array).append({"id": "chave", "n": 1, "tranca": lock, "rotulo": label})
 
 
 ## Borda i do lado 'side' do retângulo (0 = +y, 1 = -x, 2 = -y, 3 = +x).

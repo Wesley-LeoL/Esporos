@@ -290,6 +290,13 @@ func _initialize() -> void:
 	check(int(dp.limbs["torso"]["wound"]) == 1, "ferida profunda enfaixada vira leve com o tempo")
 	check(not DB.ITEMS.has("kit_sutura") and Items.sanitize([{"id": "kit_sutura", "n": 1}])[0]["id"] == "tala", "sutura saiu (saves antigos viram tala)")
 
+	# chaves não empilham e guardam a fechadura no save
+	var kd := SurvivorData.from_spec({"nome": "Chaveiro", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
+	kd.receive([{"id": "chave", "n": 1, "tranca": "c:7", "rotulo": "armário"}, {"id": "chave", "n": 1, "tranca": "h:3", "rotulo": "casa"}])
+	check(kd.count("chave") == 2 and not kd.key_for("h:3").is_empty() and kd.key_for("c:9").is_empty(), "cada chave abre a sua fechadura")
+	var kd2 := SurvivorData.from_dict(kd.to_dict())
+	check(not kd2.key_for("c:7").is_empty() and Items.label(kd2.key_for("c:7")) == "Chave (armário)", "chave vai para o save com o rótulo")
+
 	# roupas: defesa, desgaste e conjuntos
 	var nu := SurvivorData.from_spec({"nome": "Nu", "forca": 5, "resist": 5, "skills": {}, "traits": []}, r)
 	for slot: String in DB.ROUPA_SLOTS:

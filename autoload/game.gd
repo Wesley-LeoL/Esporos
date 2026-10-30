@@ -486,6 +486,29 @@ func debug_command(cmd: String) -> void:
 					bu = n as Structure
 			if bu != null:
 				p.act("interact", [world.key_of(bu)])
+		"tplock":
+			# vai até a porta trancada mais perto (testes)
+			var bk := Vector3i.ZERO
+			var bdist := 1e9
+			for k5: Vector3i in world.map_walls:
+				var e5: Dictionary = world.map_walls[k5]
+				var h5 := int(e5.get("h", -1))
+				if h5 >= 0 and String(e5["kind"]).ends_with("_porta") and world.lock_level("h:%d" % h5) > 0:
+					var d5 := world.edge_pos(k5).distance_to(p.position)
+					if d5 < bdist:
+						bdist = d5
+						bk = k5
+			if bdist < 1e9:
+				# para fora da porta (o lado de fora fica do outro lado da borda)
+				var hr5: Rect2i = world.houses[int(world.map_walls[bk]["h"])]["rect"]
+				var out_c := Vector2i(bk.x, bk.y)
+				if hr5.has_point(out_c):
+					out_c += Vector2i(1, 0) if bk.z == 0 else Vector2i(0, 1)
+				p.teleport(world.ground.map_to_local(out_c))
+		"unlocknear":
+			p._update_nearby()
+			if p.nearby != null:
+				p.act("unlock", [world.key_of(p.nearby)])
 		"interact_near":
 			p._update_nearby()
 			if p.nearby != null:

@@ -179,6 +179,16 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
   - *Torre:* munição 9 mm (até 25 balas, 1 por tiro).
   Sem insumo, a máquina não liga nem gasta energia. [E] põe o insumo que estiver no inventário. As torres das vilas não precisam.
 
+### Fechaduras, mira no mouse e ritmo das ações (fase 14)
+
+- **Fechaduras:** fora das vilas vivas, alguns prédios (25% dos vivos, 35% dos abandonados, 18% dos tomados por esporos; nunca o prédio onde a equipe acorda) e alguns móveis (armário 35%, arquivo 45%, balcão 30%, estante 12%) e caixas técnicas (20%) estão trancados. Móvel trancado guarda mais itens. Fechaduras de loja, mercado, bar, clínica, oficina e arquivos são reforçadas.
+  - *Chave:* a do móvel fica em outro móvel do mesmo prédio; a do prédio, num móvel de um prédio vizinho (até 16 tiles). Cada chave tem rótulo ("Chave (armário)", "Chave (casa em Vila Fantasma)") e abre todas as portas daquele prédio. Com a chave, destrancar leva 1 s.
+  - *Forçar:* com gazua (60% simples / 35% reforçada), chave de fenda (22% / 8%) ou faca (15% / 5%), mais 4% por nível de Mecânica; leva 4 s com gazua e 6 s improvisando (Mecânica encurta). Falhar faz barulho e gasta 25% da gazua (ela quebra no zero). A gazua aparece em caixas técnicas e armários e se fabrica na bancada (1 metal + 1 sucata, alicate, Metalurgia 1 e Mecânica 1).
+  - O que abriu fica aberto (vai para o save e para quem entra na partida).
+- **Mira no mouse:** o personagem sempre olha para o mouse, ande para onde andar. Golpe corpo a corpo e tiro vão na direção exata do mouse. Dirigindo, ele olha para onde o veículo vai.
+- **Ritmo das ações:** vestir e tirar roupa, máscara, mochila e coldre é imediato; construir também. Toda ação com tempo (comer, tratar, fabricar, consertar, forçar fechadura...) fecha o inventário ou a janela aberta, e a barra de progresso aparece no jogo.
+- **Barra rápida no inventário:** com o menu aberto, a barra rápida sai da lateral e aparece no topo da aba Inventário, para arrastar itens para ela.
+
 ### Mundo em chunks e vilas vivas (fase 7)
 
 - **Mapa: cidades pequenas e aldeias (29/10):**
@@ -245,4 +255,5 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 11 | Cidades pequenas e aldeias (vivas, abandonadas, tomadas por esporos), prédios exploráveis com corte estilo The Sims | **feito** |
 | 12 | Ferimentos com chance de sangrar (uma ferida por vez), torções e fraturas com tala, quedas, roupas e armaduras com conjuntos, barra rápida de escolher e clicar | **feito** |
 | 13 | Móveis com itens (geladeira, armário, pia...), estações com janela de fabricação (bancada, fogareiro, fornalha, mesa de reparos) e máquinas que gastam insumo (filtro, munição, lenha) | **feito** |
+| 14 | Fechaduras (chave escondida, gazua ou forçar), personagem mirando no mouse, vestir e construir imediatos, ação com tempo fecha o menu, barra rápida no inventário | **feito** |
 | 9 | Construção em bordas (estilo The Sims) com 3 abas, utilidades e decoração, rede de energia (eólico, combustão, baterias), mesa de reparos, dia/noite, clima e iluminação | **feito** |

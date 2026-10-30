@@ -258,6 +258,8 @@ const ICONS := {
 	"botas_trabalho": 94,
 	"botas_militares": 95,
 	"botas_borracha": 96,
+	"gazua": 97,
+	"chave": 98,
 }
 
 const GROUND_PATH := "res://assets/art/generated/world/ground.png"

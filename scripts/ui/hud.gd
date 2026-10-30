@@ -768,6 +768,15 @@ func open_loot(node: Node2D) -> void:
 		_rebuild()
 
 
+## Uma ação com tempo começou: fecha o menu, a janela e o menu de contexto.
+func close_for_action() -> void:
+	_close_ctx()
+	if window_kind != "":
+		close_window()
+	if menu_root.visible:
+		close_menu()
+
+
 func open_menu(tab: int = -1) -> void:
 	var p := _player()
 	if p == null or p.data == null or p.is_dead():
@@ -985,6 +994,9 @@ func _process(delta: float) -> void:
 		veh_button.reset_size()
 		veh_button.position = Vector2((ui.size.x - veh_button.size.x) / 2.0, ui.size.y - veh_button.size.y - 120.0).round()
 	_update_hotbar(d)
+	if not build_mode:
+		# com o menu aberto, a barra rápida fica dentro do inventário
+		hotbar_root.visible = not menu_root.visible
 	if build_mode:
 		for wdg in _play_widgets():
 			wdg.visible = false
@@ -1093,6 +1105,8 @@ func hot_set(i: int, id: String) -> void:
 		return
 	p.data.hotbar[i] = id
 	p.act("hotbar", [i, id])
+	if menu_root.visible:
+		_rebuild()
 
 
 ## Usa o item do espaço i: come, bebe, empunha, aplica curativo...
@@ -1646,6 +1660,18 @@ func _inventory_grid(box: VBoxContainer, d: SurvivorData, looting: bool) -> void
 	var wl := _label("VESTINDO: máscara · mochila · coldre", S, UITheme.MUTED)
 	wl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	worn.add_child(wl)
+	# barra rápida: arraste itens para os espaços (botão direito tira)
+	_head(box, "Barra rápida (teclas 1-5)")
+	var hb := _hbox(6)
+	box.add_child(hb)
+	for i in 5:
+		var hs := HotSlot.new()
+		hs.hud = self
+		hs.index = i
+		hb.add_child(hs)
+		var hid: String = d.hotbar[i]
+		hs.show_item(hid, d.count(hid) if hid != "" else 0)
+		hs.set_selected(i == hot_sel)
 	for c in ["coldre", "mochila", "bolsos"]:
 		var cap := d.capacity(c)
 		if cap <= 0.0 and d.bags[c].is_empty():

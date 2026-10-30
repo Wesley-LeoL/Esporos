@@ -101,6 +101,10 @@ func prompt() -> String:
 		return "[E] Consertar muro (2 sucatas) · %d%%" % int(hp / maxf(1.0, max_hp) * 100.0) if hp < max_hp else ""
 	if not is_door():
 		return ""
+	if world != null and world.is_locked(self):
+		var p := world.local_player()
+		var has_key := p != null and p.data != null and not p.data.key_for(world.lock_of(self)).is_empty()
+		return "[E] Porta trancada: %s" % ("usar a chave" if has_key else ("forçar com gazua" if p != null and p.data != null and p.data.count("gazua") > 0 else "forçar (ou ache a chave)"))
 	var nome := "porta"
 	if DB.BUILDS.has(kind):
 		nome = String(DB.BUILDS[kind]["nome"]).to_lower()
@@ -113,6 +117,9 @@ func interact(_p: Player) -> void:
 		world.repair_fence(_p, key())
 		return
 	if not is_door():
+		return
+	if world.is_locked(self):
+		Game.tell(_p.peer, "A porta está trancada.")
 		return
 	open = not open
 	_apply_open()

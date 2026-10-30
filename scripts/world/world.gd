@@ -773,6 +773,9 @@ func spawn_pos(fresh := false) -> Vector2:
 		return ground.map_to_local(beds[Game.rng.randi() % beds.size()]) + Vector2(0, 14)
 	if fresh or team_house < 0 or not houses.has(team_house):
 		team_house = random_spawn_house()
+	# o prédio onde a equipe acorda nunca fica trancado com ela dentro
+	if lock_level("h:%d" % team_house) > 0 and is_inside_tree():
+		_lock_open.rpc("h:%d" % team_house)
 	return house_spawn_pos(team_house)
 
 
@@ -783,7 +786,7 @@ func random_spawn_house() -> int:
 		var id: int = ids[Game.rng.randi() % ids.size()]
 		var hd: Dictionary = houses[id]
 		var r: Rect2i = hd["rect"]
-		if hd["estado"] == "esporos" or spore_level_cell(r.get_center()) > 0.3 or r.size.x * r.size.y < 9:
+		if hd["estado"] == "esporos" or spore_level_cell(r.get_center()) > 0.3 or r.size.x * r.size.y < 9 or int(hd.get("lock", 0)) > 0:
 			continue
 		var near_dead := false
 		for dz in dead_zones:
@@ -965,6 +968,95 @@ func _spawn_entity(d: Dictionary) -> Node:
 
 
 ## Chave estável de um objeto interativo (igual em todos os peers).
+# ======================================================================= fechaduras
+## Fechaduras já abertas ("c:id" móvel ou caixa, "h:id" portas de um prédio). Vai para o save.
+var unlocked := {}
+
+
+## Nível da fechadura (0 = aberta, 1 = simples, 2 = reforçada).
+func lock_level(lock: String) -> int:
+	if lock == "" or unlocked.has(lock):
+		return 0
+	var id := int(lock.substr(2))
+	if lock.begins_with("c:") and id >= 0 and id < container_data.size():
+		return int(container_data[id].get("lock", 0))
+	if lock.begins_with("h:") and houses.has(id):
+		return int(houses[id].get("lock", 0))
+	return 0
+
+
+## Fechadura de um objeto ("" = não tem).
+func lock_of(node: Node) -> String:
+	if node is LootContainer and not (node as LootContainer).chest and not (node as LootContainer).temporary:
+		return "c:%d" % (node as LootContainer).id
+	if node is WallEdge and (node as WallEdge).map and (node as WallEdge).house_id >= 0 and (node as WallEdge).is_door():
+		return "h:%d" % (node as WallEdge).house_id
+	return ""
+
+
+func is_locked(node: Node) -> bool:
+	return lock_level(lock_of(node)) > 0
+
+
+## Tempo para destrancar: com a chave é rápido; forçando depende da ferramenta e da Mecânica.
+func unlock_time(p: Player, lock: String) -> float:
+	if not p.data.key_for(lock).is_empty():
+		return 1.0
+	var mec := 1.0 - 0.06 * float(p.data.level("mecanica"))
+	if p.data.count("gazua") > 0:
+		return 4.0 * mec
+	return 6.0 * mec
+
+
+## Servidor: o jogador tenta destrancar (fim da ação com tempo "unlock").
+func try_unlock(p: Player, key: String) -> void:
+	var node := node_of(key) as Node2D
+	if node == null or not _near(p, node, 120.0):
+		return
+	var lock := lock_of(node)
+	var lv := lock_level(lock)
+	if lv <= 0:
+		return
+	var d := p.data
+	if not d.key_for(lock).is_empty():
+		_lock_open.rpc(lock)
+		Game.tell(p.peer, "Você destrancou com a chave.")
+		return
+	var tool := ""
+	for t in ["gazua", "chave_fenda", "faca"]:
+		if d.count(t) > 0:
+			tool = t
+			break
+	if tool == "":
+		Game.tell(p.peer, "Trancado. Você precisa da chave, de uma gazua ou de algo para forçar (chave de fenda, faca).")
+		return
+	var base: Array = {"gazua": [0.6, 0.35], "chave_fenda": [0.22, 0.08], "faca": [0.15, 0.05]}[tool]
+	var chance := float(base[lv - 1]) + 0.04 * float(d.level("mecanica"))
+	if rng.randf() < chance:
+		_lock_open.rpc(lock)
+		d.add_xp("mecanica", 6.0)
+		Game.tell(p.peer, "A fechadura abriu!")
+		return
+	d.add_xp("mecanica", 2.0)
+	make_noise(node.position, 180.0)
+	var msg := "A fechadura não cedeu%s." % (" (reforçada)" if lv == 2 else "")
+	if tool == "gazua":
+		var g := d.first_of("gazua")
+		g["dur"] = float(g.get("dur", 100.0)) - 25.0
+		if float(g["dur"]) <= 0.0:
+			d.remove_u(int(g["u"]))
+			msg += " A gazua quebrou!"
+	Game.tell(p.peer, msg)
+
+
+@rpc("authority", "call_local", "reliable")
+func _lock_open(lock: String) -> void:
+	unlocked[lock] = true
+	for n in get_tree().get_nodes_in_group("interactable"):
+		if n is WallEdge or n is LootContainer:
+			(n as Node2D).queue_redraw()
+
+
 func key_of(node: Node) -> String:
 	if node is LootContainer and (node as LootContainer).chest:
 		var cc := (node as LootContainer).cell
@@ -1020,6 +1112,9 @@ func interact(p: Player, key: String) -> void:
 func _loot_node(p: Player, key: String) -> Node2D:
 	var node := node_of(key) as Node2D
 	if node == null or not (node is LootContainer or node is Corpse or node is Vehicle) or not _near(p, node, 110.0):
+		return null
+	if is_locked(node):
+		Game.tell(p.peer, "Está trancado.")
 		return null
 	return node
 
@@ -1112,7 +1207,7 @@ func _near_storage(p: Player) -> Array:
 	var out: Array = []
 	for n in get_tree().get_nodes_in_group("containers"):
 		var lc := n as LootContainer
-		if not lc.is_queued_for_deletion() and _near(p, lc, 130.0) and not lc.items.is_empty():
+		if not lc.is_queued_for_deletion() and _near(p, lc, 130.0) and not lc.items.is_empty() and not is_locked(lc):
 			out.append(lc)
 	return out
 
@@ -2694,7 +2789,7 @@ func world_deltas() -> Dictionary:
 		if (wn2.open if wn2 != null else bool(map_walls[k2].get("open", false))):
 			doors.append([k2.x, k2.y, k2.z])
 	return {"version": SAVE_VERSION, "seed": seed_value, "structures": st, "floors": floors, "removed": removed,
-		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "map_doors": doors, "fence": fence, "team_house": team_house, "weather": weather.duplicate(),
+		"containers": cont, "chests": ch, "villages": vil, "walls": wl, "map_doors": doors, "unlocked": unlocked.keys(), "fence": fence, "team_house": team_house, "weather": weather.duplicate(),
 		"weather_until": _weather_until}
 
 
@@ -2775,6 +2870,8 @@ func apply_deltas(save: Dictionary) -> void:
 			var wn3: WallEdge = wall_nodes.get(kd)
 			if wn3 != null:
 				wn3.set_open(true)
+	for lk in save.get("unlocked", []):
+		unlocked[str(lk)] = true
 	team_house = int(save.get("team_house", -1))
 	if save.has("weather"):
 		weather = save["weather"]

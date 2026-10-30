@@ -13,6 +13,8 @@ extends RefCounted
 ## na mão). Uma lista de itens é um Array dessas instâncias.
 
 const STATE_KEYS := ["dur", "carga", "venc", "filtro", "mun"]
+## Estado em texto: a chave guarda a fechadura que abre ("c:id" móvel, "h:id" prédio) e o rótulo.
+const STR_KEYS := ["tranca", "rotulo"]
 ## Itens renomeados entre versões (id antigo -> novo).
 const RENAMED := {"manual_logica": "manual_metalurgia", "kit_sutura": "tala"}
 
@@ -30,7 +32,7 @@ static func def(id: String) -> Dictionary:
 
 static func stackable(id: String) -> bool:
 	var d := def(id)
-	return not d.has("dur") and not d.has("carga")
+	return not d.has("dur") and not d.has("carga") and not d.get("unica", false)
 
 
 ## Cria 'n' unidades novas (estado cheio) ou com estado sorteado por 'r'. Devolve uma lista.
@@ -94,6 +96,9 @@ static func sanitize(v: Variant) -> Array:
 		for k in STATE_KEYS:
 			if raw.has(k):
 				inst[k] = float(raw[k])
+		for k2 in STR_KEYS:
+			if raw.has(k2):
+				inst[k2] = str(raw[k2])
 		if raw.has("u"):
 			inst["u"] = int(raw["u"])
 		out.append(inst)
@@ -263,6 +268,8 @@ static func state_text(inst: Dictionary) -> String:
 
 ## Nome com quantidade: "Maçã x3".
 static func label(inst: Dictionary) -> String:
+	if inst.has("rotulo"):
+		return "%s (%s)" % [DB.item_name(inst["id"]), inst["rotulo"]]
 	var n := int(inst["n"])
 	return DB.item_name(inst["id"]) + ("" if n == 1 else " x%d" % n)
 
@@ -277,7 +284,7 @@ static func describe_list(list: Array) -> String:
 ## Ordena uma lista de itens: por tipo, depois nome, depois estado.
 const SORT_ORDER := ["arma_fogo", "arma", "municao", "comida", "bebida", "cantil", "med", "analgesico", "supressor",
 	"filtro", "mascara", "roupa", "mochila", "coldre", "ferramenta", "lanterna", "pilha", "regador", "semente", "reparo",
-	"bateria", "combustivel", "material", "kit", "implante", "manual"]
+	"bateria", "combustivel", "material", "kit", "implante", "manual", "chave"]
 
 
 static func sort_list(list: Array) -> void:

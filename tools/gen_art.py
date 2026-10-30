@@ -168,7 +168,8 @@ ITEMS = ["feijao", "carne_seca", "barra_cereal", "agua_limpa", "agua_suja", "mas
          "bone", "capacete_obra", "capacete_moto", "capacete_militar", "capacete_sucata", "camiseta", "moletom",
          "jaqueta_couro", "macacao_mecanico", "jaleco", "traje_hazmat", "colete_tatico", "armadura_sucata",
          "luvas_mecanico", "luvas_cirurgicas", "luvas_taticas", "luvas_borracha", "calca_jeans", "calca_hospitalar",
-         "calca_tatica", "caneleiras_sucata", "tenis", "botas_trabalho", "botas_militares", "botas_borracha"]
+         "calca_tatica", "caneleiras_sucata", "tenis", "botas_trabalho", "botas_militares", "botas_borracha",
+         "gazua", "chave"]
 
 
 def fit_icon(parts, theta):

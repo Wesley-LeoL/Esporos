@@ -105,6 +105,43 @@ func _ready() -> void:
 			boxes += 1
 	check(furn > w1.houses.size() and furn_full > furn / 4 and furn_full < furn, "%d móveis com itens (%d cheios), %d caixas soltas" % [furn, furn_full, boxes])
 	check(tabs.has("geladeira") and tabs.has("armario") and tabs.has("pia"), "geladeira, armário e pia têm saque próprio")
+	# fechaduras: móveis e prédios trancados; a maioria com a chave escondida por perto
+	var locked_c := 0
+	var keys := {}
+	for cd in w1.container_data:
+		if int(cd.get("lock", 0)) > 0:
+			locked_c += 1
+		for it in cd["items"]:
+			if it["id"] == "chave":
+				keys[str(it["tranca"])] = true
+	var locked_h := 0
+	var house_keys := 0
+	for hid in w1.houses:
+		if int(w1.houses[hid].get("lock", 0)) > 0:
+			locked_h += 1
+			if keys.has("h:%d" % hid):
+				house_keys += 1
+	var cont_keys := 0
+	for i in w1.container_data.size():
+		if int(w1.container_data[i].get("lock", 0)) > 0 and keys.has("c:%d" % i):
+			cont_keys += 1
+	check(locked_c > 5 and cont_keys > locked_c / 2, "%d móveis/caixas trancados, %d com chave escondida" % [locked_c, cont_keys])
+	check(locked_h > 3 and house_keys > 0, "%d prédios trancados, %d com chave num vizinho" % [locked_h, house_keys])
+	var sh := w1.random_spawn_house()
+	check(int(w1.houses[sh].get("lock", 0)) == 0, "o prédio de começo nunca está trancado")
+	check(w1.lock_level("c:%d" % w1.container_data.size()) == 0, "fechadura inexistente conta como aberta")
+	var lk_id := -1
+	for i in w1.container_data.size():
+		if int(w1.container_data[i].get("lock", 0)) > 0:
+			lk_id = i
+			break
+	w1.unlocked["c:%d" % lk_id] = true
+	var dl := w1.world_deltas()
+	var w3 := World.new()
+	w3.generate(12345)
+	w3.apply_deltas(dl)
+	check(w3.lock_level("c:%d" % lk_id) == 0, "fechadura aberta vai para o save")
+	w3.free()
 	w1.free()
 	w2.free()
 

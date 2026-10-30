@@ -14,14 +14,15 @@ const FACING_NAMES := ["L", "SE", "S", "SO", "O", "NO", "N", "NE"]
 const SPEED := 100.0
 const ISO_Y_SCALE := 0.5
 const ACTIONS := ["hotbar", "use_item", "treat", "craft", "install", "maintain", "interact", "build", "demolish",
-	"attack", "save", "move", "drop", "repair", "refuel_station", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy", "vehicle", "reorder", "sort_inv",
+	"attack", "save", "move", "drop", "repair", "refuel_station", "unlock", "unwear", "take", "take_all", "store", "remove_implant", "reload", "cancel", "examine", "deliver", "donate", "buy", "vehicle", "reorder", "sort_inv",
 	"loot_order", "sort_loot"]
 ## Ações que levam tempo (barra de progresso; mover-se ou levar dano interrompe).
-const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item", "vehicle"]
+const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item", "vehicle", "unlock"]
 const TREAT_NAMES := {"antibiotico": "Aplicando antibiótico", "desinfetar": "Desinfetando", "enfaixar": "Enfaixando",
 	"imobilizar": "Imobilizando"}
-const USE_TIME := {"comida": 1.5, "bebida": 1.5, "cantil": 1.2, "mascara": 2.0, "roupa": 2.0, "filtro": 2.5, "manual": 8.0,
-	"analgesico": 1.0, "supressor": 1.5, "mochila": 1.5, "coldre": 1.0, "bateria": 2.0, "pilha": 1.0}
+## Vestir (roupa, máscara, mochila, coldre) é imediato.
+const USE_TIME := {"comida": 1.5, "bebida": 1.5, "cantil": 1.2, "filtro": 2.5, "manual": 8.0,
+	"analgesico": 1.0, "supressor": 1.5, "bateria": 2.0, "pilha": 1.0}
 ## Ações que a sobrecarga sináptica impede (GDD 4: incapacidade de ações complexas).
 const COMPLEX := ["treat", "craft", "install", "maintain", "build", "repair"]
 
@@ -210,7 +211,15 @@ func _local_control(delta: float) -> void:
 		sprinting = false
 		return
 	moving = input != Vector2.ZERO
-	if moving:
+	if veh != null:
+		if moving:
+			facing = _vector_to_facing(input)
+	elif not console_open and not menu_open:
+		# o personagem olha para o mouse (não para onde anda)
+		var to_mouse := get_global_mouse_position() - position
+		if to_mouse.length() > 6.0:
+			facing = GenArt.facing_of(to_mouse)
+	elif moving:
 		facing = _vector_to_facing(input)
 	var mult := data.speed_mult() if data != null else 1.0
 	sprinting = moving and not sneaking and Input.is_action_pressed("sprint") and data != null and data.can_sprint()
@@ -234,13 +243,11 @@ func _local_control(delta: float) -> void:
 			and not console_open and not menu_open and veh == null and not hot_click:
 		attack_cd = 0.55
 		attack_seq += 1
-		var aim := facing
-		# arma de fogo: mira no mouse (ângulo no espaço isométrico)
+		# golpe e tiro vão na direção do mouse (ângulo no espaço isométrico)
 		var to_m := get_global_mouse_position() - position
 		var aim_angle := Vector2(to_m.x, to_m.y * 2.0).angle()
-		if data != null and not data.firearm().is_empty():
-			facing = GenArt.facing_of(to_m)
-			aim = facing
+		facing = GenArt.facing_of(to_m)
+		var aim := facing
 		if data != null and data.overloaded():
 			aim = posmod(facing + randi_range(-2, 2), 8)  # não consegue mirar
 			aim_angle += randf_range(-1.2, 1.2)
@@ -382,6 +389,9 @@ func _sheet() -> String:
 # ------------------------------------------------------------------ ações (dono -> servidor)
 ## Pede uma ação ao servidor. No anfitrião executa direto.
 func act(action: String, args: Array = []) -> void:
+	# ação com tempo fecha o inventário ou a janela aberta (o jogador vê a barra de progresso)
+	if is_local() and action in TIMED and Game.hud != null and data != null and _duration(action, args, self) > 0.0:
+		Game.hud.close_for_action()
 	if Net.is_server():
 		_do_act(action, args)
 	else:
@@ -483,6 +493,8 @@ func _run_act(action: String, args: Array) -> void:
 				pr._sync_t = 0.0
 		"interact":
 			world.interact(self, str(args[0]))
+		"unlock":
+			world.try_unlock(self, str(args[0]))
 		"refuel_station":
 			var sn2 := world.node_of(str(args[0])) as Structure
 			if sn2 != null and sn2.kind in Structure.STATIONS and Structure.supply_of(sn2.kind).size() > 0 \
@@ -591,6 +603,9 @@ func _duration(action: String, args: Array, patient: Player) -> float:
 			return 5.0 * cib
 		"craft":
 			return 3.5
+		"unlock":
+			var un := world.node_of(str(args[0]))
+			return world.unlock_time(self, world.lock_of(un)) if un != null and world.is_locked(un) else 0.0
 		"repair":
 			return 3.0 * mec
 		"reload":
@@ -628,6 +643,9 @@ func _busy_text(action: String, args: Array, patient: Player) -> String:
 			return "Manutenção do implante"
 		"craft":
 			return "Fabricando " + String(DB.CRAFTS[str(args[0])]["nome"])
+		"unlock":
+			var un2 := world.node_of(str(args[0]))
+			return "Destrancando" if un2 != null and not data.key_for(world.lock_of(un2)).is_empty() else "Forçando a fechadura"
 		"reload":
 			return "Recarregando"
 		"repair":
@@ -719,14 +737,15 @@ func _patient_info(target: int, info: Dictionary) -> void:
 		Game.hud.patient_info[target] = info
 
 
-func _server_attack(dir_index: int, aim_angle: float) -> void:
+func _server_attack(_dir_index: int, aim_angle: float) -> void:
 	attack_flash = 0.15
 	var gun := data.firearm()
 	if not gun.is_empty():
 		_server_fire(gun, aim_angle)
 		return
 	var pos := position if is_local() else net_pos
-	var dir := Vector2.from_angle(float(posmod(dir_index, 8)) * PI / 4.0)
+	# direção exata do mouse (espaço isométrico); o índice de 8 direções fica para o desenho
+	var dir := Vector2.from_angle(aim_angle)
 	data.spend_stamina(data.attack_stamina())
 	var dmg := data.melee_damage()
 	var hit := false
@@ -890,7 +909,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact") and in_veh != null:
 		act("vehicle", [world.key_of(in_veh), "exit"])
 	elif event.is_action_pressed("interact") and nearby != null and is_instance_valid(nearby):
-		if nearby is Vehicle and Game.hud != null:
+		if world.is_locked(nearby):
+			act("unlock", [world.key_of(nearby)])
+		elif nearby is Vehicle and Game.hud != null:
 			Game.hud.open_vehicle(nearby)
 		elif (nearby is LootContainer or nearby is Corpse) and Game.hud != null:
 			Game.hud.open_loot(nearby)

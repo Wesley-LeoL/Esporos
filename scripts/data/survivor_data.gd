@@ -423,6 +423,15 @@ func bleeding_limb() -> String:
 	return best
 
 
+## Chave que abre a fechadura 'lock' ({} = não tem).
+func key_for(lock: String) -> Dictionary:
+	for c in bags:
+		for inst: Dictionary in bags[c]:
+			if inst["id"] == "chave" and str(inst.get("tranca", "")) == lock:
+				return inst
+	return {}
+
+
 func has_mask() -> bool:
 	return not equip["mascara"].is_empty()
 

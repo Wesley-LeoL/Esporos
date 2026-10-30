@@ -45,6 +45,9 @@ func title() -> String:
 
 func prompt() -> String:
 	var n := Items.total_units(items)
+	var w := Game.world
+	if w != null and w.is_locked(self):
+		return "[E] %s trancad%s: %s" % [title(), "a" if title().ends_with("a") else "o", _lock_hint(w)]
 	if chest:
 		return "[E] Abrir baú (%d itens)" % n
 	if art != "":
@@ -53,6 +56,15 @@ func prompt() -> String:
 	if items.is_empty():
 		return "Vazio"
 	return "[E] Revistar (%d itens)" % n
+
+
+func _lock_hint(w: World) -> String:
+	var p := w.local_player()
+	if p == null or p.data == null:
+		return "forçar"
+	if not p.data.key_for(w.lock_of(self)).is_empty():
+		return "usar a chave"
+	return "forçar com gazua" if p.data.count("gazua") > 0 else "forçar (ou ache a chave)"
 
 
 ## Abrir é local (a janela de saque lê 'items'); a transferência vai pelo Player.act.
