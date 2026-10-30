@@ -163,7 +163,11 @@ ITEMS = ["feijao", "carne_seca", "barra_cereal", "agua_limpa", "agua_suja", "mas
          "chave_fenda", "martelo", "serra", "alicate", "lanterna", "pilha", "pregos", "fios",
          "sucata_eletronica", "cantil", "gaze", "analgesico", "alcool", "pistola", "espingarda",
          "municao_9mm", "cartucho_12", "semente_batata", "semente_milho", "semente_tomate", "batata", "milho",
-         "tomate", "enxada", "regador", "panela", "sopa", "ensopado", "milho_assado"]
+         "tomate", "enxada", "regador", "panela", "sopa", "ensopado", "milho_assado",
+         "bone", "capacete_obra", "capacete_moto", "capacete_militar", "capacete_sucata", "camiseta", "moletom",
+         "jaqueta_couro", "macacao_mecanico", "jaleco", "traje_hazmat", "colete_tatico", "armadura_sucata",
+         "luvas_mecanico", "luvas_cirurgicas", "luvas_taticas", "luvas_borracha", "calca_jeans", "calca_hospitalar",
+         "calca_tatica", "caneleiras_sucata", "tenis", "botas_trabalho", "botas_militares", "botas_borracha"]
 
 
 def fit_icon(parts, theta):

@@ -147,6 +147,20 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 - **Ações com tempo:** tratar (2 a 8 s), operar (14 s), remover implante (10 s), manutenção (5 s), fabricar, consertar, recarregar (1,6 s pistola, 2,4 s espingarda), comer, beber, vestir mochila ou máscara, trocar filtro e ler manuais. Uma barra aparece no HUD e sobre a cabeça do personagem (todos veem). Andar ou levar um golpe interrompe. Medicina, Cibernética e Pontaria encurtam o tempo.
 - **Tratar um aliado:** na aba Corpo escolha o paciente (aliados a até ~2 tiles). Curativos, antibiótico, sutura, instalação e remoção de implantes usam os suprimentos e as habilidades de quem trata. Os dois ficam parados e vulneráveis; se qualquer um se mexer ou for atacado, o procedimento para. Tratar outra pessoa é 25% mais rápido e rende 50% mais experiência; suturar a si mesmo falha mais e operar a si mesmo deixa o implante com integridade 80%.
 
+### Ferimentos, roupas e armaduras (fase 12)
+
+- **Golpe nem sempre sangra.** A chance de abrir ferida cresce com o dano (10% + 2,2% por ponto, até 75%). Golpes de menos de 4 pontos nunca sangram. A roupa reduz o dano ("defesa") e a chance de sangrar ("anti-corte").
+- **Uma ferida por vez.** Com uma ferida aberta, um novo corte não abre outra em outro membro: ele piora o sangramento da que já existe (e a reabre, se estava enfaixada). Um golpe forte (16+) a torna profunda. O dano de vida continua indo para o membro atingido.
+- **Roupas:** 5 espaços (cabeça, tronco, mãos, pernas, pés), além da máscara. Cada espaço cobre membros: o tronco cobre também 60% dos braços, as mãos 50% dos braços, os pés 40% das pernas. A defesa somada vai até 80%. As peças gastam ao absorver golpes; em farrapos (0%) protegem 40% do normal. Conserto com fita, como as outras coisas.
+- **Conjuntos:** cada peça dá um bônus pequeno, e o conjunto completo soma um bônus maior:
+  - *Mecânico* (macacão, luvas e botas de trabalho): consertos de itens, veículos e muros mais rápidos;
+  - *Médico* (jaleco, luvas cirúrgicas e calça hospitalar): tratamentos mais rápidos e suturas mais seguras;
+  - *Tático* (capacete, colete, luvas, calça e botas militares): mais dano corpo a corpo e recarga mais rápida;
+  - *Anti-esporos* (traje, luvas e botas de borracha): menos carga patogênica e menos gasto de filtro;
+  - *Sucata* (capacete, armadura e caneleiras, fabricados na bancada): só proteção, e pesa.
+- **Onde achar:** roupas comuns nas caixas comuns, as médicas em clínicas, as de mecânico, anti-esporos e militares nas caixas técnicas (as militares são raras). Todo sobrevivente começa de camiseta ou moletom, calça jeans e tênis.
+- **Aba Corpo:** à esquerda ficam os espaços de roupa (botão direito: tirar ou consertar), os conjuntos e os bônus, e as roupas do inventário com o botão "Vestir". À direita, os 6 membros em linha, só com o nome: o contorno é vermelho neon e pulsa quando o membro está machucado. Clicar num membro mostra a vida, o estado, a proteção da roupa e o tratamento.
+
 ### Mundo em chunks e vilas vivas (fase 7)
 
 - **Mapa: cidades pequenas e aldeias (29/10):**
@@ -211,4 +225,5 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
 | 8 | Agricultura (canteiro, sementes, rega, colheita), culinária (fogareiro, receitas, água fervida) e veículos (picape blindada e moto elétrica) | **feito** |
 | 10 | Padrão visual único (STYLE.md), arte própria no lugar do Town Sampler e do Neon District | **feito** |
 | 11 | Cidades pequenas e aldeias (vivas, abandonadas, tomadas por esporos), prédios exploráveis com corte estilo The Sims | **feito** |
+| 12 | Ferimentos com chance de sangrar (uma ferida por vez), roupas e armaduras com defesa, desgaste e conjuntos com bônus, aba Corpo em neon | **feito** |
 | 9 | Construção em bordas (estilo The Sims) com 3 abas, utilidades e decoração, rede de energia (eólico, combustão, baterias), mesa de reparos, dia/noite, clima e iluminação | **feito** |

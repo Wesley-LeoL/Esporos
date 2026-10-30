@@ -20,7 +20,7 @@ const ACTIONS := ["hotbar", "use_item", "treat", "craft", "install", "maintain",
 const TIMED := ["treat", "install", "remove_implant", "maintain", "craft", "reload", "repair", "use_item", "vehicle"]
 const TREAT_NAMES := {"antibiotico": "Aplicando antibiótico", "desinfetar": "Desinfetando", "enfaixar": "Enfaixando",
 	"suturar": "Suturando"}
-const USE_TIME := {"comida": 1.5, "bebida": 1.5, "cantil": 1.2, "mascara": 2.0, "filtro": 2.5, "manual": 8.0,
+const USE_TIME := {"comida": 1.5, "bebida": 1.5, "cantil": 1.2, "mascara": 2.0, "roupa": 2.0, "filtro": 2.5, "manual": 8.0,
 	"analgesico": 1.0, "supressor": 1.5, "mochila": 1.5, "coldre": 1.0, "bateria": 2.0, "pilha": 1.0}
 ## Ações que a sobrecarga sináptica impede (GDD 4: incapacidade de ações complexas).
 const COMPLEX := ["treat", "craft", "install", "maintain", "build", "repair"]
@@ -550,7 +550,8 @@ func _patient_of(action: String, args: Array) -> Player:
 
 
 func _duration(action: String, args: Array, patient: Player) -> float:
-	var med := 1.0 - 0.06 * float(data.level("medicina"))
+	var med := (1.0 - 0.06 * float(data.level("medicina"))) * (1.0 - clampf(data.gear_bonus("medico"), 0.0, 0.5))
+	var mec := 1.0 - clampf(data.gear_bonus("reparo"), 0.0, 0.6)
 	var cib := 1.0 - 0.05 * float(data.level("cibernetica"))
 	match action:
 		"treat":
@@ -565,21 +566,23 @@ func _duration(action: String, args: Array, patient: Player) -> float:
 		"craft":
 			return 3.5
 		"repair":
-			return 3.0
+			return 3.0 * mec
 		"reload":
 			var gun := data.firearm()
 			if gun.is_empty():
 				return 0.0
-			return (1.6 if int(Items.def(gun["id"])["pente"]) > 2 else 2.4) * (1.0 - 0.06 * float(data.level("pontaria")))
+			return (1.6 if int(Items.def(gun["id"])["pente"]) > 2 else 2.4) * (1.0 - 0.06 * float(data.level("pontaria"))) \
+				* (1.0 - clampf(data.gear_bonus("combate") * 1.5, 0.0, 0.4))
 		"vehicle":
-			return {"hotwire": 6.0 * (1.0 - 0.08 * float(data.level("mecanica"))), "repair": 6.0, "refuel": 2.0}.get(str(args[1]), 0.0)
+			return {"hotwire": 6.0 * (1.0 - 0.08 * float(data.level("mecanica"))) * mec, "repair": 6.0 * mec, "refuel": 2.0}.get(str(args[1]), 0.0)
 		"use_item":
 			var inst := data._resolve(args[0] if (args[0] is int or args[0] is String) else str(args[0]))
 			if inst.is_empty():
 				return 0.0
 			var tipo := String(Items.def(inst["id"])["tipo"])
 			# tirar o que está vestido é rápido
-			if tipo in SurvivorData.EQUIP_SLOTS and int(data.equip[tipo].get("u", -1)) == int(inst.get("u", 0)):
+			var es := SurvivorData.slot_of(String(inst["id"]))
+			if es != "" and int(data.equip[es].get("u", -1)) == int(inst.get("u", 0)):
 				return 0.0
 			return float(USE_TIME.get(tipo, 0.0))
 	return 0.0

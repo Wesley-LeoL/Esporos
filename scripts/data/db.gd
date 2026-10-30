@@ -213,6 +213,32 @@ const ITEMS := {
 	"mochila_trilha": {"nome": "Mochila de trilha", "tipo": "mochila", "cap": 24.0, "reducao": 0.25, "peso": 1.0, "vol": 5.0, "desc": "+24 L; o conteúdo pesa 25% menos."},
 	"mochila_militar": {"nome": "Mochila militar", "tipo": "mochila", "cap": 34.0, "reducao": 0.4, "peso": 1.6, "vol": 6.0, "desc": "+34 L; o conteúdo pesa 40% menos."},
 	"coldre": {"nome": "Coldre de cinto", "tipo": "coldre", "cap": 2.0, "reducao": 0.0, "peso": 0.3, "vol": 0.6, "desc": "Leva uma arma de até 2 L à mão."},
+	# roupas e armaduras (aba Corpo): def = dano evitado no membro coberto, corte = chance de sangrar evitada
+	"bone": {"nome": "Boné", "tipo": "roupa", "slot": "cabeca", "def": 0.03, "corte": 0.02, "conjunto": "", "bonus": {}, "dur": true, "peso": 0.1, "vol": 0.3, "desc": "Protege do sol, não de mordidas."},
+	"capacete_obra": {"nome": "Capacete de obra", "tipo": "roupa", "slot": "cabeca", "def": 0.22, "corte": 0.2, "conjunto": "", "bonus": {}, "dur": true, "peso": 0.5, "vol": 1.5, "desc": "Plástico duro: bom contra golpes na cabeça."},
+	"capacete_moto": {"nome": "Capacete de moto", "tipo": "roupa", "slot": "cabeca", "def": 0.32, "corte": 0.35, "conjunto": "", "bonus": {}, "dur": true, "peso": 1.2, "vol": 2.5, "desc": "Fechado: segura bem mordidas e arranhões."},
+	"capacete_militar": {"nome": "Capacete militar", "tipo": "roupa", "slot": "cabeca", "def": 0.4, "corte": 0.35, "conjunto": "tatico", "bonus": {"combate": 0.02}, "dur": true, "peso": 1.4, "vol": 2.0, "desc": "Parte do conjunto tático."},
+	"capacete_sucata": {"nome": "Capacete de sucata", "tipo": "roupa", "slot": "cabeca", "def": 0.28, "corte": 0.3, "conjunto": "sucata", "bonus": {}, "dur": true, "peso": 1.6, "vol": 2.0, "desc": "Improvisado com chapas. Pesado."},
+	"camiseta": {"nome": "Camiseta", "tipo": "roupa", "slot": "torso", "def": 0.03, "corte": 0.02, "conjunto": "", "bonus": {}, "dur": true, "peso": 0.2, "vol": 0.4, "desc": "Quase nenhuma proteção."},
+	"moletom": {"nome": "Moletom", "tipo": "roupa", "slot": "torso", "def": 0.07, "corte": 0.08, "conjunto": "", "bonus": {}, "dur": true, "peso": 0.6, "vol": 1.0, "desc": "Tecido grosso: segura arranhões leves."},
+	"jaqueta_couro": {"nome": "Jaqueta de couro", "tipo": "roupa", "slot": "torso", "def": 0.16, "corte": 0.32, "conjunto": "", "bonus": {}, "dur": true, "peso": 1.4, "vol": 2.0, "desc": "Couro grosso: difícil de rasgar, ótimo contra sangramento."},
+	"macacao_mecanico": {"nome": "Macacão de mecânico", "tipo": "roupa", "slot": "torso", "def": 0.1, "corte": 0.14, "conjunto": "mecanico", "bonus": {"reparo": 0.07}, "dur": true, "peso": 1.0, "vol": 1.5, "desc": "Parte do conjunto de mecânico."},
+	"jaleco": {"nome": "Jaleco", "tipo": "roupa", "slot": "torso", "def": 0.04, "corte": 0.05, "conjunto": "medico", "bonus": {"medico": 0.06}, "dur": true, "peso": 0.4, "vol": 0.8, "desc": "Parte do conjunto médico."},
+	"traje_hazmat": {"nome": "Traje de proteção química", "tipo": "roupa", "slot": "torso", "def": 0.08, "corte": 0.1, "conjunto": "hazmat", "bonus": {"esporos": 0.15}, "dur": true, "peso": 1.6, "vol": 2.5, "desc": "Parte do conjunto anti-esporos."},
+	"colete_tatico": {"nome": "Colete tático", "tipo": "roupa", "slot": "torso", "def": 0.4, "corte": 0.42, "conjunto": "tatico", "bonus": {"combate": 0.03}, "dur": true, "peso": 3.5, "vol": 3.0, "desc": "Placas balísticas. Parte do conjunto tático."},
+	"armadura_sucata": {"nome": "Armadura de sucata", "tipo": "roupa", "slot": "torso", "def": 0.34, "corte": 0.36, "conjunto": "sucata", "bonus": {}, "dur": true, "peso": 5.0, "vol": 4.0, "desc": "Chapas presas com arame. Protege muito, mas pesa."},
+	"luvas_mecanico": {"nome": "Luvas de mecânico", "tipo": "roupa", "slot": "maos", "def": 0.06, "corte": 0.1, "conjunto": "mecanico", "bonus": {"reparo": 0.07}, "dur": true, "peso": 0.2, "vol": 0.3, "desc": "Parte do conjunto de mecânico."},
+	"luvas_cirurgicas": {"nome": "Luvas cirúrgicas", "tipo": "roupa", "slot": "maos", "def": 0.01, "corte": 0.0, "conjunto": "medico", "bonus": {"medico": 0.06}, "dur": true, "peso": 0.05, "vol": 0.1, "desc": "Parte do conjunto médico."},
+	"luvas_taticas": {"nome": "Luvas táticas", "tipo": "roupa", "slot": "maos", "def": 0.12, "corte": 0.2, "conjunto": "tatico", "bonus": {"combate": 0.02}, "dur": true, "peso": 0.3, "vol": 0.3, "desc": "Parte do conjunto tático."},
+	"luvas_borracha": {"nome": "Luvas de borracha", "tipo": "roupa", "slot": "maos", "def": 0.04, "corte": 0.06, "conjunto": "hazmat", "bonus": {"esporos": 0.08}, "dur": true, "peso": 0.2, "vol": 0.3, "desc": "Parte do conjunto anti-esporos."},
+	"calca_jeans": {"nome": "Calça jeans", "tipo": "roupa", "slot": "pernas", "def": 0.08, "corte": 0.12, "conjunto": "", "bonus": {}, "dur": true, "peso": 0.7, "vol": 1.0, "desc": "Brim grosso."},
+	"calca_hospitalar": {"nome": "Calça hospitalar", "tipo": "roupa", "slot": "pernas", "def": 0.02, "corte": 0.02, "conjunto": "medico", "bonus": {"medico": 0.06}, "dur": true, "peso": 0.3, "vol": 0.6, "desc": "Parte do conjunto médico."},
+	"calca_tatica": {"nome": "Calça tática", "tipo": "roupa", "slot": "pernas", "def": 0.24, "corte": 0.3, "conjunto": "tatico", "bonus": {"combate": 0.02}, "dur": true, "peso": 1.2, "vol": 1.5, "desc": "Joelheiras e reforço. Parte do conjunto tático."},
+	"caneleiras_sucata": {"nome": "Caneleiras de sucata", "tipo": "roupa", "slot": "pernas", "def": 0.28, "corte": 0.3, "conjunto": "sucata", "bonus": {}, "dur": true, "peso": 3.0, "vol": 3.0, "desc": "Chapas nas pernas. Pesadas."},
+	"tenis": {"nome": "Tênis", "tipo": "roupa", "slot": "pes", "def": 0.02, "corte": 0.02, "conjunto": "", "bonus": {}, "dur": true, "peso": 0.5, "vol": 1.0, "desc": "Confortável."},
+	"botas_trabalho": {"nome": "Botas de trabalho", "tipo": "roupa", "slot": "pes", "def": 0.08, "corte": 0.1, "conjunto": "mecanico", "bonus": {"reparo": 0.07}, "dur": true, "peso": 1.2, "vol": 1.5, "desc": "Bico de aço. Parte do conjunto de mecânico."},
+	"botas_militares": {"nome": "Botas militares", "tipo": "roupa", "slot": "pes", "def": 0.12, "corte": 0.16, "conjunto": "tatico", "bonus": {"combate": 0.02}, "dur": true, "peso": 1.3, "vol": 1.5, "desc": "Parte do conjunto tático."},
+	"botas_borracha": {"nome": "Botas de borracha", "tipo": "roupa", "slot": "pes", "def": 0.05, "corte": 0.06, "conjunto": "hazmat", "bonus": {"esporos": 0.08}, "dur": true, "peso": 1.0, "vol": 1.5, "desc": "Parte do conjunto anti-esporos."},
 	"manual_mecanica": {"nome": "Manual de Mecânica", "tipo": "manual", "skill": "mecanica", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Mecânica."},
 	"manual_metalurgia": {"nome": "Manual de Metalurgia", "tipo": "manual", "skill": "metalurgia", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Metalurgia."},
 	"manual_medicina": {"nome": "Manual de Medicina", "tipo": "manual", "skill": "medicina", "xp": 140.0, "peso": 0.5, "vol": 0.8, "desc": "+140 XP de Medicina."},
@@ -340,6 +366,29 @@ const BUILDS := {
 		"xp": {"carpintaria": 3}, "desc": "Móvel."},
 }
 
+## Espaços de roupa (aba Corpo) e quanto cada um cobre de cada membro.
+const ROUPA_SLOTS: Array[String] = ["cabeca", "torso", "maos", "pernas", "pes"]
+const ROUPA_SLOT_NAMES := {"cabeca": "Cabeça", "torso": "Tronco", "maos": "Mãos", "pernas": "Pernas", "pes": "Pés"}
+const ROUPA_COBRE := {"cabeca": {"cabeca": 1.0}, "torso": {"torso": 1.0, "braco_e": 0.6, "braco_d": 0.6},
+	"maos": {"braco_e": 0.5, "braco_d": 0.5}, "pernas": {"perna_e": 1.0, "perna_d": 1.0}, "pes": {"perna_e": 0.4, "perna_d": 0.4}}
+## Conjuntos: vestir todas as peças soma o bônus do conjunto ao de cada peça.
+## Bônus: reparo (consertos de itens, veículos e muros mais rápidos/eficientes), medico
+## (tratamentos mais rápidos e sutura mais segura), combate (dano corpo a corpo e recarga),
+## esporos (menos carga patogênica e filtro dos esporos).
+const CONJUNTOS := {
+	"mecanico": {"nome": "Mecânico", "pecas": ["macacao_mecanico", "luvas_mecanico", "botas_trabalho"], "bonus": {"reparo": 0.2},
+		"desc": "Consertos de máquinas, veículos, itens e muros mais rápidos"},
+	"medico": {"nome": "Médico", "pecas": ["jaleco", "luvas_cirurgicas", "calca_hospitalar"], "bonus": {"medico": 0.15},
+		"desc": "Tratamentos mais rápidos e suturas mais seguras"},
+	"tatico": {"nome": "Tático", "pecas": ["capacete_militar", "colete_tatico", "luvas_taticas", "calca_tatica", "botas_militares"], "bonus": {"combate": 0.1},
+		"desc": "Mais dano corpo a corpo e recarga mais rápida"},
+	"hazmat": {"nome": "Anti-esporos", "pecas": ["traje_hazmat", "luvas_borracha", "botas_borracha"], "bonus": {"esporos": 0.2},
+		"desc": "Menos carga patogênica e menos gasto de filtro nos esporos"},
+	"sucata": {"nome": "Sucata", "pecas": ["capacete_sucata", "armadura_sucata", "caneleiras_sucata"], "bonus": {},
+		"desc": "Só proteção (pesada)"},
+}
+const BONUS_NAMES := {"reparo": "Consertos", "medico": "Medicina", "combate": "Combate", "esporos": "Proteção contra esporos"}
+
 ## qtd: unidades produzidas; saida: item produzido (padrão: o id da receita);
 ## estacao: construção que precisa estar perto (cozinhar no fogareiro).
 const CRAFTS := {
@@ -365,6 +414,12 @@ const CRAFTS := {
 		"estacao": "bancada", "ferramentas": ["alicate", "martelo"], "xp": {"metalurgia": 10, "pontaria": 4}},
 	"cartucho_12": {"nome": "Cartucho calibre 12 (x4)", "qtd": 4, "custo": {"metal": 1, "sucata": 1, "combustivel": 1}, "req": {"metalurgia": 3, "pontaria": 1},
 		"estacao": "bancada", "ferramentas": ["alicate", "martelo"], "xp": {"metalurgia": 10, "pontaria": 4}},
+	"capacete_sucata": {"nome": "Capacete de sucata", "custo": {"sucata": 3, "metal": 1, "pregos": 6}, "req": {"metalurgia": 1}, "estacao": "bancada",
+		"ferramentas": ["martelo"], "xp": {"metalurgia": 10}},
+	"armadura_sucata": {"nome": "Armadura de sucata", "custo": {"sucata": 6, "metal": 3, "fios": 2}, "req": {"metalurgia": 2}, "estacao": "bancada",
+		"ferramentas": ["martelo", "alicate"], "xp": {"metalurgia": 18}},
+	"caneleiras_sucata": {"nome": "Caneleiras de sucata", "custo": {"sucata": 4, "metal": 2, "pregos": 8}, "req": {"metalurgia": 1}, "estacao": "bancada",
+		"ferramentas": ["martelo"], "xp": {"metalurgia": 12}},
 }
 
 # Cada entrada: [item, peso, mínimo, máximo]
@@ -376,10 +431,13 @@ const LOOT := {
 		["fita", 4, 1, 1], ["faca", 3, 1, 1], ["abridor", 4, 1, 1], ["pregos", 10, 4, 14], ["martelo", 3, 1, 1],
 		["chave_fenda", 3, 1, 1], ["lanterna", 3, 1, 1], ["pilha", 5, 1, 3], ["cantil", 2, 1, 1], ["municao_9mm", 3, 3, 10],
 		["cartucho_12", 2, 2, 5], ["pistola", 1, 1, 1], ["semente_batata", 4, 2, 4],
-		["semente_milho", 3, 2, 4], ["semente_tomate", 3, 2, 4], ["enxada", 2, 1, 1], ["regador", 2, 1, 1], ["panela", 3, 1, 1], ["taco", 3, 1, 1], ["mochila_escolar", 3, 1, 1], ["coldre", 2, 1, 1]],
+		["semente_milho", 3, 2, 4], ["semente_tomate", 3, 2, 4], ["enxada", 2, 1, 1], ["regador", 2, 1, 1], ["panela", 3, 1, 1], ["taco", 3, 1, 1], ["mochila_escolar", 3, 1, 1], ["coldre", 2, 1, 1],
+		["bone", 3, 1, 1], ["camiseta", 4, 1, 1], ["moletom", 3, 1, 1], ["calca_jeans", 4, 1, 1], ["tenis", 3, 1, 1],
+		["jaqueta_couro", 1, 1, 1], ["capacete_obra", 1, 1, 1], ["capacete_moto", 1, 1, 1], ["luvas_borracha", 1, 1, 1], ["botas_borracha", 1, 1, 1]],
 	"medico": [["bandagem", 30, 1, 3], ["antisseptico", 25, 1, 2], ["kit_sutura", 15, 1, 1], ["antibiotico", 15, 1, 2],
 		["supressor", 12, 1, 2], ["agua_limpa", 8, 1, 2], ["gaze", 18, 1, 3], ["alcool", 12, 1, 1],
-		["analgesico", 12, 1, 2], ["manual_medicina", 4, 1, 1], ["kit_cirurgico", 3, 1, 1]],
+		["analgesico", 12, 1, 2], ["manual_medicina", 4, 1, 1], ["kit_cirurgico", 3, 1, 1],
+		["jaleco", 5, 1, 1], ["luvas_cirurgicas", 6, 1, 1], ["calca_hospitalar", 5, 1, 1], ["traje_hazmat", 1, 1, 1]],
 	"tecnico": [["metal", 30, 1, 4], ["sucata", 25, 2, 5], ["bateria", 14, 1, 2], ["combustivel", 14, 1, 3],
 		["filtro", 12, 1, 2], ["mascara", 5, 1, 1], ["manual_mecanica", 3, 1, 1], ["manual_metalurgia", 3, 1, 1],
 		["manual_engenharia", 3, 1, 1], ["manual_carpintaria", 3, 1, 1], ["manual_cibernetica", 2, 1, 1], ["implante_pulmao", 1, 1, 1], ["implante_hud", 1, 1, 1],
@@ -387,7 +445,10 @@ const LOOT := {
 		["proc_neural_mk1", 2, 1, 1], ["proc_neural_mk2", 1, 1, 1], ["machete", 2, 1, 1], ["fita", 8, 1, 1], ["mochila_trilha", 2, 1, 1],
 		["mochila_militar", 1, 1, 1], ["coldre", 3, 1, 1], ["fios", 14, 1, 3], ["sucata_eletronica", 14, 1, 3],
 		["alicate", 4, 1, 1], ["serra", 3, 1, 1], ["chave_fenda", 4, 1, 1], ["pilha", 6, 2, 4], ["municao_9mm", 4, 4, 12],
-		["cartucho_12", 3, 2, 6], ["pistola", 1, 1, 1], ["espingarda", 1, 1, 1]],
+		["cartucho_12", 3, 2, 6], ["pistola", 1, 1, 1], ["espingarda", 1, 1, 1],
+		["macacao_mecanico", 4, 1, 1], ["luvas_mecanico", 5, 1, 1], ["botas_trabalho", 4, 1, 1], ["capacete_obra", 3, 1, 1],
+		["traje_hazmat", 2, 1, 1], ["luvas_borracha", 2, 1, 1], ["botas_borracha", 2, 1, 1],
+		["capacete_militar", 1, 1, 1], ["colete_tatico", 1, 1, 1], ["luvas_taticas", 1, 1, 1], ["calca_tatica", 1, 1, 1], ["botas_militares", 1, 1, 1]],
 }
 
 

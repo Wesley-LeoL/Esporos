@@ -154,6 +154,15 @@ func debug_command(cmd: String) -> void:
 			p.data.pathogen = float(arg)
 		"hurt":
 			p.data.damage_limb(a[0], float(a[1]))
+		"wound":
+			# wound:membro,1|2 -> abre ferida direto (testes)
+			var wl: Dictionary = p.data.limbs[a[0]]
+			wl["wound"] = int(a[1]) if a.size() > 1 else 1
+			wl["bleed"] = 0.25 * float(wl["wound"])
+			wl["hp"] = minf(float(wl["hp"]), 60.0)
+		"wear":
+			for id in a:
+				p.data.wear(Items.make(id)[0])
 		"tp":
 			p.teleport(world.ground.map_to_local(Vector2i(int(a[0]), int(a[1]))))
 		"tab":

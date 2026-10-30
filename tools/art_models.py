@@ -474,8 +474,102 @@ def object_model(name, on=True):
 
 
 # ====================================================================== ícones de itens
+def cloth_model(item):
+    """Roupas e armaduras (ícones): peças deitadas, vistas de cima em isométrico."""
+    def helmet(col, visor=None, brim=True):
+        P = [Part("ell", (0.34, 0.32, 0.30), col, (0, 0, 0.12)),
+             Part("box", (0.36, 0.34, 0.06), "dark", (0, 0, 0.06))]
+        if brim:
+            P.append(Part("box", (0.14, 0.30, 0.03), col, (0.40, 0, 0.12)))
+        if visor:
+            P.append(Part("box", (0.05, 0.24, 0.08), visor, (0.30, 0, 0.26)))
+        return P
+
+    def shirt(col, sleeve=0.18, long=False, extra=None):
+        L = 0.30 if long else 0.16
+        P = [Part("box", (0.26, 0.24, 0.05), col, (0, 0, 0.05), pattern=pat_seams(0.5, (1, 0, 0))),
+             Part("box", (L, 0.09, 0.045), col, (0.06, 0.30, 0.05), rot_z(-25)),
+             Part("box", (L, 0.09, 0.045), col, (0.06, -0.30, 0.05), rot_z(25)),
+             Part("box", (0.05, 0.10, 0.03), "dark", (-0.24, 0, 0.10))]
+        if extra:
+            P += extra
+        return P
+
+    def pants(col, extra=None):
+        P = [Part("box", (0.08, 0.26, 0.05), col, (-0.30, 0, 0.05)),
+             Part("box", (0.30, 0.11, 0.05), col, (0.06, 0.13, 0.05), rot_z(-6)),
+             Part("box", (0.30, 0.11, 0.05), col, (0.06, -0.13, 0.05), rot_z(6)),
+             Part("box", (0.03, 0.26, 0.055), "dark", (-0.36, 0, 0.05))]
+        if extra:
+            P += extra
+        return P
+
+    def gloves(col, cuff="dark"):
+        P = []
+        for sy in (-1, 1):
+            P += [Part("box", (0.16, 0.12, 0.05), col, (0.02, sy * 0.17, 0.05)),
+                  Part("box", (0.08, 0.10, 0.04), cuff, (-0.20, sy * 0.17, 0.05)),
+                  Part("box", (0.10, 0.03, 0.035), col, (0.22, sy * 0.17 - 0.06, 0.05)),
+                  Part("box", (0.11, 0.03, 0.035), col, (0.24, sy * 0.17, 0.05)),
+                  Part("box", (0.10, 0.03, 0.035), col, (0.22, sy * 0.17 + 0.06, 0.05))]
+        return P
+
+    def boots(col, sole="dark", h=0.22):
+        P = []
+        for sy in (-1, 1):
+            P += [Part("box", (0.24, 0.09, 0.04), sole, (0.04, sy * 0.14, 0.04)),
+                  Part("box", (0.20, 0.085, 0.07), col, (0.06, sy * 0.14, 0.14)),
+                  Part("box", (0.09, 0.085, h), col, (-0.08, sy * 0.14, 0.14 + h))]
+        return P
+
+    plate = pat_seams(0.22, (1, 1, 0))
+    m = {
+        "bone": [Part("ell", (0.26, 0.26, 0.20), "teal", (0, 0, 0.04)),
+                 Part("box", (0.18, 0.22, 0.025), "teal", (0.34, 0, 0.05)),
+                 Part("cyl", (0.04, 0.03), "bone", (0, 0, 0.25))],
+        "capacete_obra": helmet("mustard"),
+        "capacete_moto": helmet("red", visor="glow_dim", brim=False),
+        "capacete_militar": helmet("olive"),
+        "capacete_sucata": [Part("box", (0.30, 0.30, 0.20), "rust", (0, 0, 0.20), pattern=pat_noise(6, 1, 0.3)),
+                            Part("box", (0.04, 0.22, 0.04), "dark", (0.30, 0, 0.26)),
+                            Part("cyl", (0.04, 0.03), "steel", (0.0, 0.0, 0.42))],
+        "camiseta": shirt("bone"),
+        "moletom": shirt("slate", long=True, extra=[Part("box", (0.08, 0.16, 0.03), "slate", (-0.20, 0, 0.11))]),
+        "jaqueta_couro": shirt("rust", long=True, extra=[Part("box", (0.25, 0.015, 0.02), "steel", (0, 0, 0.11))]),
+        "macacao_mecanico": shirt("steel", long=True, extra=[Part("box", (0.10, 0.10, 0.02), "mustard", (0.05, 0.10, 0.11))]),
+        "jaleco": shirt("bone", long=True, extra=[Part("box", (0.04, 0.04, 0.02), "red", (-0.10, 0.12, 0.11))]),
+        "traje_hazmat": shirt("mustard", long=True, extra=[Part("box", (0.07, 0.22, 0.02), "dark", (0.10, 0, 0.11))]),
+        "colete_tatico": [Part("box", (0.26, 0.24, 0.10), "olive", (0, 0, 0.10), pattern=plate),
+                          Part("box", (0.08, 0.06, 0.06), "olive", (0.10, 0.12, 0.24)),
+                          Part("box", (0.08, 0.06, 0.06), "olive", (0.10, -0.12, 0.24)),
+                          Part("box", (0.06, 0.10, 0.04), "dark", (-0.24, 0, 0.20))],
+        "armadura_sucata": [Part("box", (0.26, 0.26, 0.10), "rust", (0, 0, 0.10), pattern=pat_noise(4, 1, 0.3)),
+                            Part("box", (0.20, 0.22, 0.04), "steel", (0.02, 0, 0.24), rot_z(6), pattern=plate),
+                            Part("box", (0.08, 0.10, 0.05), "steel", (-0.06, 0.30, 0.10)),
+                            Part("box", (0.08, 0.10, 0.05), "steel", (-0.06, -0.30, 0.10))],
+        "luvas_mecanico": gloves("steel", "mustard"),
+        "luvas_cirurgicas": gloves("teal", "teal"),
+        "luvas_taticas": gloves("dark", "olive"),
+        "luvas_borracha": gloves("mustard", "mustard"),
+        "calca_jeans": pants("steel"),
+        "calca_hospitalar": pants("teal"),
+        "calca_tatica": pants("olive", extra=[Part("box", (0.06, 0.08, 0.03), "dark", (0.06, 0.13, 0.10)),
+                                               Part("box", (0.06, 0.08, 0.03), "dark", (0.06, -0.13, 0.10))]),
+        "caneleiras_sucata": [Part("box", (0.30, 0.10, 0.07), "rust", (0, sy * 0.15, 0.07), pattern=pat_noise(5, 1, 0.3)) for sy in (-1, 1)]
+                             + [Part("box", (0.03, 0.11, 0.075), "dark", (x, sy * 0.15, 0.07)) for x in (-0.15, 0.15) for sy in (-1, 1)],
+        "tenis": boots("bone", "dark", h=0.04),
+        "botas_trabalho": boots("rust", "dark"),
+        "botas_militares": boots("dark", "grey", h=0.26),
+        "botas_borracha": boots("mustard", "dark", h=0.28),
+    }
+    return m.get(item)
+
+
 def item_model(item):
     """Modelo pequeno de cada item (para os ícones do inventário). Unidades livres."""
+    cm = cloth_model(item)
+    if cm is not None:
+        return cm
     can = lambda mat, band: [Part("cyl", (0.30, 0.38), mat, (0, 0, 0.38)),
                              Part("cyl", (0.31, 0.12), band, (0, 0, 0.40))]
     bottle = lambda mat, cap: [Part("cyl", (0.24, 0.42), mat, (0, 0, 0.42)),

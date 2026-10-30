@@ -35,8 +35,9 @@ var traits: Array = []
 var stamina: float = 100.0
 ## Itens por recipiente (listas de instâncias, ver Items).
 var bags := {"bolsos": [], "mochila": [], "coldre": []}
-## Itens vestidos: máscara (com vedação e filtro), mochila e coldre. {} = vazio.
-var equip := {"mascara": {}, "mochila": {}, "coldre": {}}
+## Itens vestidos: máscara (com vedação e filtro), mochila, coldre e roupas (DB.ROUPA_SLOTS).
+## {} = vazio.
+var equip := {"mascara": {}, "mochila": {}, "coldre": {}, "cabeca": {}, "torso": {}, "maos": {}, "pernas": {}, "pes": {}}
 ## Id único ("u") da arma na mão (ela continua guardada em algum recipiente).
 var hand_u: int = 0
 ## Barra rápida: 5 tipos de item (o item continua no inventário). "" = espaço vazio.
@@ -119,6 +120,14 @@ static func random_survivor(r: RandomNumberGenerator) -> SurvivorData:
 	var mask: Dictionary = Items.make("mascara")[0]
 	mask["filtro"] = 100.0
 	d.equip["mascara"] = mask
+	# roupa do corpo
+	var top := "moletom" if r.randf() < 0.35 else "camiseta"
+	for id: String in [top, "calca_jeans", "tenis"]:
+		var c: Dictionary = Items.make(id)[0]
+		c["dur"] = snappedf(r.randf_range(55.0, 100.0), 1.0)
+		c["u"] = d._next_u
+		d._next_u += 1
+		d.equip[slot_of(id)] = c
 	var start := {"feijao": 1, "abridor": 1, "agua_limpa": 2, "bandagem": 1, "filtro": 1, "sucata": 3}
 	if r.randf() < 0.5:
 		start["supressor"] = 1
@@ -332,6 +341,88 @@ func sort_bags() -> void:
 
 
 # ---------------------------------------------------------------- equipamento
+## Espaço onde o item é vestido ("" = não se veste).
+static func slot_of(id: String) -> String:
+	var d := Items.def(id)
+	var tipo := String(d.get("tipo", ""))
+	if tipo in EQUIP_SLOTS:
+		return tipo
+	if tipo == "roupa":
+		return String(d.get("slot", ""))
+	return ""
+
+
+## Peça vestida está gasta? A proteção cai até 40% com a durabilidade zerada.
+static func cloth_cond(inst: Dictionary) -> float:
+	return 0.4 + 0.6 * clampf(float(inst.get("dur", 100.0)) / 100.0, 0.0, 1.0)
+
+
+## [dano evitado, chance de sangrar evitada] num membro, somando as roupas que o cobrem.
+func limb_armor(limb_id: String) -> Array:
+	var keep_d := 1.0
+	var keep_c := 1.0
+	for slot: String in DB.ROUPA_SLOTS:
+		var inst: Dictionary = equip[slot]
+		if inst.is_empty():
+			continue
+		var k := float(DB.ROUPA_COBRE[slot].get(limb_id, 0.0))
+		if k <= 0.0:
+			continue
+		var d := Items.def(inst["id"])
+		var c := cloth_cond(inst) * k
+		keep_d *= 1.0 - float(d.get("def", 0.0)) * c
+		keep_c *= 1.0 - float(d.get("corte", 0.0)) * c
+	return [minf(0.8, 1.0 - keep_d), minf(0.85, 1.0 - keep_c)]
+
+
+## Peças vestidas de um conjunto.
+func set_pieces(conj: String) -> int:
+	var n := 0
+	for slot: String in DB.ROUPA_SLOTS:
+		if not equip[slot].is_empty() and String(Items.def(equip[slot]["id"]).get("conjunto", "")) == conj:
+			n += 1
+	return n
+
+
+func set_complete(conj: String) -> bool:
+	return DB.CONJUNTOS.has(conj) and set_pieces(conj) >= (DB.CONJUNTOS[conj]["pecas"] as Array).size()
+
+
+## Bônus de roupa (fração; 0.2 = 20%): soma das peças + conjunto completo.
+func gear_bonus(kind: String) -> float:
+	var b := 0.0
+	for slot: String in DB.ROUPA_SLOTS:
+		if not equip[slot].is_empty():
+			b += float(Items.def(equip[slot]["id"]).get("bonus", {}).get(kind, 0.0))
+	for conj: String in DB.CONJUNTOS:
+		if set_complete(conj):
+			b += float(DB.CONJUNTOS[conj]["bonus"].get(kind, 0.0))
+	return b
+
+
+## Gasta as roupas que cobrem o membro atingido.
+func _wear_clothes(limb_id: String, amount: float) -> void:
+	for slot: String in DB.ROUPA_SLOTS:
+		var inst: Dictionary = equip[slot]
+		if inst.is_empty() or float(DB.ROUPA_COBRE[slot].get(limb_id, 0.0)) <= 0.0:
+			continue
+		var before := float(inst.get("dur", 100.0))
+		inst["dur"] = maxf(0.0, before - amount * (0.25 + float(Items.def(inst["id"]).get("def", 0.0))))
+		if before > 0.0 and float(inst["dur"]) <= 0.0:
+			message.emit("%s está em farrapos: protege bem menos (conserte com fita)." % DB.item_name(inst["id"]))
+
+
+## Membro com ferida aberta que mais sangra ("" = nenhum).
+func bleeding_limb() -> String:
+	var best := ""
+	var bb := -1.0
+	for l in LIMBS:
+		if int(limbs[l]["wound"]) > 0 and float(limbs[l]["bleed"]) > bb:
+			bb = float(limbs[l]["bleed"])
+			best = l
+	return best
+
+
 func has_mask() -> bool:
 	return not equip["mascara"].is_empty()
 
@@ -360,8 +451,8 @@ func weapon_id() -> String:
 ## O que estava vestido antes volta para o inventário junto com o conteúdo dele; o que não
 ## couber cai no chão.
 func wear(inst: Dictionary) -> void:
-	var tipo := String(Items.def(inst["id"]).get("tipo", ""))
-	if not tipo in EQUIP_SLOTS:
+	var tipo := slot_of(String(inst["id"]))
+	if tipo == "":
 		return
 	inst = Items.strip(inst)
 	inst["n"] = 1
@@ -740,7 +831,8 @@ func exposure_factor() -> float:
 
 func _tick_pathogen(delta: float, spore: float, purifier: bool) -> void:
 	var f := exposure_factor()
-	var rate := 0.015 + 1.2 * pow(spore, 1.5) * f
+	var hz := clampf(gear_bonus("esporos"), 0.0, 0.8)
+	var rate := 0.015 + 1.2 * pow(spore, 1.5) * f * (1.0 - hz)
 	if spore >= 1.0:
 		rate += 18.0 * (0.4 + 0.6 * f)
 		_warn("letal", "CONCENTRAÇÃO LETAL DE ESPOROS! Volte agora!", 6.0)
@@ -764,7 +856,7 @@ func _tick_pathogen(delta: float, spore: float, purifier: bool) -> void:
 			mask["filtro"] = 0.0
 			message.emit("O filtro foi destruído pelos esporos!")
 		else:
-			mask["filtro"] = maxf(0.0, filter_pct() - (spore * spore * 1.2 + spore * 0.2) * delta)
+			mask["filtro"] = maxf(0.0, filter_pct() - (spore * spore * 1.2 + spore * 0.2) * delta * (1.0 - hz * 0.6))
 			if filter_pct() <= 0.0:
 				message.emit("O filtro da máscara acabou!")
 			elif filter_pct() < 15.0:
@@ -857,29 +949,55 @@ func _die(cause: String, kind: String) -> void:
 
 
 # ---------------------------------------------------------------- combate
+## Golpe num membro. A roupa que cobre o membro reduz o dano e a chance de sangrar. Nem todo
+## golpe abre ferida: a chance cresce com o dano. Se já há uma ferida aberta, um novo corte
+## não abre outra: piora o sangramento da que já existe.
 func damage_limb(limb_id: String, amount: float) -> void:
 	if god:
 		return
 	if implant_active("pele"):
 		amount *= 0.75
+	var arm := limb_armor(limb_id)
+	var raw := amount
+	amount *= 1.0 - float(arm[0])
+	_wear_clothes(limb_id, raw)
 	var limb: Dictionary = limbs[limb_id]
 	limb["hp"] = maxf(0.0, float(limb["hp"]) - amount)
 	_last_hurt_cause = "Trauma em combate"
-	if amount >= 6.0:
+	var p_bleed := 0.0
+	if amount >= 4.0:
+		p_bleed = clampf(0.1 + amount * 0.022, 0.0, 0.75) * (1.0 - float(arm[1]))
+		if has_trait("sangue_fino"):
+			p_bleed = minf(0.9, p_bleed * 1.25)
+	var text := "Golpe: %s (-%d)." % [LIMB_NAMES[limb_id], int(amount)]
+	if rng.randf() < p_bleed:
 		var deep := amount >= 16.0
-		limb["wound"] = 2 if (deep or int(limb["wound"]) == 2) else 1
-		limb["bleed"] = float(limb["bleed"]) + amount * (0.035 if deep else 0.012) * (1.3 if has_trait("sangue_fino") else 1.0)
-		limb["disinfected"] = false
-		limb["sutured"] = false
-		limb["bandaged"] = false
-		limb["heal"] = 0.0
+		var add := amount * (0.035 if deep else 0.012) * (1.3 if has_trait("sangue_fino") else 1.0)
+		var open_l := bleeding_limb()
+		var wl := open_l if open_l != "" else limb_id
+		var w: Dictionary = limbs[wl]
+		if open_l != "":
+			# a ferida que já existe abre mais
+			w["bleed"] = float(w["bleed"]) + add * 0.8
+			if deep:
+				w["wound"] = 2
+				w["sutured"] = false
+			text = "O sangramento em %s piorou! (golpe em %s, -%d)" % [LIMB_NAMES[wl].to_lower(), LIMB_NAMES[limb_id].to_lower(), int(amount)]
+		else:
+			w["wound"] = 2 if deep else 1
+			w["bleed"] = add
+			w["sutured"] = false
+			w["disinfected"] = false
+			text = "%s: %s está sangrando (-%d)." % ["Corte profundo" if deep else "Corte", LIMB_NAMES[wl], int(amount)]
+		w["bandaged"] = false
+		w["heal"] = 0.0
 	for slot in implants:
 		var def: Dictionary = DB.IMPLANTS[implants[slot]["id"]]
 		if def["membro"] == limb_id:
 			implants[slot]["integ"] = maxf(0.0, float(implants[slot]["integ"]) - amount * 0.4)
 	if limb_id == "cabeca" and has_mask():
 		equip["mascara"]["dur"] = maxf(0.0, mask_seal() - amount * 0.8)
-	message.emit("Ferimento: %s (-%d)." % [LIMB_NAMES[limb_id], int(amount)])
+	message.emit(text)
 
 
 func melee_damage() -> float:
@@ -890,7 +1008,7 @@ func melee_damage() -> float:
 		dmg += bonus * (0.6 if float(w.get("dur", 100.0)) < 25.0 else 1.0)
 	if implant_active("braco_d"):
 		dmg += 14.0
-	dmg *= 1.0 + 0.04 * float(level("combate"))
+	dmg *= 1.0 + 0.04 * float(level("combate")) + gear_bonus("combate")
 	if float(limbs["braco_d"]["hp"]) < 30.0 and pain_t <= 0.0:
 		dmg *= 0.6
 	if stamina < 8.0:
@@ -976,9 +1094,10 @@ func use_item(ref: Variant) -> void:
 				message.emit("Água contaminada! A infecção acelera.")
 			else:
 				message.emit("Você bebeu água limpa.")
-		"mascara", "mochila", "coldre":
-			if equip.has(def["tipo"]) and int(equip[def["tipo"]].get("u", -1)) == u:
-				unwear(String(def["tipo"]))
+		"mascara", "mochila", "coldre", "roupa":
+			var es := slot_of(id)
+			if equip.has(es) and int(equip[es].get("u", -1)) == u:
+				unwear(es)
 			else:
 				var part := remove_u(u)
 				if not part.is_empty():
@@ -1155,7 +1274,7 @@ func treat(limb_id: String, action: String, healer: SurvivorData = null) -> void
 			if not h.take_item("kit_sutura"):
 				h.message.emit("Sem kit de sutura.")
 				return
-			var chance_fail := maxf(0.0, 0.5 - 0.15 * float(h.level("medicina")))
+			var chance_fail := maxf(0.0, 0.5 - 0.15 * float(h.level("medicina")) - h.gear_bonus("medico"))
 			if h.has_trait("maos_firmes"):
 				chance_fail *= 0.5
 			if h == self:

@@ -276,7 +276,7 @@ static func describe_list(list: Array) -> String:
 
 ## Ordena uma lista de itens: por tipo, depois nome, depois estado.
 const SORT_ORDER := ["arma_fogo", "arma", "municao", "comida", "bebida", "cantil", "med", "analgesico", "supressor",
-	"filtro", "mascara", "mochila", "coldre", "ferramenta", "lanterna", "pilha", "regador", "semente", "reparo",
+	"filtro", "mascara", "roupa", "mochila", "coldre", "ferramenta", "lanterna", "pilha", "regador", "semente", "reparo",
 	"bateria", "combustivel", "material", "kit", "implante", "manual"]
 
 
@@ -297,3 +297,17 @@ static func compact(list: Array) -> void:
 	for inst in list:
 		add(out, inst)
 	list.assign(out)
+
+
+## Resumo de uma peça de roupa: espaço, defesa, proteção contra sangramento, conjunto e bônus.
+static func cloth_text(id: String) -> String:
+	var d := def(id)
+	var t := "%s · defesa %d%% · anti-corte %d%%" % [DB.ROUPA_SLOT_NAMES.get(String(d.get("slot", "")), "?"),
+		int(float(d.get("def", 0.0)) * 100.0), int(float(d.get("corte", 0.0)) * 100.0)]
+	var b: Dictionary = d.get("bonus", {})
+	for k in b:
+		t += " · %s +%d%%" % [DB.BONUS_NAMES.get(k, k), int(float(b[k]) * 100.0)]
+	var cj := String(d.get("conjunto", ""))
+	if DB.CONJUNTOS.has(cj):
+		t += "\nConjunto %s (%d peças)" % [DB.CONJUNTOS[cj]["nome"], (DB.CONJUNTOS[cj]["pecas"] as Array).size()]
+	return t

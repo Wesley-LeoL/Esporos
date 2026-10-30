@@ -91,7 +91,10 @@ func _tooltip() -> String:
 	t += "\n%.2f kg · %.1f L" % [Items.weight(inst), Items.volume(inst)]
 	if in_hand:
 		t += "\nNa mão"
-	var desc := str(Items.def(inst["id"]).get("desc", ""))
+	var dd := Items.def(inst["id"])
+	if String(dd.get("tipo", "")) == "roupa":
+		t += "\n" + Items.cloth_text(inst["id"])
+	var desc := str(dd.get("desc", ""))
 	if desc != "":
 		t += "\n" + desc
 	return t

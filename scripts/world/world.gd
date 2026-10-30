@@ -1029,7 +1029,7 @@ func take_from(p: Player, key: String, idx: int, n: int, mode: String, id: Strin
 	if idx < 0 or idx >= items.size() or items[idx]["id"] != id:
 		return
 	var part := Items.split(items, items[idx], maxi(1, n))
-	if mode == "vestir" and String(Items.def(part["id"])["tipo"]) in SurvivorData.EQUIP_SLOTS:
+	if mode == "vestir" and SurvivorData.slot_of(String(part["id"])) != "":
 		if int(part["n"]) > 1:
 			var extra := part.duplicate()
 			extra["n"] = int(part["n"]) - 1
@@ -1792,7 +1792,7 @@ func repair_fence(p: Player, k: Vector3i) -> void:
 		Game.tell(p.peer, "Consertar o muro custa 2 sucatas.")
 		return
 	pay_near(p, {"sucata": 2})
-	e["hp"] = minf(float(e["max"]), float(e["hp"]) + float(e["max"]) * 0.35)
+	e["hp"] = minf(float(e["max"]), float(e["hp"]) + float(e["max"]) * 0.35 * (1.0 + p.data.gear_bonus("reparo")))
 	_fence_state.rpc(k.x, k.y, k.z, float(e["hp"]))
 	p.data.add_xp("metalurgia", 2.0)
 	var vid := int(e.get("vid", -1))
