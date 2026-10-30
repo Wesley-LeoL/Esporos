@@ -658,6 +658,13 @@ func open_window(kind: String) -> void:
 	if menu_root.visible:
 		menu_root.visible = false
 		loot_node = null
+	if window_kind != kind:
+		# janela nova começa do topo
+		var scs: Array = []
+		_collect_scrolls(window_root, scs)
+		for sc: ScrollContainer in scs:
+			sc.scroll_vertical = 0
+		_clear(window_box)
 	window_kind = kind
 	window_root.visible = true
 	get_tree().paused = Net.is_solo()
@@ -679,6 +686,12 @@ func _rebuild_window() -> void:
 	var p := _player()
 	if p == null or p.data == null or window_kind == "":
 		return
+	var saved := _scroll_state(window_root)
+	_rebuild_window_now(p)
+	_restore_scroll(window_root, saved)
+
+
+func _rebuild_window_now(p: Player) -> void:
 	match window_kind:
 		"build":
 			window_title.text = "CONSTRUÇÃO"
@@ -1566,12 +1579,57 @@ func _rebuild() -> void:
 	if get_viewport().gui_is_dragging() or ctx_root.visible:
 		return
 	var d := p.data
+	# a tela é refeita a cada segundo: guarda a rolagem e devolve depois (senão volta ao topo)
+	var tab_c := tabs.get_current_tab_control()
+	var saved := _scroll_state(tab_c)
 	match tabs.current_tab:
 		0: _tab_inventory(d)
 		1: _tab_body(d)
 		2: _tab_skills(d)
 		3: _tab_implants(d)
 		4: _tab_map(p)
+	_restore_scroll(tab_c, saved)
+
+
+## Rolagens (vertical e horizontal) de todas as áreas roláveis dentro de 'root', em ordem.
+func _scroll_state(root: Node) -> Array:
+	var out: Array = []
+	if root != null:
+		_collect_scrolls(root, out)
+	var vals: Array = []
+	for sc: ScrollContainer in out:
+		vals.append(Vector2i(sc.scroll_horizontal, sc.scroll_vertical))
+	return vals
+
+
+func _collect_scrolls(n: Node, out: Array) -> void:
+	if n is ScrollContainer and not n.is_queued_for_deletion():
+		out.append(n)
+	for c in n.get_children():
+		if not c.is_queued_for_deletion():
+			_collect_scrolls(c, out)
+
+
+## Devolve a rolagem depois que o conteúdo novo tiver tamanho (próximo quadro).
+func _restore_scroll(root: Node, vals: Array) -> void:
+	if root == null or vals.is_empty():
+		return
+	var apply := func() -> void:
+		if not is_instance_valid(root):
+			return
+		var now: Array = []
+		_collect_scrolls(root, now)
+		for i in mini(now.size(), vals.size()):
+			var sc: ScrollContainer = now[i]
+			var v: Vector2i = vals[i]
+			sc.scroll_horizontal = v.x
+			sc.scroll_vertical = v.y
+	# aplica já (a área de fora não mudou de tamanho) e de novo depois do layout
+	apply.call()
+	await get_tree().process_frame
+	apply.call()
+	await get_tree().process_frame
+	apply.call()
 
 
 func _act(cb: Callable) -> Callable:

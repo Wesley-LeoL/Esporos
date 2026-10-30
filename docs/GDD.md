@@ -187,6 +187,8 @@ Antes de iniciarmos a lógica, preciso que você me oriente a:
   - O que abriu fica aberto (vai para o save e para quem entra na partida).
 - **Mira no mouse:** o personagem sempre olha para o mouse, ande para onde andar. Golpe corpo a corpo e tiro vão na direção exata do mouse. Dirigindo, ele olha para onde o veículo vai.
 - **Ritmo das ações:** vestir e tirar roupa, máscara, mochila e coldre é imediato; construir também. Toda ação com tempo (comer, tratar, fabricar, consertar, forçar fechadura...) fecha o inventário ou a janela aberta, e a barra de progresso aparece no jogo.
+- **Corte das paredes (revisado):** só com o personagem DENTRO de um prédio (do mapa ou num piso construído pelo jogador) as paredes da frente dele, abaixo da cabeça na tela, ficam baixas; as de trás continuam inteiras. De fora nada abaixa, e as cercas das vilas nunca abaixam.
+- **Rolagem das abas:** a posição da rolagem se mantém quando a tela se atualiza.
 - **Barra rápida no inventário:** com o menu aberto, a barra rápida sai da lateral e aparece no topo da aba Inventário, para arrastar itens para ela.
 
 ### Mundo em chunks e vilas vivas (fase 7)

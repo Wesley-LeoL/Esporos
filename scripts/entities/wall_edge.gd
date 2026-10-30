@@ -6,9 +6,9 @@ extends StaticBody2D
 ## Serve para as paredes que o jogador constrói (kind = id em DB.BUILDS) e para as dos
 ## prédios do mapa (kind = folha w_<material>_<variação>, map = true).
 ##
-## Corte do The Sims: quando o jogador local está logo atrás da parede (ela fica entre ele
-## e a câmera), a parede é desenhada baixa. Nos prédios do mapa isso só acontece com o
-## prédio "aberto" (jogador dentro ou logo atrás; telhado escondido). A colisão não muda.
+## Corte do The Sims: só com o jogador DENTRO do prédio, as paredes da frente dele (abaixo da
+## cabeça na tela) ficam baixas; as de trás continuam inteiras. De fora, nada abaixa. A
+## colisão não muda.
 
 var kind := "parede_madeira"
 var cell := Vector2i.ZERO
@@ -140,15 +140,25 @@ func _process(delta: float) -> void:
 	_cut_t = 0.1
 	var want := false
 	var pl: Player = world.local_player() if world != null else null
-	var house_ok := house_id < 0 or bool(world.house_open.get(house_id, false))
-	if pl != null and pl.alive and house_ok:
+	if pl != null and pl.alive and fence_vid < 0 and _player_inside(pl):
 		var off := position - pl.position
-		# a parede está à frente (mais embaixo na tela) e perto do jogador
-		if off.y > -6.0 and Vector2(off.x, off.y * 2.0).length() < 210.0:
+		# só as paredes da frente (abaixo da cabeça na tela), perto do jogador; as de trás ficam
+		if off.y > 2.0 and Vector2(off.x, off.y * 2.0).length() < 210.0:
 			want = true
 	if want != low:
 		low = want
 		queue_redraw()
+
+
+## O jogador está dentro do prédio desta parede? Prédio do mapa: o estado "dentro" da casa.
+## Parede construída: o jogador pisa num piso construído. Cerca de vila: nunca abaixa.
+func _player_inside(pl: Player) -> bool:
+	if house_id >= 0:
+		return bool(world.house_open.get(house_id, false))
+	if map:
+		return false
+	var tp := world.tile_pos(pl.position)
+	return world.terrain_deltas.has(Vector2i(floori(tp.x), floori(tp.y)))
 
 
 func _draw() -> void:

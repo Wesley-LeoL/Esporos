@@ -509,6 +509,14 @@ func debug_command(cmd: String) -> void:
 			p._update_nearby()
 			if p.nearby != null:
 				p.act("unlock", [world.key_of(p.nearby)])
+		"scroll":
+			# rola a aba aberta (scroll:N) ou mostra a rolagem (scroll) — testes
+			var scs: Array = []
+			hud._collect_scrolls(hud.tabs.get_current_tab_control(), scs)
+			if not scs.is_empty():
+				if arg != "":
+					(scs[0] as ScrollContainer).scroll_vertical = int(arg)
+				print("[scroll] ", (scs[0] as ScrollContainer).scroll_vertical)
 		"interact_near":
 			p._update_nearby()
 			if p.nearby != null:
